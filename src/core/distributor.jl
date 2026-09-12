@@ -43,8 +43,6 @@ In serial (single-process) mode:
 - Transforms are just basis forward/backward transform calls.
 """
 
-using LinearAlgebra
-using OrderedCollections: OrderedDict
 
 # ============================================================================
 # Serial Communicator (placeholder for MPI)
@@ -896,7 +894,7 @@ mutable struct Distributor <: AbstractDistributor
         end
 
         # Trim trailing ones (equivalent to np.trim_zeros(mesh-1, 'b') + 1)
-        while length(mesh_arr) > 1 && mesh_arr[end] == 1
+        while !isempty(mesh_arr) && mesh_arr[end] == 1
             pop!(mesh_arr)
         end
 
@@ -1029,7 +1027,7 @@ function get_axis(dist::Distributor, coord)
     if coord isa AbstractCoordinateSystem
         coord = get_coords(coord)[1]
     end
-    idx = findfirst(c -> c === coord, dist.coords)
+    idx = findfirst(==(coord), dist.coords)
     if idx === nothing
         throw(ArgumentError("Coordinate not found in distributor."))
     end
@@ -1211,7 +1209,7 @@ function local_grids(dist::Distributor, bases...; scales=nothing)
         fa = first_axis(dist, basis)
         la = last_axis(dist, basis)
         basis_scales = scales[fa:la]
-        append!(grids, local_grids(basis, dist; scales=basis_scales))
+        append!(grids, local_grids(basis, dist, basis_scales))
     end
     return grids
 end

@@ -1,0 +1,15 @@
+[Core]
+versions = ["lts", "1", "pre"]
+
+[QA]
+versions = ["1"]
+
+# MPI tests spawn four julia workers via mpiexec from the group's own env.
+# Excluded from "All" (needs mpiexec) and allowed to fail until
+# local_grid/local_modes mesh partitioning is fixed:
+# https://github.com/SciML/Dedalus.jl/issues/8
+[Parallel]
+versions = ["1"]
+in_all = false
+timeout = 60
+continue_on_error = true

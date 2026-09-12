@@ -14,8 +14,6 @@ Provides:
 - dsc_jacobi_matrix: Jacobi tridiagonal matrix
 """
 
-using SparseArrays
-using LinearAlgebra: I as eye_I
 
 # ============================================================================
 # DSCDeferredTuple

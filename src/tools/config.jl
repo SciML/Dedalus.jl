@@ -11,7 +11,6 @@ This is a Julia translation of the Python Dedalus `config.py` module, using TOML
 instead of INI/ConfigParser format.
 """
 
-import TOML
 
 """
     deep_merge(base::Dict, override::Dict) -> Dict

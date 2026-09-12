@@ -29,8 +29,6 @@ This module defines:
 - TensorField, TensorField2D, TensorField3D: tensor field types
 """
 
-using SparseArrays
-using LinearAlgebra
 
 # ============================================================================
 # Ball-specific radial functions (ball128 equivalents)

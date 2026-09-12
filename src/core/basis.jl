@@ -40,9 +40,6 @@ Uses: tools/jacobi.jl, tools/clenshaw.jl, tools/array.jl, tools/cache.jl,
       tools/general.jl, core/coords.jl, core/domain.jl
 """
 
-using LinearAlgebra
-using SparseArrays
-using FFTW
 
 # ============================================================================
 # Import tools (assumed already included in the module; we reference the
@@ -62,7 +59,6 @@ using FFTW
 # From core/domain.jl:    AbstractBasis, AbstractDistributor, Domain, make_domain,
 #                          get_dim, get_basis_axis, coordsys, volume
 
-import Logging
 const _basis_logger = Logging.current_logger()
 
 # ============================================================================
@@ -413,8 +409,18 @@ end
 
 # -- Interface implementations --
 
+"""
+    basis_coord(b)
+
+The `Coordinate` object that basis `b` spans.
+"""
 basis_coord(b::CardinalBasis) = b.coord
 basis_coordsys(b::CardinalBasis) = b.coord
+"""
+    basis_size(b)
+
+The number of spectral modes in basis `b`.
+"""
 basis_size(b::CardinalBasis) = b._size
 basis_shape(b::CardinalBasis) = (b._size,)
 basis_dealias(b::CardinalBasis) = (1,)
@@ -490,10 +496,22 @@ function chunk_shape(b::CardinalBasis, grid_space)
     return (1,)
 end
 
+"""
+    forward_transform(b, field, axis, gdata, cdata)
+
+Apply the grid-to-coefficient transform of basis `b` along `axis`, reading grid
+data from `gdata` and writing coefficients to `cdata`.
+"""
 function forward_transform(b::CardinalBasis, field, axis, gdata, cdata)
     copyto!(cdata, gdata)
 end
 
+"""
+    backward_transform(b, field, axis, cdata, gdata)
+
+Apply the coefficient-to-grid transform of basis `b` along `axis`, reading
+coefficients from `cdata` and writing grid data to `gdata`.
+"""
 function backward_transform(b::CardinalBasis, field, axis, cdata, gdata)
     copyto!(gdata, cdata)
 end
@@ -5322,7 +5340,7 @@ Return the local radial grid (subset of global grid for this process).
 """
 function local_grid(b::AbstractRegularityBasis, dist, scale)
     radial_axis = get_basis_axis(dist, b) + 2
-    local_elems = local_elements(grid_layout(dist), basis_domain(b, dist); scales=scale)[radial_axis]
+    local_elems = local_elements(grid_layout(dist), basis_domain(b, dist), scale)[radial_axis]
     problem_grid = _radius_grid(b, scale)[local_elems]
     return reshape_vector(problem_grid, get_dim(dist), radial_axis)
 end
@@ -5345,7 +5363,7 @@ Return the local quadrature weights.
 """
 function local_weights(b::AbstractRegularityBasis, dist; scale=1)
     radial_axis = get_basis_axis(dist, b) + 2
-    local_elems = local_elements(grid_layout(dist), basis_domain(b, dist); scales=scale)[radial_axis]
+    local_elems = local_elements(grid_layout(dist), basis_domain(b, dist), scale)[radial_axis]
     weights = Float64.(_radius_weights(b, scale))
     return reshape_vector(weights[local_elems], get_dim(dist), radial_axis)
 end

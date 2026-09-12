@@ -13,9 +13,6 @@ This module defines:
 Note: This module is self-contained and does NOT depend on tools/jacobi.jl.
 """
 
-using SparseArrays
-using LinearAlgebra: eigvals, SymTridiagonal, diag, diagm
-using SpecialFunctions: beta as _beta, logbeta as _logbeta
 
 # ============================================================================
 # JacobiCodomain

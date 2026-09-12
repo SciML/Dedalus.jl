@@ -6,7 +6,6 @@ Provides Zernike polynomial mass, quadrature, polynomial evaluation,
 and operator construction built on top of the Jacobi framework.
 """
 
-using SparseArrays
 
 # ============================================================================
 # ZernikeCodomain

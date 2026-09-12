@@ -160,7 +160,7 @@ nu = 1e-3
 problem = IVP([u]; namespace=@locals)
 ```
 
-The [`@locals`](@ref) macro captures all local bindings at the point where it is
+The `@locals` macro captures all local bindings at the point where it is
 called. Ensure all referenced names are defined *before* the `@locals` call.
 
 ### Operator precedence surprises

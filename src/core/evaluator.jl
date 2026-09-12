@@ -35,9 +35,6 @@ output handlers (dictionary, system, HDF5 file).
 - Parallel HDF5 (MPIO)     -> `h5open(path, mode, comm, info)` via HDF5.jl
 """
 
-using HDF5
-using UUIDs: uuid4
-using SHA: sha1
 
 # ============================================================================
 # Configuration defaults
@@ -2148,6 +2145,12 @@ end
 
 const add_system_handler! = add_system_handler
 const evaluate_group! = evaluate_group
+
+"""
+    FileHandler
+
+Alias for [`H5FileHandlerBase`](@ref), the default file-output handler.
+"""
 const FileHandler = H5FileHandlerBase
 
 export Evaluator,

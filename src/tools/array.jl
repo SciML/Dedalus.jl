@@ -13,8 +13,6 @@ Key differences from the Python original:
   (`apply_csc!`, `solve_upper_csc!`) using the native CSC format.
 """
 
-using SparseArrays
-using LinearAlgebra
 
 # config.jl is included by the main module before this file
 
@@ -22,7 +20,12 @@ using LinearAlgebra
 # Module-level configuration flags
 # ---------------------------------------------------------------------------
 
+"""Whether sparse matrix-vector products are split into per-row segments
+(`[linear_algebra] SPLIT_CSR_MATVECS` in `dedalus.toml`)."""
 const SPLIT_CSR_MATVECS = get_config_bool("linear_algebra", "SPLIT_CSR_MATVECS")
+
+"""Whether to use the legacy CSC matvec kernels
+(`[linear_algebra] OLD_CSR_MATVECS` in `dedalus.toml`)."""
 const OLD_CSR_MATVECS   = get_config_bool("linear_algebra", "OLD_CSR_MATVECS")
 
 # ---------------------------------------------------------------------------
@@ -526,6 +529,8 @@ function dedalus_copyto!(dest::AbstractArray, src::AbstractArray)
     dest .= src
     return dest
 end
+
+dedalus_copyto!(dest::AbstractArray, src::Number) = fill!(dest, src)
 
 # ---------------------------------------------------------------------------
 # perm_matrix

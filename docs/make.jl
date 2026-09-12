@@ -161,6 +161,7 @@ makedocs(;
             "Problems" => "api/problems.md",
             "Solvers" => "api/solvers.md",
             "Extras" => "api/extras.md",
+            "Internals" => "api/internals.md",
         ],
     ],
     doctest  = false,

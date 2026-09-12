@@ -14,8 +14,6 @@ This module defines:
 - grad: gradient in coefficient space
 """
 
-using SparseArrays
-using LinearAlgebra
 
 # ============================================================================
 # SphereWrapper

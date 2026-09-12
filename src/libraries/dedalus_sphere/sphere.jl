@@ -18,7 +18,6 @@ This module defines:
 - sphere_unitary: unitary transformation matrix from spin to regularity basis
 """
 
-using SparseArrays
 
 # ============================================================================
 # SphereCodomain

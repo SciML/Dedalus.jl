@@ -9,8 +9,6 @@ interface.
 Translated from dedalus/libraries/matsolvers.py.
 """
 
-using SparseArrays
-using LinearAlgebra
 
 # ---------------------------------------------------------------------------
 # Solver registry

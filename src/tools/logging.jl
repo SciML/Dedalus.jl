@@ -9,8 +9,6 @@ Currently operates in serial mode (no MPI). When MPI support is added, rank and
 size will be read from the communicator.
 """
 
-using Logging
-using Dates
 
 # ---------------------------------------------------------------------------
 # MPI placeholders (serial mode)

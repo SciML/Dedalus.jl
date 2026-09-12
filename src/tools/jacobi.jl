@@ -7,8 +7,6 @@ functions (grid construction, polynomial evaluation, differentiation,
 conversion, and integration).
 """
 
-using SpecialFunctions: loggamma
-using LinearAlgebra: eigen, Symmetric, SymTridiagonal, diagm, diag, I as eye_I
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -442,8 +440,7 @@ end
 # Exports
 # ---------------------------------------------------------------------------
 
-export OUTPUT_DTYPE,
-       mass,
+export mass,
        build_grid,
        build_weights,
        build_polynomials,

@@ -17,7 +17,7 @@ A Julia translation of the [Python Dedalus](https://dedalus-project.org/) spectr
 using Pkg
 
 # Install from repository URL
-Pkg.add(url="https://github.com/DedalusProject/Dedalus.jl")
+Pkg.add(url="https://github.com/SciML/Dedalus.jl")
 
 # Or for local development
 Pkg.develop(path=".")
@@ -32,8 +32,8 @@ using Dedalus
 
 # Build a 1D Chebyshev domain
 coord = Coordinate("x")
-dist = Distributor(coord; dtype=Float64)
-basis = ChebyshevT(coord, 32; bounds=(0, 1))
+dist = Distributor(coord, Float64)
+basis = ChebyshevT(coord, 32, (0, 1))
 
 # Set up fields
 u = Field(dist; name="u", bases=(basis,))

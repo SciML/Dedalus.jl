@@ -24,8 +24,6 @@ will subtype `AbstractBasis` when they are created.
 Similarly, the `Distributor` type is forward-referenced via `AbstractDistributor`.
 """
 
-using OrderedCollections: OrderedDict
-using LinearAlgebra
 
 # ============================================================================
 # Forward-reference abstract types

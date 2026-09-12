@@ -10,7 +10,6 @@ Translated from dedalus/extras/flow_tools.py.  Provides:
 When MPI is not available (serial mode), all reductions operate locally.
 """
 
-using Logging
 
 const _flow_tools_logger = Logging.current_logger()
 

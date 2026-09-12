@@ -10,7 +10,6 @@ Provides caching patterns translated from the Python Dedalus `cache.py` module:
 - [`serialize_call`](@ref): Normalize positional/keyword arguments into a canonical tuple.
 """
 
-using OrderedCollections: OrderedDict
 
 export CachedAttribute, get_cached!, reset_cached!,
        CachedFunction, serialize_call,

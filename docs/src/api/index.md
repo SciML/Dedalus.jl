@@ -9,7 +9,7 @@ Dedalus.jl is a single module (`Dedalus`) whose source is split across several l
 | Layer | Sub-page | Description |
 |:------|:---------|:------------|
 | Coordinates | [Coordinates](@ref) | Coordinate systems (`Coordinate`, `CartesianCoordinates`, `S2Coordinates`, etc.) |
-| Fields | [Fields](@ref) | Data containers and lazy evaluation (`Field`, `ScalarField`, `VectorField`, `FutureField`, `Domain`) |
+| Fields | [Fields](fields.md) | Data containers and lazy evaluation (`Field`, `ScalarField`, `VectorField`, `FutureField`, `Domain`) |
 | Bases | [Bases](@ref) | Spectral basis sets and transforms (`ChebyshevT`, `Fourier`, `DiskBasis`, `BallBasis`, etc.) |
 | Operators | [Operators](@ref) | Differential and algebraic operators (`differentiate`, `gradient`, `divergence`, `curl`, etc.) |
 | Problems | [Problems](@ref) | Problem formulations (`IVP`, `EVP`, `LBVP`, `NLBVP`) and subsystem management |

@@ -1,4 +1,3 @@
-using SparseArrays
 
 # ============================================================================
 # Codomain
@@ -277,7 +276,8 @@ function Base.getindex(m::InfiniteCSC, row::Int, ::Colon)
     return spzeros(eltype(m), size(m, 2))
 end
 
-function Base.:+(a::InfiniteCSC{T}, b::InfiniteCSC{T}) where {T}
+function Base.:+(a::InfiniteCSC, b::InfiniteCSC)
+    T = promote_type(eltype(a), eltype(b))
     ns, no = size(a, 1), size(b, 1)
     nc = max(size(a, 2), size(b, 2))
     if ns == no
@@ -321,6 +321,17 @@ end
 
 function Base.:*(a::AbstractMatrix, b::InfiniteCSC)
     InfiniteCSC(a) * b
+end
+
+# Disambiguate against LinearAlgebra's row-vector rules: a Transpose/Adjoint of
+# an AbstractVector is an AbstractMatrix, so `x' * icsc` / `transpose(x) * icsc`
+# would otherwise be ambiguous with `*(::AbstractMatrix, ::InfiniteCSC)`.
+function Base.:*(a::LinearAlgebra.Transpose{<:Any, <:AbstractVector}, b::InfiniteCSC)
+    return InfiniteCSC(Matrix(a)) * b
+end
+
+function Base.:*(a::LinearAlgebra.Adjoint{<:Any, <:AbstractVector}, b::InfiniteCSC)
+    return InfiniteCSC(Matrix(a)) * b
 end
 
 # ============================================================================

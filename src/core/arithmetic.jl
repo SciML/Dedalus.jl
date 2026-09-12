@@ -29,8 +29,6 @@ dot product, and cross product operations.
   functions before struct construction.
 """
 
-using SparseArrays
-using LinearAlgebra
 
 # ============================================================================
 # Forward-reference stubs
@@ -60,10 +58,6 @@ function convert_operand end
 
 # Fallback: Numbers pass through unchanged
 convert_operand(arg::Number, bases) = arg
-
-# Default stub for operands: returns arg unchanged until operators.jl is loaded.
-# operators.jl redefines convert_operand(arg, bases) with the full Convert logic.
-convert_operand(arg, bases) = arg
 
 # Alphabet used for einsum string construction
 const EINSUM_ALPHABET = "abcdefghijklmnopqrstuvwxy"
@@ -147,6 +141,13 @@ abstract type Add <: AbstractFuture end
 Return the string name for addition operators.
 """
 add_name(::Type{<:Add}) = "Add"
+
+"""
+    operator_name(op)
+
+The string name of an operator or operand node, used when rendering equation
+strings.
+"""
 operator_name(::Add) = "Add"
 
 """
@@ -370,6 +371,12 @@ mutable struct AddFields <: Add
 end
 
 # Make AddFields also satisfy FutureField interface
+"""
+    is_future_field(x)
+
+Whether `x` is a deferred (lazy) field expression rather than an evaluated
+field.
+"""
 is_future_field(::AddFields) = true
 
 """
