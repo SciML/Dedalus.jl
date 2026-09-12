@@ -33,7 +33,7 @@ build and solve the matrix systems arising from Dedalus problem types.
 
 Retrieve solver configuration with a fallback default.
 """
-function _solver_config(section::String, key::String; default=nothing)
+function _solver_config(section::String, key::String; default = nothing)
     try
         return get_config(section, key)
     catch
@@ -41,7 +41,7 @@ function _solver_config(section::String, key::String; default=nothing)
     end
 end
 
-function _solver_config_bool(section::String, key::String; default::Bool=false)::Bool
+function _solver_config_bool(section::String, key::String; default::Bool = false)::Bool
     try
         return get_config_bool(section, key)
     catch
@@ -113,17 +113,19 @@ end
 Initialize the common solver infrastructure. This is the Julia equivalent of
 `SolverBase.__init__` in Python.
 """
-function _init_solver_base(problem;
-                           ncc_cutoff::Float64=1e-6,
-                           max_ncc_terms=nothing,
-                           entry_cutoff::Float64=1e-12,
-                           matrix_coupling=nothing,
-                           matsolver=nothing,
-                           bc_top=nothing,
-                           tau_left=nothing,
-                           interleave_components=nothing,
-                           store_expanded_matrices=nothing,
-                           matsolver_default::String="MATRIX_FACTORIZER")
+function _init_solver_base(
+        problem;
+        ncc_cutoff::Float64 = 1.0e-6,
+        max_ncc_terms = nothing,
+        entry_cutoff::Float64 = 1.0e-12,
+        matrix_coupling = nothing,
+        matsolver = nothing,
+        bc_top = nothing,
+        tau_left = nothing,
+        interleave_components = nothing,
+        store_expanded_matrices = nothing,
+        matsolver_default::String = "MATRIX_FACTORIZER"
+    )
     dist = get_dist(problem)
     dtype = problem_dtype(problem)
     state = get_variables(problem)
@@ -138,8 +140,11 @@ function _init_solver_base(problem;
     else
         mc = BitVector(matrix_coupling)
         if any(.~mc .& BitVector(prob_coupling))
-            throw(ArgumentError(
-                "Specified solver coupling is incompatible with problem coupling: $prob_coupling"))
+            throw(
+                ArgumentError(
+                    "Specified solver coupling is incompatible with problem coupling: $prob_coupling"
+                )
+            )
         end
     end
     # Check that coupled dimensions are local
@@ -147,8 +152,11 @@ function _init_solver_base(problem;
     coupled_nonlocal = mc .& .~BitVector(cl.local)
     if any(coupled_nonlocal)
         nonlocal_axes = findall(coupled_nonlocal)
-        throw(ArgumentError(
-            "Problem is coupled along distributed dimensions: $(Tuple(nonlocal_axes))"))
+        throw(
+            ArgumentError(
+                "Problem is coupled along distributed dimensions: $(Tuple(nonlocal_axes))"
+            )
+        )
     end
     # Determine matrix dependence
     mat_dep = BitVector(problem_matrix_dependence(problem))
@@ -156,31 +164,37 @@ function _init_solver_base(problem;
         for basis in eq["domain"].bases
             first_axis = get_basis_axis(dist, basis)
             d = get_dim(basis)
-            sl = first_axis:first_axis+d-1
+            sl = first_axis:(first_axis + d - 1)
             mat_dep[sl] .= mat_dep[sl] .| BitVector(basis_matrix_dependence(basis, mc[sl]))
         end
     end
     # Process config options
     if matsolver === nothing
-        matsolver_name = _solver_config("linear_algebra", matsolver_default;
-                                        default="SuperLUColamdFactorizedTranspose")
+        matsolver_name = _solver_config(
+            "linear_algebra", matsolver_default;
+            default = "SuperLUColamdFactorizedTranspose"
+        )
         matsolver = get_solver(string(matsolver_name))
     elseif matsolver isa AbstractString
         matsolver = get_solver(matsolver)
     end
     if bc_top === nothing
-        bc_top = _solver_config_bool("matrix_construction", "BC_TOP"; default=false)
+        bc_top = _solver_config_bool("matrix_construction", "BC_TOP"; default = false)
     end
     if tau_left === nothing
-        tau_left = _solver_config_bool("matrix_construction", "TAU_LEFT"; default=false)
+        tau_left = _solver_config_bool("matrix_construction", "TAU_LEFT"; default = false)
     end
     if interleave_components === nothing
-        interleave_components = _solver_config_bool("matrix_construction",
-                                                    "INTERLEAVE_COMPONENTS"; default=false)
+        interleave_components = _solver_config_bool(
+            "matrix_construction",
+            "INTERLEAVE_COMPONENTS"; default = false
+        )
     end
     if store_expanded_matrices === nothing
-        store_expanded_matrices = _solver_config_bool("matrix_construction",
-                                                      "STORE_EXPANDED_MATRICES"; default=false)
+        store_expanded_matrices = _solver_config_bool(
+            "matrix_construction",
+            "STORE_EXPANDED_MATRICES"; default = false
+        )
     end
     # Build initial solver data (subsystems/subproblems set later)
     sd = SolverData(
@@ -205,7 +219,7 @@ function _finalize_solver_base!(sd::SolverData, solver::SolverBase)
     sd.subproblems_by_group = Dict(sp.group => sp for sp in sd.subproblems)
     # Build evaluator
     namespace = Dict{String, Any}()
-    sd.evaluator = Evaluator(sd.dist, namespace)
+    return sd.evaluator = Evaluator(sd.dist, namespace)
 end
 
 """
@@ -213,7 +227,7 @@ end
 
 Build matrices for selected subproblems.
 """
-function solver_build_matrices!(solver::SolverBase; subproblems=nothing, matrices=nothing)
+function solver_build_matrices!(solver::SolverBase; subproblems = nothing, matrices = nothing)
     sd = _solver_data(solver)
     if subproblems === nothing
         subproblems = sd.subproblems
@@ -221,7 +235,7 @@ function solver_build_matrices!(solver::SolverBase; subproblems=nothing, matrice
     if matrices === nothing
         matrices = solver_matrices(solver)
     end
-    build_subproblem_matrices(solver, subproblems, matrices)
+    return build_subproblem_matrices(solver, subproblems, matrices)
 end
 
 # Interface to be implemented by concrete solvers
@@ -266,10 +280,14 @@ end
 
 function EigenvalueSolver(problem; kw...)
     @debug "Beginning EVP instantiation"
-    sd = _init_solver_base(problem;
-                           matsolver_default="MATRIX_FACTORIZER", kw...)
-    solver = EigenvalueSolver(sd,
-        nothing, nothing, nothing, nothing, nothing, nothing, nothing)
+    sd = _init_solver_base(
+        problem;
+        matsolver_default = "MATRIX_FACTORIZER", kw...
+    )
+    solver = EigenvalueSolver(
+        sd,
+        nothing, nothing, nothing, nothing, nothing, nothing, nothing
+    )
     _finalize_solver_base!(sd, solver)
     @debug "Finished EVP instantiation"
     return solver
@@ -280,10 +298,12 @@ solver_matrices(::EigenvalueSolver) = ["M", "L"]
 
 # Property accessors -- delegate SolverData fields transparently
 function Base.getproperty(s::EigenvalueSolver, sym::Symbol)
-    if sym in (:problem, :dist, :dtype, :state, :ncc_cutoff, :max_ncc_terms,
-               :entry_cutoff, :matrix_coupling, :matrix_dependence, :matsolver,
-               :bc_top, :tau_left, :interleave_components, :store_expanded_matrices,
-               :subsystems, :subproblems, :subproblems_by_group, :evaluator)
+    if sym in (
+            :problem, :dist, :dtype, :state, :ncc_cutoff, :max_ncc_terms,
+            :entry_cutoff, :matrix_coupling, :matrix_dependence, :matsolver,
+            :bc_top, :tau_left, :interleave_components, :store_expanded_matrices,
+            :subsystems, :subproblems, :subproblems_by_group, :evaluator,
+        )
         return getfield(getfield(s, :sd), sym)
     end
     return getfield(s, sym)
@@ -294,8 +314,10 @@ end
 
 Print the matrix rank and condition number of each subproblem LHS.
 """
-function print_subproblem_ranks(solver::EigenvalueSolver;
-                                subproblems=nothing, target=0)
+function print_subproblem_ranks(
+        solver::EigenvalueSolver;
+        subproblems = nothing, target = 0
+    )
     if subproblems === nothing
         subproblems = solver.subproblems
     end
@@ -308,9 +330,12 @@ function print_subproblem_ranks(solver::EigenvalueSolver;
         A = L .+ target .* M
         r = rank(A)
         c = cond(A)
-        println("subproblem: $i, group: $(sp.group), " *
-                "matrix rank: $r/$(size(A, 1)), cond: $(round(c, sigdigits=4))")
+        println(
+            "subproblem: $i, group: $(sp.group), " *
+                "matrix rank: $r/$(size(A, 1)), cond: $(round(c, sigdigits = 4))"
+        )
     end
+    return
 end
 
 """
@@ -326,20 +351,22 @@ Finds all eigenvectors but is computationally expensive.
 - `left` -- also solve for left eigenvectors (default: false)
 - `normalize_left` -- normalize left eigenvectors for biorthonormality (default: true)
 """
-function solve_dense!(solver::EigenvalueSolver, subproblem;
-                      rebuild_matrices::Bool=false,
-                      left::Bool=false,
-                      normalize_left::Bool=true,
-                      kw...)
+function solve_dense!(
+        solver::EigenvalueSolver, subproblem;
+        rebuild_matrices::Bool = false,
+        left::Bool = false,
+        normalize_left::Bool = true,
+        kw...
+    )
     solver.eigenvalue_subproblem = sp = subproblem
     # Build matrices if directed or not yet built
     if rebuild_matrices || !hasproperty(sp, :L_min)
-        solver_build_matrices!(solver; subproblems=[sp], matrices=["M", "L"])
+        solver_build_matrices!(solver; subproblems = [sp], matrices = ["M", "L"])
     end
     # Solve as dense general eigenvalue problem: A*v = lambda*B*v
     A = Matrix(sp.L_min)
     B = -Matrix(sp.M_min)
-    if left
+    return if left
         F_right = eigen(A, B)
         solver.eigenvalues = F_right.values
         pre_right_evecs = F_right.vectors
@@ -388,16 +415,18 @@ end
 Perform targeted sparse eigenvector search for the selected subproblem.
 Finds N eigenvectors near the specified target eigenvalue.
 """
-function solve_sparse!(solver::EigenvalueSolver, subproblem, N::Int, target;
-                       rebuild_matrices::Bool=false,
-                       left::Bool=false,
-                       normalize_left::Bool=true,
-                       raise_on_mismatch::Bool=true,
-                       v0=nothing,
-                       kw...)
+function solve_sparse!(
+        solver::EigenvalueSolver, subproblem, N::Int, target;
+        rebuild_matrices::Bool = false,
+        left::Bool = false,
+        normalize_left::Bool = true,
+        raise_on_mismatch::Bool = true,
+        v0 = nothing,
+        kw...
+    )
     solver.eigenvalue_subproblem = sp = subproblem
     if rebuild_matrices || !hasproperty(sp, :L_min)
-        solver_build_matrices!(solver; subproblems=[sp], matrices=["M", "L"])
+        solver_build_matrices!(solver; subproblems = [sp], matrices = ["M", "L"])
     end
     A = sp.L_min
     B = -sp.M_min
@@ -406,15 +435,17 @@ function solve_sparse!(solver::EigenvalueSolver, subproblem, N::Int, target;
         v0 = sp.pre_right_pinv * v0
     end
     # Sparse eigenvalue solve via shift-invert Arnoldi
-    eig_result = _sparse_eigs(A, B; N=N, target=target,
-                              matsolver=solver.matsolver, v0=v0, left=left, kw...)
-    if left
+    eig_result = _sparse_eigs(
+        A, B; N = N, target = target,
+        matsolver = solver.matsolver, v0 = v0, left = left, kw...
+    )
+    return if left
         solver.eigenvalues, pre_right_evecs, solver.left_eigenvalues, pre_left_evecs = eig_result
         solver.right_eigenvectors = solver.eigenvectors = sp.pre_right * pre_right_evecs
         solver.left_eigenvectors = sp.pre_left' * pre_left_evecs
         solver.modified_left_eigenvectors = (sp.M_min * sp.pre_right_pinv)' * pre_left_evecs
         # Check eigenvalue match
-        if !isapprox(solver.eigenvalues, conj.(solver.left_eigenvalues); atol=1e-10)
+        if !isapprox(solver.eigenvalues, conj.(solver.left_eigenvalues); atol = 1.0e-10)
             if raise_on_mismatch
                 error("Conjugate of left eigenvalues does not match right eigenvalues.")
             else
@@ -445,7 +476,7 @@ Set the state vector to the specified eigenmode.
 - `index` -- index of the desired eigenmode
 - `subsystem_idx` -- index of subsystem within the eigenvalue subproblem (default: 1)
 """
-function set_state!(solver::EigenvalueSolver, index::Int; subsystem_idx::Int=1)
+function set_state!(solver::EigenvalueSolver, index::Int; subsystem_idx::Int = 1)
     sp = solver.eigenvalue_subproblem
     ss = sp.subsystems[subsystem_idx]
     # Zero all state variables
@@ -455,7 +486,7 @@ function set_state!(solver::EigenvalueSolver, index::Int; subsystem_idx::Int=1)
     # Set eigenmode coefficients
     scatter!(ss, solver.eigenvectors[:, index], solver.state)
     # Set eigenvalue
-    solver.problem.eigenvalue["g"] = solver.eigenvalues[index]
+    return solver.problem.eigenvalue["g"] = solver.eigenvalues[index]
 end
 
 """
@@ -463,7 +494,7 @@ end
 
 Sparse eigenvalue solve using shift-invert mode.
 """
-function _sparse_eigs(A, B; N::Int, target, matsolver, v0=nothing, left::Bool=false, kw...)
+function _sparse_eigs(A, B; N::Int, target, matsolver, v0 = nothing, left::Bool = false, kw...)
     sigma = target
     C = A - sigma * B
     C_solver = matsolver(sparse(C))
@@ -471,14 +502,14 @@ function _sparse_eigs(A, B; N::Int, target, matsolver, v0=nothing, left::Bool=fa
     function matvec(x)
         return solve(C_solver, B * x)
     end
-    eigenvalues, eigenvectors = _arnoldi_eigs(matvec, n, N; v0=v0)
+    eigenvalues, eigenvectors = _arnoldi_eigs(matvec, n, N; v0 = v0)
     # Transform back: lambda = sigma + 1/mu
     transformed_evals = sigma .+ 1.0 ./ eigenvalues
     if left
         function matvec_H(x)
             return solve_H(C_solver, B' * x)
         end
-        left_evals, left_evecs = _arnoldi_eigs(matvec_H, n, N; v0=v0)
+        left_evals, left_evecs = _arnoldi_eigs(matvec_H, n, N; v0 = v0)
         left_transformed = conj(sigma) .+ 1.0 ./ left_evals
         return (transformed_evals, eigenvectors, conj.(left_transformed), left_evecs)
     end
@@ -491,7 +522,7 @@ end
 Implicitly restarted Arnoldi iteration for computing k eigenvalues of the
 linear operator `op` acting on vectors of length `n`.
 """
-function _arnoldi_eigs(op, n::Int, k::Int; v0=nothing)
+function _arnoldi_eigs(op, n::Int, k::Int; v0 = nothing)
     m = min(k + 20, n)  # Krylov subspace dimension
     V = zeros(ComplexF64, n, m + 1)
     H = zeros(ComplexF64, m + 1, m)
@@ -508,18 +539,18 @@ function _arnoldi_eigs(op, n::Int, k::Int; v0=nothing)
             H[i, j] = dot(V[:, i], w)
             w .-= H[i, j] .* V[:, i]
         end
-        H[j+1, j] = norm(w)
-        if abs(H[j+1, j]) < 1e-14
+        H[j + 1, j] = norm(w)
+        if abs(H[j + 1, j]) < 1.0e-14
             actual_m = j
             break
         end
-        V[:, j+1] = w / H[j+1, j]
+        V[:, j + 1] = w / H[j + 1, j]
     end
     # Eigendecompose the Hessenberg matrix
     Hm = H[1:actual_m, 1:actual_m]
     F = eigen(Hm)
     # Select k eigenvalues with largest magnitude
-    perm = sortperm(abs.(F.values); rev=true)
+    perm = sortperm(abs.(F.values); rev = true)
     k_actual = min(k, length(perm))
     selected = perm[1:k_actual]
     eigenvalues = F.values[selected]
@@ -551,12 +582,14 @@ end
 
 function LinearBoundaryValueSolver(problem; kw...)
     @debug "Beginning LBVP instantiation"
-    sd = _init_solver_base(problem;
-                           matsolver_default="MATRIX_FACTORIZER", kw...)
+    sd = _init_solver_base(
+        problem;
+        matsolver_default = "MATRIX_FACTORIZER", kw...
+    )
     solver = LinearBoundaryValueSolver(sd, Dict{Any, Any}(), 0, Any[])
     _finalize_solver_base!(sd, solver)
     # Create RHS handler
-    F_handler = add_system_handler!(sd.evaluator; iter=1, group="F")
+    F_handler = add_system_handler!(sd.evaluator; iter = 1, group = "F")
     for eq in get_equations(problem)
         add_task!(F_handler, eq["F"])
     end
@@ -570,10 +603,12 @@ _solver_data(s::LinearBoundaryValueSolver) = s.sd
 solver_matrices(::LinearBoundaryValueSolver) = ["L"]
 
 function Base.getproperty(s::LinearBoundaryValueSolver, sym::Symbol)
-    if sym in (:problem, :dist, :dtype, :state, :ncc_cutoff, :max_ncc_terms,
-               :entry_cutoff, :matrix_coupling, :matrix_dependence, :matsolver,
-               :bc_top, :tau_left, :interleave_components, :store_expanded_matrices,
-               :subsystems, :subproblems, :subproblems_by_group, :evaluator)
+    if sym in (
+            :problem, :dist, :dtype, :state, :ncc_cutoff, :max_ncc_terms,
+            :entry_cutoff, :matrix_coupling, :matrix_dependence, :matsolver,
+            :bc_top, :tau_left, :interleave_components, :store_expanded_matrices,
+            :subsystems, :subproblems, :subproblems_by_group, :evaluator,
+        )
         return getfield(getfield(s, :sd), sym)
     end
     return getfield(s, sym)
@@ -584,7 +619,7 @@ end
 
 Print the matrix rank and condition number of each subproblem LHS.
 """
-function print_subproblem_ranks(solver::LinearBoundaryValueSolver; subproblems=nothing)
+function print_subproblem_ranks(solver::LinearBoundaryValueSolver; subproblems = nothing)
     if subproblems === nothing
         subproblems = solver.subproblems
     end
@@ -595,9 +630,12 @@ function print_subproblem_ranks(solver::LinearBoundaryValueSolver; subproblems=n
         L = Matrix(sp.L_min)
         r = rank(L)
         c = cond(L)
-        println("subproblem: $i, group: $(sp.group), " *
-                "matrix rank: $r/$(size(L, 1)), cond: $(round(c, sigdigits=4))")
+        println(
+            "subproblem: $i, group: $(sp.group), " *
+                "matrix rank: $r/$(size(L, 1)), cond: $(round(c, sigdigits = 4))"
+        )
     end
+    return
 end
 
 """
@@ -610,8 +648,10 @@ Solve the BVP over selected subproblems.
 - `subproblems` -- subproblems to solve for (default: all)
 - `rebuild_matrices` -- rebuild LHS matrices if coefficients changed (default: false)
 """
-function solve!(solver::LinearBoundaryValueSolver;
-                subproblems=nothing, rebuild_matrices::Bool=false)
+function solve!(
+        solver::LinearBoundaryValueSolver;
+        subproblems = nothing, rebuild_matrices::Bool = false
+    )
     sd = solver.sd
     if subproblems === nothing
         subproblems = sd.subproblems
@@ -626,13 +666,13 @@ function solve!(solver::LinearBoundaryValueSolver;
         sp_to_build = [sp for sp in subproblems if !haskey(solver.subproblem_matsolvers, sp)]
     end
     if !isempty(sp_to_build)
-        solver_build_matrices!(solver; subproblems=sp_to_build, matrices=["L"])
+        solver_build_matrices!(solver; subproblems = sp_to_build, matrices = ["L"])
         for sp in sp_to_build
             solver.subproblem_matsolvers[sp] = sd.matsolver(sp.L_min, solver)
         end
     end
     # Compute RHS
-    evaluate_scheduled!(sd.evaluator; iteration=solver.iteration)
+    evaluate_scheduled!(sd.evaluator; iteration = solver.iteration)
     # Ensure coeff space
     for field in solver.F
         change_layout!(field, "c")
@@ -646,7 +686,7 @@ function solve!(solver::LinearBoundaryValueSolver;
         spX = solve(solver.subproblem_matsolvers[sp], spF)
         scatter_inputs!(sp, spX, sd.state)
     end
-    solver.iteration += 1
+    return solver.iteration += 1
 end
 
 """
@@ -654,12 +694,12 @@ end
 
 Evaluate specified handlers (all by default).
 """
-function evaluate_handlers!(solver::LinearBoundaryValueSolver; handlers=nothing)
+function evaluate_handlers!(solver::LinearBoundaryValueSolver; handlers = nothing)
     sd = solver.sd
     if handlers === nothing
         handlers = sd.evaluator.handlers
     end
-    evaluate_handlers!(sd.evaluator, handlers; iteration=solver.iteration)
+    return evaluate_handlers!(sd.evaluator, handlers; iteration = solver.iteration)
 end
 
 # ============================================================================
@@ -691,8 +731,10 @@ end
 
 function NonlinearBoundaryValueSolver(problem; kw...)
     @debug "Beginning NLBVP instantiation"
-    sd = _init_solver_base(problem;
-                           matsolver_default="MATRIX_SOLVER", kw...)
+    sd = _init_solver_base(
+        problem;
+        matsolver_default = "MATRIX_SOLVER", kw...
+    )
     perts = problem.perturbations
     # Copy valid modes from variables to perturbations
     for (pert, var) in zip(perts, get_variables(problem))
@@ -701,7 +743,7 @@ function NonlinearBoundaryValueSolver(problem; kw...)
     solver = NonlinearBoundaryValueSolver(sd, collect(Any, perts), 0, Any[])
     _finalize_solver_base!(sd, solver)
     # Create RHS handler
-    F_handler = add_system_handler!(sd.evaluator; iter=1, group="F")
+    F_handler = add_system_handler!(sd.evaluator; iter = 1, group = "F")
     for eq in get_equations(problem)
         add_task!(F_handler, eq["F"])
     end
@@ -715,10 +757,12 @@ _solver_data(s::NonlinearBoundaryValueSolver) = s.sd
 solver_matrices(::NonlinearBoundaryValueSolver) = ["dF"]
 
 function Base.getproperty(s::NonlinearBoundaryValueSolver, sym::Symbol)
-    if sym in (:problem, :dist, :dtype, :state, :ncc_cutoff, :max_ncc_terms,
-               :entry_cutoff, :matrix_coupling, :matrix_dependence, :matsolver,
-               :bc_top, :tau_left, :interleave_components, :store_expanded_matrices,
-               :subsystems, :subproblems, :subproblems_by_group, :evaluator)
+    if sym in (
+            :problem, :dist, :dtype, :state, :ncc_cutoff, :max_ncc_terms,
+            :entry_cutoff, :matrix_coupling, :matrix_dependence, :matsolver,
+            :bc_top, :tau_left, :interleave_components, :store_expanded_matrices,
+            :subsystems, :subproblems, :subproblems_by_group, :evaluator,
+        )
         return getfield(getfield(s, :sd), sym)
     end
     return getfield(s, sym)
@@ -729,7 +773,7 @@ end
 
 Print the matrix rank and condition number of each subproblem Jacobian.
 """
-function print_subproblem_ranks(solver::NonlinearBoundaryValueSolver; subproblems=nothing)
+function print_subproblem_ranks(solver::NonlinearBoundaryValueSolver; subproblems = nothing)
     if subproblems === nothing
         subproblems = solver.subproblems
     end
@@ -740,9 +784,12 @@ function print_subproblem_ranks(solver::NonlinearBoundaryValueSolver; subproblem
         dF = Matrix(sp.dF_min)
         r = rank(dF)
         c = cond(dF)
-        println("subproblem: $i, group: $(sp.group), " *
-                "matrix rank: $r/$(size(dF, 1)), cond: $(round(c, sigdigits=4))")
+        println(
+            "subproblem: $i, group: $(sp.group), " *
+                "matrix rank: $r/$(size(dF, 1)), cond: $(round(c, sigdigits = 4))"
+        )
     end
+    return
 end
 
 """
@@ -750,12 +797,12 @@ end
 
 Perform one Newton iteration, updating the solution.
 """
-function newton_iteration!(solver::NonlinearBoundaryValueSolver; damping::Float64=1.0)
+function newton_iteration!(solver::NonlinearBoundaryValueSolver; damping::Float64 = 1.0)
     sd = solver.sd
     # Compute RHS (evaluate F(X_n))
-    evaluate_scheduled!(sd.evaluator; iteration=solver.iteration)
+    evaluate_scheduled!(sd.evaluator; iteration = solver.iteration)
     # Rebuild Jacobian
-    solver_build_matrices!(solver; subproblems=sd.subproblems, matrices=["dF"])
+    solver_build_matrices!(solver; subproblems = sd.subproblems, matrices = ["dF"])
     # Ensure coeff space
     for field in solver.F
         change_layout!(field, "c")
@@ -774,7 +821,7 @@ function newton_iteration!(solver::NonlinearBoundaryValueSolver; damping::Float6
     for (var, pert) in zip(sd.state, solver.perturbations)
         var["c"] .-= damping .* pert["c"]
     end
-    solver.iteration += 1
+    return solver.iteration += 1
 end
 
 """
@@ -782,12 +829,12 @@ end
 
 Evaluate specified handlers (all by default).
 """
-function evaluate_handlers!(solver::NonlinearBoundaryValueSolver; handlers=nothing)
+function evaluate_handlers!(solver::NonlinearBoundaryValueSolver; handlers = nothing)
     sd = solver.sd
     if handlers === nothing
         handlers = sd.evaluator.handlers
     end
-    evaluate_handlers!(sd.evaluator, handlers; iteration=solver.iteration)
+    return evaluate_handlers!(sd.evaluator, handlers; iteration = solver.iteration)
 end
 
 # ============================================================================
@@ -834,13 +881,17 @@ mutable struct InitialValueSolver <: SolverBase
     run_time_end::Float64
 end
 
-function InitialValueSolver(problem, timestepper_type;
-                            enforce_real_cadence::Int=100,
-                            warmup_iterations::Int=10,
-                            kw...)
+function InitialValueSolver(
+        problem, timestepper_type;
+        enforce_real_cadence::Int = 100,
+        warmup_iterations::Int = 10,
+        kw...
+    )
     @debug "Beginning IVP instantiation"
-    sd = _init_solver_base(problem;
-                           matsolver_default="MATRIX_FACTORIZER", kw...)
+    sd = _init_solver_base(
+        problem;
+        matsolver_default = "MATRIX_FACTORIZER", kw...
+    )
     init_time = time()
     solver = InitialValueSolver(
         sd,
@@ -858,12 +909,12 @@ function InitialValueSolver(problem, timestepper_type;
     )
     _finalize_solver_base!(sd, solver)
     # Build LHS matrices
-    solver_build_matrices!(solver; subproblems=sd.subproblems, matrices=["M", "L"])
+    solver_build_matrices!(solver; subproblems = sd.subproblems, matrices = ["M", "L"])
     # Compute total modes
     local_modes = sum(prod(subproblem_shape(sp)) for sp in sd.subproblems)
     solver.total_modes = local_modes  # Serial; MPI would allreduce
     # Create RHS handler
-    F_handler = add_system_handler!(sd.evaluator; iter=1, group="F")
+    F_handler = add_system_handler!(sd.evaluator; iter = 1, group = "F")
     for eq in get_equations(problem)
         add_task!(F_handler, eq["F"])
     end
@@ -891,10 +942,12 @@ _solver_data(s::InitialValueSolver) = s.sd
 solver_matrices(::InitialValueSolver) = ["M", "L"]
 
 function Base.getproperty(s::InitialValueSolver, sym::Symbol)
-    if sym in (:problem, :dist, :dtype, :state, :ncc_cutoff, :max_ncc_terms,
-               :entry_cutoff, :matrix_coupling, :matrix_dependence, :matsolver,
-               :bc_top, :tau_left, :interleave_components, :store_expanded_matrices,
-               :subsystems, :subproblems, :subproblems_by_group, :evaluator)
+    if sym in (
+            :problem, :dist, :dtype, :state, :ncc_cutoff, :max_ncc_terms,
+            :entry_cutoff, :matrix_coupling, :matrix_dependence, :matsolver,
+            :bc_top, :tau_left, :interleave_components, :store_expanded_matrices,
+            :subsystems, :subproblems, :subproblems_by_group, :evaluator,
+        )
         return getfield(getfield(s, :sd), sym)
     end
     return getfield(s, sym)
@@ -909,7 +962,7 @@ function Base.setproperty!(s::InitialValueSolver, sym::Symbol, val)
         end
         return val
     end
-    setfield!(s, sym, val)
+    return setfield!(s, sym, val)
 end
 
 function _get_initial_sim_time(problem)
@@ -975,7 +1028,7 @@ function step!(solver::InitialValueSolver, dt::Float64)
     end
     # Update iteration
     solver.iteration += 1
-    solver.dt = dt
+    return solver.dt = dt
 end
 
 """
@@ -989,7 +1042,7 @@ function enforce_hermitian_symmetry!(solver::InitialValueSolver, fields)
         change_scales!(f, f.domain.dealias)
     end
     require_grid_space!(sd.evaluator, fields)
-    require_coeff_space!(sd.evaluator, fields)
+    return require_coeff_space!(sd.evaluator, fields)
 end
 
 """
@@ -1002,13 +1055,15 @@ Advance the system until a stopping criterion is reached.
 - `timestep_function` -- callable returning the next timestep
 - `log_cadence` -- iteration cadence for info logging (default: 100)
 """
-function evolve!(solver::InitialValueSolver, timestep_function;
-                 log_cadence::Int=100)
+function evolve!(
+        solver::InitialValueSolver, timestep_function;
+        log_cadence::Int = 100
+    )
     if isinf(solver.stop_sim_time) && isinf(solver.stop_wall_time) &&
-       solver.stop_iteration == typemax(Int)
+            solver.stop_iteration == typemax(Int)
         throw(ArgumentError("No stopping criterion specified."))
     end
-    try
+    return try
         @info "Starting main loop"
         while proceed(solver)
             dt_val = timestep_function()
@@ -1030,16 +1085,18 @@ end
 
 Evaluate specified handlers (all by default).
 """
-function evaluate_handlers!(solver::InitialValueSolver; handlers=nothing, dt::Float64=0.0)
+function evaluate_handlers!(solver::InitialValueSolver; handlers = nothing, dt::Float64 = 0.0)
     sd = solver.sd
     if handlers === nothing
         handlers = sd.evaluator.handlers
     end
-    evaluate_handlers!(sd.evaluator, handlers;
-                       iteration=solver.iteration,
-                       wall_time=wall_time(solver),
-                       sim_time=solver.sim_time,
-                       timestep=dt)
+    return evaluate_handlers!(
+        sd.evaluator, handlers;
+        iteration = solver.iteration,
+        wall_time = wall_time(solver),
+        sim_time = solver.sim_time,
+        timestep = dt
+    )
 end
 
 """
@@ -1047,8 +1104,10 @@ end
 
 Print the matrix rank and condition number of each subproblem LHS.
 """
-function print_subproblem_ranks(solver::InitialValueSolver;
-                                subproblems=nothing, dt::Float64=1.0)
+function print_subproblem_ranks(
+        solver::InitialValueSolver;
+        subproblems = nothing, dt::Float64 = 1.0
+    )
     if subproblems === nothing
         subproblems = solver.subproblems
     end
@@ -1058,9 +1117,12 @@ function print_subproblem_ranks(solver::InitialValueSolver;
         A = Matrix(M + dt * L)
         r = rank(A)
         c = cond(A)
-        println("subproblem: $i, group: $(sp.group), " *
-                "matrix rank: $r/$(size(A, 1)), cond: $(round(c, sigdigits=4))")
+        println(
+            "subproblem: $i, group: $(sp.group), " *
+                "matrix rank: $r/$(size(A, 1)), cond: $(round(c, sigdigits = 4))"
+        )
     end
+    return
 end
 
 """
@@ -1073,17 +1135,17 @@ function log_stats(solver::InitialValueSolver)
     start = solver.start_time_end
     @info "Final iteration: $(solver.iteration)"
     @info "Final sim time: $(solver.sim_time)"
-    @info "Setup time (init - iter 0): $(round(start, sigdigits=4)) sec"
-    if solver.iteration >= solver.initial_iteration + solver.warmup_iterations
+    @info "Setup time (init - iter 0): $(round(start, sigdigits = 4)) sec"
+    return if solver.iteration >= solver.initial_iteration + solver.warmup_iterations
         warmup = solver.warmup_time_end - solver.warmup_time_start
         run = solver.run_time_end - solver.run_time_start
         modes = solver.total_modes
         stages = (solver.iteration - solver.warmup_iterations - solver.initial_iteration) *
-                 solver.timestepper.stages
-        @info "Warmup time: $(round(warmup, sigdigits=4)) sec"
-        @info "Run time: $(round(run, sigdigits=4)) sec"
+            solver.timestepper.stages
+        @info "Warmup time: $(round(warmup, sigdigits = 4)) sec"
+        @info "Run time: $(round(run, sigdigits = 4)) sec"
         if run > 0
-            @info "Speed: $(round(modes * stages / run, sigdigits=4)) mode-stages/sec"
+            @info "Speed: $(round(modes * stages / run, sigdigits = 4)) mode-stages/sec"
         end
     else
         @info "Timings unavailable because warmup did not complete."
@@ -1109,7 +1171,6 @@ end
 """Stub: build_system! for handler."""
 
 
-
 """Stub: change_scales! for fields."""
 
 """Stub: get_timestepper by name."""
@@ -1120,21 +1181,21 @@ function get_timestepper end
 # ============================================================================
 
 export SolverBase,
-       SolverData,
-       EigenvalueSolver,
-       LinearBoundaryValueSolver,
-       NonlinearBoundaryValueSolver,
-       InitialValueSolver,
-       solve_dense!,
-       solve_sparse!,
-       set_state!,
-       solve!,
-       newton_iteration!,
-       step!,
-       evolve!,
-       proceed,
-       wall_time,
-       log_stats,
-       print_subproblem_ranks,
-       solver_build_matrices!,
-       evaluate_handlers!
+    SolverData,
+    EigenvalueSolver,
+    LinearBoundaryValueSolver,
+    NonlinearBoundaryValueSolver,
+    InitialValueSolver,
+    solve_dense!,
+    solve_sparse!,
+    set_state!,
+    solve!,
+    newton_iteration!,
+    step!,
+    evolve!,
+    proceed,
+    wall_time,
+    log_stats,
+    print_subproblem_ranks,
+    solver_build_matrices!,
+    evaluate_handlers!

@@ -42,8 +42,8 @@ function split_equation(equation::AbstractString)
         throw(SymbolicParsingError("Equation contains multiple top-level equals signs."))
     end
     idx = top_level_equals[1]
-    lhs = strip(equation[1:idx-1])
-    rhs = strip(equation[idx+1:end])
+    lhs = strip(equation[1:(idx - 1)])
+    rhs = strip(equation[(idx + 1):end])
     return (String(lhs), String(rhs))
 end
 
@@ -115,5 +115,5 @@ end
 # ---------------------------------------------------------------------------
 
 export split_equation,
-       split_call,
-       lambdify_functions
+    split_call,
+    lambdify_functions

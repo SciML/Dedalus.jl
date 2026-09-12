@@ -51,7 +51,7 @@ idx, data = take!(ch)   # (0, [...])
 ```
 """
 function chunked_rng(seed, chunk_size::Int, distribution::AbstractString)
-    return Channel{Tuple{Int, Vector{Float64}}}(; csize=1) do ch
+    return Channel{Tuple{Int, Vector{Float64}}}(; csize = 1) do ch
         rng = Xoshiro(seed)
         chunk_index = 0
         while true
@@ -176,7 +176,7 @@ end
 
 Create an `IndexArray` with the given shape and index ordering.
 """
-IndexArray(shape::NTuple{N, Int}; order::Char='C') where {N} =
+IndexArray(shape::NTuple{N, Int}; order::Char = 'C') where {N} =
     IndexArray{N}(shape, order)
 
 """
@@ -210,7 +210,7 @@ Slice the `IndexArray` with 1-based `UnitRange`s and return an `Array{Int}` of
 """
 function Base.getindex(ia::IndexArray{N}, key::Vararg{UnitRange{Int}, N}) where {N}
     # Convert 1-based ranges to 0-based ranges
-    ranges_0 = Tuple(0:(last(r)-first(r)) .+ (first(r) - 1) for r in key)
+    ranges_0 = Tuple(0:((last(r) - first(r)) .+ (first(r) - 1)) for r in key)
     # Build output shape
     out_shape = Tuple(length(r) for r in key)
     result = Array{Int}(undef, out_shape)
@@ -282,12 +282,14 @@ end
 
 Create a `ChunkedRandomArray` with the given shape and RNG parameters.
 """
-function ChunkedRandomArray(shape::NTuple{N, Int};
-                            seed=nothing,
-                            chunk_size::Int=2^20,
-                            distribution::AbstractString="uniform",
-                            order::Char='C') where {N}
-    ia = IndexArray(shape; order=order)
+function ChunkedRandomArray(
+        shape::NTuple{N, Int};
+        seed = nothing,
+        chunk_size::Int = 2^20,
+        distribution::AbstractString = "uniform",
+        order::Char = 'C'
+    ) where {N}
+    ia = IndexArray(shape; order = order)
     return ChunkedRandomArray{N}(ia, seed, chunk_size, String(distribution))
 end
 
@@ -303,7 +305,7 @@ end
 # ---------------------------------------------------------------------------
 
 export chunked_rng,
-       rng_element,
-       rng_elements,
-       IndexArray,
-       ChunkedRandomArray
+    rng_element,
+    rng_elements,
+    IndexArray,
+    ChunkedRandomArray

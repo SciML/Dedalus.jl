@@ -65,8 +65,10 @@ function get_timestepper(name::AbstractString)
     if haskey(SCHEME_REGISTRY, key)
         return SCHEME_REGISTRY[key]
     end
-    error("Unknown timestepper: $name. " *
-          "Available: $(join(sort(collect(keys(SCHEME_REGISTRY))), ", "))")
+    error(
+        "Unknown timestepper: $name. " *
+            "Available: $(join(sort(collect(keys(SCHEME_REGISTRY))), ", "))"
+    )
 end
 
 # CoeffSystem is defined in system.jl (included before this file)
@@ -135,15 +137,17 @@ end
 
 Initialize the multistep IMEX data structures.
 """
-function _init_multistep(solver, amax::Int, bmax::Int, cmax::Int, steps::Int;
-                         dtype::DataType=Float64)
+function _init_multistep(
+        solver, amax::Int, bmax::Int, cmax::Int, steps::Int;
+        dtype::DataType = Float64
+    )
     subproblems = solver.subproblems
-    RHS = CoeffSystem(subproblems; dtype=dtype)
-    solve_buf = CoeffSystem(subproblems; dtype=dtype)
+    RHS = CoeffSystem(subproblems; dtype = dtype)
+    solve_buf = CoeffSystem(subproblems; dtype = dtype)
     dt_history = zeros(Float64, steps)
-    MX = [CoeffSystem(subproblems; dtype=dtype) for _ in 1:amax]
-    LX = [CoeffSystem(subproblems; dtype=dtype) for _ in 1:bmax]
-    F_sys = [CoeffSystem(subproblems; dtype=dtype) for _ in 1:cmax]
+    MX = [CoeffSystem(subproblems; dtype = dtype) for _ in 1:amax]
+    LX = [CoeffSystem(subproblems; dtype = dtype) for _ in 1:bmax]
+    F_sys = [CoeffSystem(subproblems; dtype = dtype) for _ in 1:cmax]
     nonempty = Any[sp for sp in subproblems if subproblem_size(sp) > 0]
     return MultistepIMEXData{dtype}(solver, RHS, solve_buf, dt_history, MX, LX, F_sys, 0, nothing, nonempty)
 end
@@ -160,8 +164,10 @@ This implements the core multistep algorithm:
 4. Build RHS from history
 5. Form and solve the LHS system
 """
-function _multistep_step!(data::MultistepIMEXData, stepper::MultistepIMEX,
-                          dt::Float64, wall_time::Float64)::Nothing
+function _multistep_step!(
+        data::MultistepIMEXData, stepper::MultistepIMEX,
+        dt::Float64, wall_time::Float64
+    )::Nothing
     solver = data.solver
     subproblems = data._nonempty_subproblems
     evaluator = solver.evaluator
@@ -213,11 +219,13 @@ function _multistep_step!(data::MultistepIMEXData, stepper::MultistepIMEX,
     end
 
     # Evaluate F(X0)
-    evaluate_scheduled!(evaluator; iteration=iteration, wall_time=wall_time,
-                        sim_time=sim_time, timestep=dt)
+    evaluate_scheduled!(
+        evaluator; iteration = iteration, wall_time = wall_time,
+        sim_time = sim_time, timestep = dt
+    )
     require_coeff_space!(evaluator, F_fields)
     for sp in subproblems
-        gather_outputs(sp, F_fields; out=get_subdata(F0, sp))
+        gather_outputs(sp, F_fields; out = get_subdata(F0, sp))
     end
 
     # Build RHS
@@ -226,15 +234,15 @@ function _multistep_step!(data::MultistepIMEXData, stepper::MultistepIMEX,
         @. RHS.data = c[2] * F_sys[1].data
         for j in 3:length(c)
             # RHS += c[j] * F[j-1]
-            axpy!(c[j], F_sys[j-1].data, RHS.data)
+            axpy!(c[j], F_sys[j - 1].data, RHS.data)
         end
         for j in 2:length(a)
             # RHS -= a[j] * MX[j-1]
-            axpy!(-a[j], MX[j-1].data, RHS.data)
+            axpy!(-a[j], MX[j - 1].data, RHS.data)
         end
         for j in 2:length(b)
             # RHS -= b[j] * LX[j-1]
-            axpy!(-b[j], LX[j-1].data, RHS.data)
+            axpy!(-b[j], LX[j - 1].data, RHS.data)
         end
     end
 
@@ -258,7 +266,7 @@ function _multistep_step!(data::MultistepIMEXData, stepper::MultistepIMEX,
     end
 
     # Update sim time
-    solver.sim_time += dt
+    return solver.sim_time += dt
 end
 
 """
@@ -274,7 +282,7 @@ Equivalent to Python's `deque.rotate()`.
     end
     last = v[n]
     for i in n:-1:2
-        v[i] = v[i-1]
+        v[i] = v[i - 1]
     end
     v[1] = last
     return v
@@ -320,8 +328,10 @@ const CNAB1_BMAX = 1
 const CNAB1_CMAX = 1
 
 function CNAB1(solver)
-    data = _init_multistep(solver, CNAB1_AMAX, CNAB1_BMAX, CNAB1_CMAX, 1;
-                           dtype=solver.dtype)
+    data = _init_multistep(
+        solver, CNAB1_AMAX, CNAB1_BMAX, CNAB1_CMAX, 1;
+        dtype = solver.dtype
+    )
     return CNAB1(data, 1, 1)
 end
 
@@ -343,7 +353,7 @@ function compute_coefficients(::CNAB1, timesteps, iteration)
 end
 
 function step!(ts::CNAB1, dt::Float64, wt::Float64)
-    _multistep_step!(ts.data, ts, dt, wt)
+    return _multistep_step!(ts.data, ts, dt, wt)
 end
 
 register_scheme!(CNAB1)
@@ -371,8 +381,10 @@ const SBDF1_BMAX = 1
 const SBDF1_CMAX = 1
 
 function SBDF1(solver)
-    data = _init_multistep(solver, SBDF1_AMAX, SBDF1_BMAX, SBDF1_CMAX, 1;
-                           dtype=solver.dtype)
+    data = _init_multistep(
+        solver, SBDF1_AMAX, SBDF1_BMAX, SBDF1_CMAX, 1;
+        dtype = solver.dtype
+    )
     return SBDF1(data, 1, 1)
 end
 
@@ -388,7 +400,7 @@ function compute_coefficients(::SBDF1, timesteps, iteration)
 end
 
 function step!(ts::SBDF1, dt::Float64, wt::Float64)
-    _multistep_step!(ts.data, ts, dt, wt)
+    return _multistep_step!(ts.data, ts, dt, wt)
 end
 
 register_scheme!(SBDF1)
@@ -416,8 +428,10 @@ const CNAB2_BMAX = 2
 const CNAB2_CMAX = 2
 
 function CNAB2(solver)
-    data = _init_multistep(solver, CNAB2_AMAX, CNAB2_BMAX, CNAB2_CMAX, 2;
-                           dtype=solver.dtype)
+    data = _init_multistep(
+        solver, CNAB2_AMAX, CNAB2_BMAX, CNAB2_CMAX, 2;
+        dtype = solver.dtype
+    )
     return CNAB2(data, 1, 2)
 end
 
@@ -439,7 +453,7 @@ function compute_coefficients(ts::CNAB2, timesteps, iteration)
 end
 
 function step!(ts::CNAB2, dt::Float64, wt::Float64)
-    _multistep_step!(ts.data, ts, dt, wt)
+    return _multistep_step!(ts.data, ts, dt, wt)
 end
 
 register_scheme!(CNAB2)
@@ -467,8 +481,10 @@ const MCNAB2_BMAX = 2
 const MCNAB2_CMAX = 2
 
 function MCNAB2(solver)
-    data = _init_multistep(solver, MCNAB2_AMAX, MCNAB2_BMAX, MCNAB2_CMAX, 2;
-                           dtype=solver.dtype)
+    data = _init_multistep(
+        solver, MCNAB2_AMAX, MCNAB2_BMAX, MCNAB2_CMAX, 2;
+        dtype = solver.dtype
+    )
     return MCNAB2(data, 1, 2)
 end
 
@@ -492,7 +508,7 @@ function compute_coefficients(ts::MCNAB2, timesteps, iteration)
 end
 
 function step!(ts::MCNAB2, dt::Float64, wt::Float64)
-    _multistep_step!(ts.data, ts, dt, wt)
+    return _multistep_step!(ts.data, ts, dt, wt)
 end
 
 register_scheme!(MCNAB2)
@@ -520,8 +536,10 @@ const SBDF2_BMAX = 2
 const SBDF2_CMAX = 2
 
 function SBDF2(solver)
-    data = _init_multistep(solver, SBDF2_AMAX, SBDF2_BMAX, SBDF2_CMAX, 2;
-                           dtype=solver.dtype)
+    data = _init_multistep(
+        solver, SBDF2_AMAX, SBDF2_BMAX, SBDF2_CMAX, 2;
+        dtype = solver.dtype
+    )
     return SBDF2(data, 1, 2)
 end
 
@@ -545,7 +563,7 @@ function compute_coefficients(ts::SBDF2, timesteps, iteration)
 end
 
 function step!(ts::SBDF2, dt::Float64, wt::Float64)
-    _multistep_step!(ts.data, ts, dt, wt)
+    return _multistep_step!(ts.data, ts, dt, wt)
 end
 
 register_scheme!(SBDF2)
@@ -573,8 +591,10 @@ const CNLF2_BMAX = 2
 const CNLF2_CMAX = 2
 
 function CNLF2(solver)
-    data = _init_multistep(solver, CNLF2_AMAX, CNLF2_BMAX, CNLF2_CMAX, 2;
-                           dtype=solver.dtype)
+    data = _init_multistep(
+        solver, CNLF2_AMAX, CNLF2_BMAX, CNLF2_CMAX, 2;
+        dtype = solver.dtype
+    )
     return CNLF2(data, 1, 2)
 end
 
@@ -599,7 +619,7 @@ function compute_coefficients(ts::CNLF2, timesteps, iteration)
 end
 
 function step!(ts::CNLF2, dt::Float64, wt::Float64)
-    _multistep_step!(ts.data, ts, dt, wt)
+    return _multistep_step!(ts.data, ts, dt, wt)
 end
 
 register_scheme!(CNLF2)
@@ -627,8 +647,10 @@ const SBDF3_BMAX = 3
 const SBDF3_CMAX = 3
 
 function SBDF3(solver)
-    data = _init_multistep(solver, SBDF3_AMAX, SBDF3_BMAX, SBDF3_CMAX, 3;
-                           dtype=solver.dtype)
+    data = _init_multistep(
+        solver, SBDF3_AMAX, SBDF3_BMAX, SBDF3_CMAX, 3;
+        dtype = solver.dtype
+    )
     return SBDF3(data, 1, 3)
 end
 
@@ -656,7 +678,7 @@ function compute_coefficients(ts::SBDF3, timesteps, iteration)
 end
 
 function step!(ts::SBDF3, dt::Float64, wt::Float64)
-    _multistep_step!(ts.data, ts, dt, wt)
+    return _multistep_step!(ts.data, ts, dt, wt)
 end
 
 register_scheme!(SBDF3)
@@ -684,8 +706,10 @@ const SBDF4_BMAX = 4
 const SBDF4_CMAX = 4
 
 function SBDF4(solver)
-    data = _init_multistep(solver, SBDF4_AMAX, SBDF4_BMAX, SBDF4_CMAX, 4;
-                           dtype=solver.dtype)
+    data = _init_multistep(
+        solver, SBDF4_AMAX, SBDF4_BMAX, SBDF4_CMAX, 4;
+        dtype = solver.dtype
+    )
     return SBDF4(data, 1, 4)
 end
 
@@ -720,7 +744,7 @@ function compute_coefficients(ts::SBDF4, timesteps, iteration)
 end
 
 function step!(ts::SBDF4, dt::Float64, wt::Float64)
-    _multistep_step!(ts.data, ts, dt, wt)
+    return _multistep_step!(ts.data, ts, dt, wt)
 end
 
 register_scheme!(SBDF4)
@@ -848,13 +872,13 @@ end
 
 Initialize the Runge-Kutta IMEX data structures.
 """
-function _init_rk(solver, num_stages::Int; dtype::DataType=Float64)
+function _init_rk(solver, num_stages::Int; dtype::DataType = Float64)
     subproblems = solver.subproblems
-    RHS = CoeffSystem(subproblems; dtype=dtype)
-    solve_buf = CoeffSystem(subproblems; dtype=dtype)
-    MX0 = CoeffSystem(subproblems; dtype=dtype)
-    LX = [CoeffSystem(subproblems; dtype=dtype) for _ in 1:num_stages]
-    F_sys = [CoeffSystem(subproblems; dtype=dtype) for _ in 1:num_stages]
+    RHS = CoeffSystem(subproblems; dtype = dtype)
+    solve_buf = CoeffSystem(subproblems; dtype = dtype)
+    MX0 = CoeffSystem(subproblems; dtype = dtype)
+    LX = [CoeffSystem(subproblems; dtype = dtype) for _ in 1:num_stages]
+    F_sys = [CoeffSystem(subproblems; dtype = dtype) for _ in 1:num_stages]
     nonempty = Any[sp for sp in subproblems if subproblem_size(sp) > 0]
     return RungeKuttaIMEXData{dtype}(solver, RHS, solve_buf, MX0, LX, F_sys, nothing, nonempty)
 end
@@ -869,8 +893,10 @@ For each stage i = 1, ..., s:
         + k * sum_{j<i} A_{ij} * F(n,j)
         - k * sum_{j<i} H_{ij} * L . X(n,j)
 """
-function _rk_step!(data::RungeKuttaIMEXData, stepper::RungeKuttaIMEX,
-                   dt::Float64, wall_time::Float64)::Nothing
+function _rk_step!(
+        data::RungeKuttaIMEXData, stepper::RungeKuttaIMEX,
+        dt::Float64, wall_time::Float64
+    )::Nothing
     solver = data.solver
     subproblems = data._nonempty_subproblems
     evaluator = solver.evaluator
@@ -926,15 +952,17 @@ function _rk_step!(data::RungeKuttaIMEXData, stepper::RungeKuttaIMEX,
 
         # Compute F(n,i-1)
         if i == 2
-            evaluate_scheduled!(evaluator; iteration=iteration,
-                                wall_time=wall_time,
-                                sim_time=solver.sim_time, timestep=dt)
+            evaluate_scheduled!(
+                evaluator; iteration = iteration,
+                wall_time = wall_time,
+                sim_time = solver.sim_time, timestep = dt
+            )
         else
             evaluate_group!(evaluator, "F")
         end
         Fi = F_sys[i - 1]
         for sp in subproblems
-            gather_outputs(sp, F_fields; out=get_subdata(Fi, sp))
+            gather_outputs(sp, F_fields; out = get_subdata(Fi, sp))
         end
 
         # Construct RHS(n,i)
@@ -967,6 +995,7 @@ function _rk_step!(data::RungeKuttaIMEXData, stepper::RungeKuttaIMEX,
         end
         solver.sim_time = sim_time_0 + k * c_tab[i]
     end
+    return
 end
 
 # ============================================================================
@@ -988,17 +1017,21 @@ mutable struct RK111 <: RungeKuttaIMEX
 end
 
 function RK111(solver)
-    data = _init_rk(solver, 1; dtype=solver.dtype)
+    data = _init_rk(solver, 1; dtype = solver.dtype)
     c = [0.0, 1.0]
-    A = [0.0 0.0;
-         1.0 0.0]
-    H = [0.0 0.0;
-         0.0 1.0]
+    A = [
+        0.0 0.0;
+        1.0 0.0
+    ]
+    H = [
+        0.0 0.0;
+        0.0 1.0
+    ]
     return RK111(data, 1, 1, c, A, H)
 end
 
 function step!(ts::RK111, dt::Float64, wt::Float64)
-    _rk_step!(ts.data, ts, dt, wt)
+    return _rk_step!(ts.data, ts, dt, wt)
 end
 
 register_scheme!(RK111)
@@ -1022,21 +1055,25 @@ mutable struct RK222 <: RungeKuttaIMEX
 end
 
 function RK222(solver)
-    data = _init_rk(solver, 2; dtype=solver.dtype)
+    data = _init_rk(solver, 2; dtype = solver.dtype)
     gamma = (2 - sqrt(2)) / 2
     delta = 1 - 1 / gamma / 2
     c = [0.0, gamma, 1.0]
-    A = [0.0   0.0     0.0;
-         gamma 0.0     0.0;
-         delta 1-delta 0.0]
-    H = [0.0     0.0     0.0;
-         0.0     gamma   0.0;
-         0.0     1-gamma gamma]
+    A = [
+        0.0   0.0     0.0;
+        gamma 0.0     0.0;
+        delta 1 - delta 0.0
+    ]
+    H = [
+        0.0     0.0     0.0;
+        0.0     gamma   0.0;
+        0.0     1 - gamma gamma
+    ]
     return RK222(data, 2, 1, c, A, H)
 end
 
 function step!(ts::RK222, dt::Float64, wt::Float64)
-    _rk_step!(ts.data, ts, dt, wt)
+    return _rk_step!(ts.data, ts, dt, wt)
 end
 
 register_scheme!(RK222)
@@ -1060,23 +1097,27 @@ mutable struct RK443 <: RungeKuttaIMEX
 end
 
 function RK443(solver)
-    data = _init_rk(solver, 4; dtype=solver.dtype)
-    c = [0.0, 1/2, 2/3, 1/2, 1.0]
-    A = [  0.0    0.0    0.0    0.0  0.0;
-           1/2    0.0    0.0    0.0  0.0;
-          11/18   1/18   0.0    0.0  0.0;
-           5/6   -5/6    1/2    0.0  0.0;
-           1/4    7/4    3/4   -7/4  0.0]
-    H = [0.0    0.0    0.0    0.0   0.0;
-         0.0    1/2    0.0    0.0   0.0;
-         0.0    1/6    1/2    0.0   0.0;
-         0.0   -1/2    1/2    1/2   0.0;
-         0.0    3/2   -3/2    1/2   1/2]
+    data = _init_rk(solver, 4; dtype = solver.dtype)
+    c = [0.0, 1 / 2, 2 / 3, 1 / 2, 1.0]
+    A = [
+        0.0    0.0    0.0    0.0  0.0;
+        1 / 2    0.0    0.0    0.0  0.0;
+        11 / 18   1 / 18   0.0    0.0  0.0;
+        5 / 6   -5 / 6    1 / 2    0.0  0.0;
+        1 / 4    7 / 4    3 / 4   -7 / 4  0.0
+    ]
+    H = [
+        0.0    0.0    0.0    0.0   0.0;
+        0.0    1 / 2    0.0    0.0   0.0;
+        0.0    1 / 6    1 / 2    0.0   0.0;
+        0.0   -1 / 2    1 / 2    1 / 2   0.0;
+        0.0    3 / 2   -3 / 2    1 / 2   1 / 2
+    ]
     return RK443(data, 4, 1, c, A, H)
 end
 
 function step!(ts::RK443, dt::Float64, wt::Float64)
-    _rk_step!(ts.data, ts, dt, wt)
+    return _rk_step!(ts.data, ts, dt, wt)
 end
 
 register_scheme!(RK443)
@@ -1100,25 +1141,29 @@ mutable struct RKSMR <: RungeKuttaIMEX
 end
 
 function RKSMR(solver)
-    data = _init_rk(solver, 3; dtype=solver.dtype)
-    alpha1, alpha2, alpha3 = (29/96, -3/40, 1/6)
-    beta1, beta2, beta3 = (37/160, 5/24, 1/6)
-    gamma1, gamma2, gamma3 = (8/15, 5/12, 3/4)
-    zeta2, zeta3 = (-17/60, -5/12)
-    c = [0.0, 8/15, 2/3, 1.0]
-    A = [0.0           0.0           0.0     0.0;
-         gamma1        0.0           0.0     0.0;
-         gamma1+zeta2  gamma2        0.0     0.0;
-         gamma1+zeta2  gamma2+zeta3  gamma3  0.0]
-    H = [0.0     0.0            0.0            0.0;
-         alpha1  beta1          0.0            0.0;
-         alpha1  beta1+alpha2   beta2          0.0;
-         alpha1  beta1+alpha2   beta2+alpha3   beta3]
+    data = _init_rk(solver, 3; dtype = solver.dtype)
+    alpha1, alpha2, alpha3 = (29 / 96, -3 / 40, 1 / 6)
+    beta1, beta2, beta3 = (37 / 160, 5 / 24, 1 / 6)
+    gamma1, gamma2, gamma3 = (8 / 15, 5 / 12, 3 / 4)
+    zeta2, zeta3 = (-17 / 60, -5 / 12)
+    c = [0.0, 8 / 15, 2 / 3, 1.0]
+    A = [
+        0.0           0.0           0.0     0.0;
+        gamma1        0.0           0.0     0.0;
+        gamma1 + zeta2  gamma2        0.0     0.0;
+        gamma1 + zeta2  gamma2 + zeta3  gamma3  0.0
+    ]
+    H = [
+        0.0     0.0            0.0            0.0;
+        alpha1  beta1          0.0            0.0;
+        alpha1  beta1 + alpha2   beta2          0.0;
+        alpha1  beta1 + alpha2   beta2 + alpha3   beta3
+    ]
     return RKSMR(data, 3, 1, c, A, H)
 end
 
 function step!(ts::RKSMR, dt::Float64, wt::Float64)
-    _rk_step!(ts.data, ts, dt, wt)
+    return _rk_step!(ts.data, ts, dt, wt)
 end
 
 register_scheme!(RKSMR)
@@ -1142,19 +1187,23 @@ mutable struct RKGFY <: RungeKuttaIMEX
 end
 
 function RKGFY(solver)
-    data = _init_rk(solver, 2; dtype=solver.dtype)
+    data = _init_rk(solver, 2; dtype = solver.dtype)
     c = [0.0, 1.0, 1.0]
-    A = [0.0  0.0  0.0;
-         1.0  0.0  0.0;
-         0.5  0.5  0.0]
-    H = [0.0   0.0  0.0;
-         0.5   0.5  0.0;
-         0.5   0.0  0.5]
+    A = [
+        0.0  0.0  0.0;
+        1.0  0.0  0.0;
+        0.5  0.5  0.0
+    ]
+    H = [
+        0.0   0.0  0.0;
+        0.5   0.5  0.0;
+        0.5   0.0  0.5
+    ]
     return RKGFY(data, 2, 1, c, A, H)
 end
 
 function step!(ts::RKGFY, dt::Float64, wt::Float64)
-    _rk_step!(ts.data, ts, dt, wt)
+    return _rk_step!(ts.data, ts, dt, wt)
 end
 
 register_scheme!(RKGFY)
@@ -1188,15 +1237,15 @@ register_scheme!(RKGFY)
 # ============================================================================
 
 export IMEXBase,
-       MultistepIMEX,
-       RungeKuttaIMEX,
-       CoeffSystem,
-       get_subdata,
-       compute_coefficients,
-       CNAB1, CNAB2, MCNAB2,
-       SBDF1, SBDF2, SBDF3, SBDF4,
-       CNLF2,
-       RK111, RK222, RK443,
-       RKSMR, RKGFY,
-       SCHEME_REGISTRY,
-       get_timestepper
+    MultistepIMEX,
+    RungeKuttaIMEX,
+    CoeffSystem,
+    get_subdata,
+    compute_coefficients,
+    CNAB1, CNAB2, MCNAB2,
+    SBDF1, SBDF2, SBDF3, SBDF4,
+    CNLF2,
+    RK111, RK222, RK443,
+    RKSMR, RKGFY,
+    SCHEME_REGISTRY,
+    get_timestepper

@@ -14,10 +14,10 @@ using HDF5
 
 function build_s2_vertices(phi, theta)
     phi = vec(phi)
-    phi_vert = vcat(phi, [2*pi])
+    phi_vert = vcat(phi, [2 * pi])
     phi_vert .-= phi_vert[2] / 2
     theta = vec(theta)
-    theta_mid = (theta[1:end-1] .+ theta[2:end]) ./ 2
+    theta_mid = (theta[1:(end - 1)] .+ theta[2:end]) ./ 2
     theta_vert = vcat([pi], theta_mid, [0])
     return phi_vert, theta_vert
 end
@@ -25,7 +25,7 @@ end
 function build_spherical_vertices(phi, theta, r, Ri, Ro)
     phi_vert, theta_vert = build_s2_vertices(phi, theta)
     r = vec(r)
-    r_mid = (r[1:end-1] .+ r[2:end]) ./ 2
+    r_mid = (r[1:(end - 1)] .+ r[2:end]) ./ 2
     r_vert = vcat([Ri], r_mid, [Ro])
     return phi_vert, theta_vert, r_vert
 end
@@ -60,12 +60,12 @@ function main(filename, start, count, output)
     task_e = "T(phi=3/2*pi)"
     R = 1
     phis = 0
-    phie = 3*pi/2
+    phie = 3 * pi / 2
     dpi = 100
     savename_func(write) = "write_$(lpad(write, 6, '0')).png"
 
     # Plot writes
-    h5open(filename, "r") do file
+    return h5open(filename, "r") do file
         dset_o = file["tasks"][task_r]
         dset_s = file["tasks"][task_s]
         dset_e = file["tasks"][task_e]
@@ -106,7 +106,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     files = String[]
     for arg in ARGS
         if startswith(arg, "--output=")
-            output = arg[length("--output=") + 1:end]
+            output = arg[(length("--output=") + 1):end]
         else
             push!(files, arg)
         end

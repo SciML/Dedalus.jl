@@ -31,9 +31,9 @@ logger = Logging.current_logger()
 # Parameters
 Lx, Lz = 4, 1
 Nx, Nz = 256, 64
-Rayleigh = 2e6
+Rayleigh = 2.0e6
 Prandtl = 1
-dealias = 3/2
+dealias = 3 / 2
 stop_sim_time = 50
 timestepper = RK222
 max_timestep = 0.125
@@ -42,24 +42,24 @@ dtype = Float64
 # Bases
 ncoord = Coordinate("n")
 coords = CartesianCoordinates("x", "z")
-dist = Distributor((ncoord, coords); dtype=dtype)
-nbasis = CardinalBasis(ncoord; size=10)
-xbasis = RealFourier(coords["x"], Nx; bounds=(0, Lx), dealias=dealias)
-zbasis = ChebyshevT(coords["z"], Nz; bounds=(0, Lz), dealias=dealias)
+dist = Distributor((ncoord, coords); dtype = dtype)
+nbasis = CardinalBasis(ncoord; size = 10)
+xbasis = RealFourier(coords["x"], Nx; bounds = (0, Lx), dealias = dealias)
+zbasis = ChebyshevT(coords["z"], Nz; bounds = (0, Lz), dealias = dealias)
 
 # Fields
-p = Field(dist; name="p", bases=(nbasis, xbasis, zbasis))
-b = Field(dist; name="b", bases=(nbasis, xbasis, zbasis))
-u = VectorField(dist, coords; name="u", bases=(nbasis, xbasis, zbasis))
-tau_p = Field(dist; name="tau_p", bases=(nbasis,))
-tau_b1 = Field(dist; name="tau_b1", bases=(nbasis, xbasis))
-tau_b2 = Field(dist; name="tau_b2", bases=(nbasis, xbasis))
-tau_u1 = VectorField(dist, coords; name="tau_u1", bases=(nbasis, xbasis))
-tau_u2 = VectorField(dist, coords; name="tau_u2", bases=(nbasis, xbasis))
+p = Field(dist; name = "p", bases = (nbasis, xbasis, zbasis))
+b = Field(dist; name = "b", bases = (nbasis, xbasis, zbasis))
+u = VectorField(dist, coords; name = "u", bases = (nbasis, xbasis, zbasis))
+tau_p = Field(dist; name = "tau_p", bases = (nbasis,))
+tau_b1 = Field(dist; name = "tau_b1", bases = (nbasis, xbasis))
+tau_b2 = Field(dist; name = "tau_b2", bases = (nbasis, xbasis))
+tau_u1 = VectorField(dist, coords; name = "tau_u1", bases = (nbasis, xbasis))
+tau_u2 = VectorField(dist, coords; name = "tau_u2", bases = (nbasis, xbasis))
 
 # Substitutions
-kappa = (Rayleigh * Prandtl)^(-1/2)
-nu = (Rayleigh / Prandtl)^(-1/2)
+kappa = (Rayleigh * Prandtl)^(-1 / 2)
+nu = (Rayleigh / Prandtl)^(-1 / 2)
 x, z = local_grids(dist, xbasis, zbasis)
 ex, ez = unit_vector_fields(coords, dist)
 lift_basis = derivative_basis(zbasis, 1)
@@ -72,7 +72,7 @@ integ = A -> integrate(A, coords)
 # Problem
 # First-order form: "div(f)" becomes "trace(grad_f)"
 # First-order form: "lap(f)" becomes "div(grad_f)"
-problem = IVP([p, b, u, tau_p, tau_b1, tau_b2, tau_u1, tau_u2]; namespace=@locals)
+problem = IVP([p, b, u, tau_p, tau_b1, tau_b2, tau_u1, tau_u2]; namespace = @locals)
 add_equation!(problem, "trace(grad_u) + tau_p = 0")
 add_equation!(problem, "dt(b) - kappa*div(grad_b) + lift(tau_b2) = - u@grad(b)")
 add_equation!(problem, "dt(u) - nu*div(grad_u) + grad(p) - b*ez + lift(tau_u2) = - u@grad(u)")
@@ -87,26 +87,28 @@ solver = build_solver(problem, timestepper)
 solver.stop_sim_time = stop_sim_time
 
 # Initial conditions
-fill_random!(b, "g"; seed=42, distribution="normal", scale=1e-3) # Random noise
+fill_random!(b, "g"; seed = 42, distribution = "normal", scale = 1.0e-3) # Random noise
 b["g"] .*= z .* (Lz .- z) # Damp noise at walls
 b["g"] .+= Lz .- z # Add linear background
 
 # Analysis
 vorticity = -divergence(skew(u))
-snapshots = add_file_handler(solver.evaluator, "snapshots"; sim_dt=0.25, max_writes=50)
-add_task!(snapshots, b; name="buoyancy")
-add_task!(snapshots, vorticity; name="vorticity")
-add_task!(snapshots, average(b, "n"); name="ensemble buoyancy")
-add_task!(snapshots, average(vorticity, "n"); name="ensemble vorticity")
+snapshots = add_file_handler(solver.evaluator, "snapshots"; sim_dt = 0.25, max_writes = 50)
+add_task!(snapshots, b; name = "buoyancy")
+add_task!(snapshots, vorticity; name = "vorticity")
+add_task!(snapshots, average(b, "n"); name = "ensemble buoyancy")
+add_task!(snapshots, average(vorticity, "n"); name = "ensemble vorticity")
 
 # CFL
-cfl = CFL(solver; initial_dt=max_timestep, cadence=10, safety=0.5, threshold=0.05,
-          max_change=1.5, min_change=0.5, max_dt=max_timestep)
+cfl = CFL(
+    solver; initial_dt = max_timestep, cadence = 10, safety = 0.5, threshold = 0.05,
+    max_change = 1.5, min_change = 0.5, max_dt = max_timestep
+)
 add_velocity!(cfl, u)
 
 # Flow properties
-flow = GlobalFlowProperty(solver; cadence=10)
-add_property!(flow, sqrt(DotProduct(u, u)) / nu; name="Re")
+flow = GlobalFlowProperty(solver; cadence = 10)
+add_property!(flow, sqrt(DotProduct(u, u)) / nu; name = "Re")
 
 # Main loop
 try

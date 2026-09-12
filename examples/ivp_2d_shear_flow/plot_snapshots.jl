@@ -17,11 +17,11 @@ function main(filename, start, count, output)
     # Plot settings
     tasks = ["tracer", "pressure", "vorticity"]
     dpi = 200
-    title_func(sim_time) = "t = $(round(sim_time; digits=3))"
+    title_func(sim_time) = "t = $(round(sim_time; digits = 3))"
     savename_func(write) = "write_$(lpad(write, 6, '0')).png"
 
     # Plot writes
-    h5open(filename, "r") do file
+    return h5open(filename, "r") do file
         for index in start:(start + count - 1)
             for (n, task) in enumerate(tasks)
                 dset = file["tasks"][task]
@@ -56,7 +56,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     files = String[]
     for arg in ARGS
         if startswith(arg, "--output=")
-            output = arg[length("--output=") + 1:end]
+            output = arg[(length("--output=") + 1):end]
         else
             push!(files, arg)
         end

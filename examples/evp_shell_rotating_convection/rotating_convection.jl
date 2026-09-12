@@ -42,7 +42,7 @@ Nr = 64
 Ri = 0.35
 Ro = 1
 Prandtl = 1
-Ekman = 1e-5
+Ekman = 1.0e-5
 stress_free = true
 dtype = ComplexF64
 
@@ -55,27 +55,27 @@ end
 
 # Bases
 coords = SphericalCoordinates("phi", "theta", "r")
-dist = Distributor(coords; dtype=dtype)
-shell = ShellBasis(coords; shape=(Nphi, Ntheta, Nr), radii=(Ri, Ro), dtype=dtype)
+dist = Distributor(coords; dtype = dtype)
+shell = ShellBasis(coords; shape = (Nphi, Ntheta, Nr), radii = (Ri, Ro), dtype = dtype)
 sphere = outer_surface(shell)
 phi, theta, r = local_grids(dist, shell)
 
 # Fields
-om = Field(dist; name="om")
-u = VectorField(dist, coords; name="u", bases=(shell,))
-p = Field(dist; name="p", bases=(shell,))
-T = Field(dist; name="T", bases=(shell,))
-tau_u1 = VectorField(dist, coords; bases=(sphere,))
-tau_u2 = VectorField(dist, coords; bases=(sphere,))
-tau_T1 = Field(dist; bases=(sphere,))
-tau_T2 = Field(dist; bases=(sphere,))
+om = Field(dist; name = "om")
+u = VectorField(dist, coords; name = "u", bases = (shell,))
+p = Field(dist; name = "p", bases = (shell,))
+T = Field(dist; name = "T", bases = (shell,))
+tau_u1 = VectorField(dist, coords; bases = (sphere,))
+tau_u2 = VectorField(dist, coords; bases = (sphere,))
+tau_T1 = Field(dist; bases = (sphere,))
+tau_T2 = Field(dist; bases = (sphere,))
 tau_p = Field(dist)
 
 # Substitutions
 dt = A -> -1im * om * A
-rvec = VectorField(dist, coords; bases=(meridional_basis(shell),))
+rvec = VectorField(dist, coords; bases = (meridional_basis(shell),))
 rvec["g"][3] = r
-ez = VectorField(dist, coords; bases=(meridional_basis(shell),))
+ez = VectorField(dist, coords; bases = (meridional_basis(shell),))
 ez["g"][2] = @. -sin(theta)
 ez["g"][3] = @. cos(theta)
 lift_basis = derivative_basis(shell, 1)
@@ -85,7 +85,7 @@ grad_T = gradient(T) + rvec * lift(tau_T1)  # First-order reduction
 strain_rate = gradient(u) + transpose_components(gradient(u))
 
 # Problem
-problem = EVP([p, u, T, tau_u1, tau_u2, tau_T1, tau_T2, tau_p]; eigenvalue=om, namespace=@locals)
+problem = EVP([p, u, T, tau_u1, tau_u2, tau_T1, tau_T2, tau_p]; eigenvalue = om, namespace = @locals)
 add_equation!(problem, "trace(grad_u) + tau_p = 0")
 add_equation!(problem, "dt(u) + (1/Ekman)*cross(ez, u) + grad(p) - Rayleigh*T*rvec - div(grad_u) + lift(tau_u2) = 0")
 add_equation!(problem, "Prandtl*dt(T) - dot(rvec,u) - div(grad_T) + lift(tau_T2) = 0")
@@ -104,7 +104,7 @@ add_equation!(problem, "T(r=Ro) = 0")
 add_equation!(problem, "integ(p) = 0")
 
 # Solver
-solver = build_solver(problem; ncc_cutoff=1e-10)
+solver = build_solver(problem; ncc_cutoff = 1.0e-10)
 
 # Select m=13
 subproblem = subproblems_by_group(solver, (13, nothing, nothing))
@@ -115,7 +115,7 @@ if stress_free
 else
     target = 731.753
 end
-solve_sparse!(solver, subproblem, 10; target=target)
+solve_sparse!(solver, subproblem, 10; target = target)
 
 # Report results
 @info "Predicted eigenvalue: $(target + 0im)"

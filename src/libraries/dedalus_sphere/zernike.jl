@@ -23,8 +23,8 @@ struct ZernikeCodomain
     arrow::NTuple{4, Int}
     Output::Type
 
-    function ZernikeCodomain(dn::Int=0, dk::Int=0, dl::Int=0, pi::Int=0; Output::Type=ZernikeCodomain)
-        new((dn, dk, dl, pi), Output)
+    function ZernikeCodomain(dn::Int = 0, dk::Int = 0, dl::Int = 0, pi::Int = 0; Output::Type = ZernikeCodomain)
+        return new((dn, dk, dl, pi), Output)
     end
 end
 
@@ -40,7 +40,7 @@ function Base.show(io::IO, c::ZernikeCodomain)
     s = "(n->n+$(c[1]),k->k+$(c[2]),l->l+$(c[3]))"
     s = replace(s, "+0" => "")
     s = replace(s, "+-" => "-")
-    print(io, s)
+    return print(io, s)
 end
 
 function Base.:+(a::ZernikeCodomain, b::ZernikeCodomain)
@@ -49,7 +49,7 @@ function Base.:+(a::ZernikeCodomain, b::ZernikeCodomain)
     dk = a[2] + b[2]
     dl = a[3] + b[3]
     pi = xor(a[4], b[4])
-    return a.Output(dn, dk, dl, pi; Output=a.Output)
+    return a.Output(dn, dk, dl, pi; Output = a.Output)
 end
 
 function (c::ZernikeCodomain)(args...)
@@ -75,12 +75,12 @@ function Base.:|(a::ZernikeCodomain, b::ZernikeCodomain)
 end
 
 function Base.:-(c::ZernikeCodomain)
-    return c.Output(-c[1], -c[2], -c[3], c[4]; Output=c.Output)
+    return c.Output(-c[1], -c[2], -c[3], c[4]; Output = c.Output)
 end
 
 function Base.:*(c::ZernikeCodomain, other::Int)
     if other == 0
-        return c.Output(0, 0, 0, 0; Output=c.Output)
+        return c.Output(0, 0, 0, 0; Output = c.Output)
     end
     if other < 0
         return -c + (other + 1) * c
@@ -95,12 +95,12 @@ end
 Base.:*(other::Int, c::ZernikeCodomain) = c * other
 
 function Base.:-(a::ZernikeCodomain, b::ZernikeCodomain)
-    a + (-b)
+    return a + (-b)
 end
 
 """Convert a ZernikeCodomain to a base Codomain for use with Operator."""
 function _zernike_to_codomain(zc::ZernikeCodomain)
-    Codomain(zc.arrow...; Output=Codomain)
+    return Codomain(zc.arrow...; Output = Codomain)
 end
 
 # ============================================================================
@@ -119,7 +119,7 @@ const zernike_alpha = 0
 
 Compute the Zernike mass for given dimension and regularity parameter k.
 """
-function zernike_mass(dimension; k::Int=zernike_alpha)
+function zernike_mass(dimension; k::Int = zernike_alpha)
     return jacobi_mass(k, dimension / 2 - 1) / 2^(k + dimension / 2 + 1)
 end
 
@@ -132,7 +132,7 @@ end
 
 Weights associated with dV = (1-r*r)^k * r^(dimension-1) dr, where 0 <= r <= 1.
 """
-function zernike_quadrature(dimension, n; k::Int=zernike_alpha)
+function zernike_quadrature(dimension, n; k::Int = zernike_alpha)
     z, w = jacobi_quadrature(n, k, dimension / 2 - 1)
     w ./= 2^(k + dimension / 2 + 1)
     return z, w
@@ -163,11 +163,11 @@ Unit normalised Zernike polynomials: integral(Q^2 dV) = 1.
 function zernike_polynomials(dimension, n, k, l, z)
     b = l + dimension / 2 - 1
 
-    init = jacobi_measure(0, l, z; log=true, probability=false)
-    init .-= jacobi_mass(k, b; log=true) .- log(2) * (k + dimension / 2 + 1)
+    init = jacobi_measure(0, l, z; log = true, probability = false)
+    init .-= jacobi_mass(k, b; log = true) .- log(2) * (k + dimension / 2 + 1)
     init = exp.(0.5 .* init)
 
-    return jacobi_polynomials(n, k, b, z; init=init)
+    return jacobi_polynomials(n, k, b, z; init = init)
 end
 
 # ============================================================================
@@ -188,7 +188,7 @@ end
 
 function (zo::ZernikeOperator)(p)
     func, cod = zo._func(p)
-    return Operator(func, _zernike_to_codomain(cod); Output=Operator)
+    return Operator(func, _zernike_to_codomain(cod); Output = Operator)
 end
 
 function _zernike_b(dimension, l)
@@ -240,19 +240,19 @@ Interface to base ZernikeOperator class.
 For "Id" and "Z": returns an Operator directly.
 For "D", "E", "R": returns a ZernikeOperator factory.
 """
-function zernike_operator(dimension, name::String; radius=1)
+function zernike_operator(dimension, name::String; radius = 1)
     if name == "Id"
         function I_func(n, k, l)
             return jacobi_operator("Id")(n, k, l + dimension / 2 - 1)
         end
-        return Operator(I_func, _zernike_to_codomain(ZernikeCodomain(0, 0, 0)); Output=Operator)
+        return Operator(I_func, _zernike_to_codomain(ZernikeCodomain(0, 0, 0)); Output = Operator)
     end
 
     if name == "Z"
         function Z_func(n, k, l)
             return jacobi_operator("Z")(n, k, l + dimension / 2 - 1)
         end
-        return Operator(Z_func, _zernike_to_codomain(ZernikeCodomain(1, 0, 0)); Output=Operator)
+        return Operator(Z_func, _zernike_to_codomain(ZernikeCodomain(1, 0, 0)); Output = Operator)
     end
 
     if name == "D"

@@ -31,7 +31,7 @@ using Logging
 logger = Logging.current_logger()
 
 # Parameters
-Re = 1e4
+Re = 1.0e4
 kz = 1
 m = 5
 Nphi = 2 * m + 2
@@ -40,18 +40,18 @@ dtype = ComplexF64
 
 # Bases
 coords = PolarCoordinates("phi", "r")
-dist = Distributor(coords; dtype=dtype)
-disk = DiskBasis(coords; shape=(Nphi, Nr), radius=1, dtype=dtype)
+dist = Distributor(coords; dtype = dtype)
+disk = DiskBasis(coords; shape = (Nphi, Nr), radius = 1, dtype = dtype)
 phi, r = local_grids(dist, disk)
 
 # Fields
-s = Field(dist; name="s")
-u = VectorField(dist, coords; name="u", bases=(disk,))
-w = Field(dist; name="w", bases=(disk,))
-p = Field(dist; name="p", bases=(disk,))
-tau_u = VectorField(dist, coords; name="tau_u", bases=(edge(disk),))
-tau_w = Field(dist; name="tau_w", bases=(edge(disk),))
-tau_p = Field(dist; name="tau_p")
+s = Field(dist; name = "s")
+u = VectorField(dist, coords; name = "u", bases = (disk,))
+w = Field(dist; name = "w", bases = (disk,))
+p = Field(dist; name = "p", bases = (disk,))
+tau_u = VectorField(dist, coords; name = "tau_u", bases = (edge(disk),))
+tau_w = Field(dist; name = "tau_w", bases = (edge(disk),))
+tau_p = Field(dist; name = "tau_p")
 
 # Substitutions
 dt = A -> s * A
@@ -60,11 +60,11 @@ lift_basis = derivative_basis(disk, 2)
 lift = A -> Lift(A, lift_basis, -1)
 
 # Background
-w0 = Field(dist; name="w0", bases=(radial_basis(disk),))
+w0 = Field(dist; name = "w0", bases = (radial_basis(disk),))
 w0["g"] = @. 1 - r^2
 
 # Problem
-problem = EVP([u, w, p, tau_u, tau_w, tau_p]; eigenvalue=s, namespace=@locals)
+problem = EVP([u, w, p, tau_u, tau_w, tau_p]; eigenvalue = s, namespace = @locals)
 add_equation!(problem, "div(u) + dz(w) = 0")
 add_equation!(problem, "dt(u) + w0*dz(u) + grad(p) - (1/Re)*(lap(u)+dz(dz(u))) + lift(tau_u) = 0")
 add_equation!(problem, "dt(w) + w0*dz(w) + u@grad(w0) + dz(p) - (1/Re)*(lap(w)+dz(dz(w))) + lift(tau_w) = 0")

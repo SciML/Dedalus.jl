@@ -79,9 +79,9 @@ end
 
 """Map rigor name strings to FFTW flag constants."""
 const FFTW_RIGOR_FLAGS = Dict{String, UInt32}(
-    "estimate"   => FFTW.ESTIMATE,
-    "measure"    => FFTW.MEASURE,
-    "patient"    => FFTW.PATIENT,
+    "estimate" => FFTW.ESTIMATE,
+    "measure" => FFTW.MEASURE,
+    "patient" => FFTW.PATIENT,
     "exhaustive" => FFTW.EXHAUSTIVE,
 )
 
@@ -213,8 +213,10 @@ Construct a Jacobi matrix-multiply transform.
 - `a0, b0` -- Jacobi parameters for the quadrature grid.
 - `dealias_before_converting` -- if `nothing`, read from config.
 """
-function JacobiMMT(grid_size::Int, coeff_size::Int, a, b, a0, b0;
-                   dealias_before_converting::Union{Bool, Nothing}=nothing)
+function JacobiMMT(
+        grid_size::Int, coeff_size::Int, a, b, a0, b0;
+        dealias_before_converting::Union{Bool, Nothing} = nothing
+    )
     if dealias_before_converting === nothing
         dealias_before_converting = _get_dealias_before_converting()
     end
@@ -222,50 +224,56 @@ function JacobiMMT(grid_size::Int, coeff_size::Int, a, b, a0, b0;
     M = coeff_size
 
     # -- lazy forward matrix --------------------------------------------------
-    fwd_cache = CachedAttribute{Matrix{Float64}}(function()
-        # Gauss quadrature with base (a0, b0) polynomials
-        base_grid = build_grid(N, a0, b0)
-        base_polynomials = build_polynomials(max(M, N), a0, b0, base_grid)
-        base_weights = build_weights(N, a0, b0)
-        base_transform = base_polynomials .* base_weights'
-        # Zero higher coefficients for transforms with grid_size < coeff_size
-        if size(base_transform, 1) > N
-            base_transform[N+1:end, :] .= 0
+    fwd_cache = CachedAttribute{Matrix{Float64}}(
+        function ()
+            # Gauss quadrature with base (a0, b0) polynomials
+            base_grid = build_grid(N, a0, b0)
+            base_polynomials = build_polynomials(max(M, N), a0, b0, base_grid)
+            base_weights = build_weights(N, a0, b0)
+            base_transform = base_polynomials .* base_weights'
+            # Zero higher coefficients for transforms with grid_size < coeff_size
+            if size(base_transform, 1) > N
+                base_transform[(N + 1):end, :] .= 0
+            end
+            if dealias_before_converting
+                # Truncate to specified coeff_size
+                base_transform = base_transform[1:M, :]
+            end
+            # Spectral conversion
+            if a == a0 && b == b0
+                forward_mat = base_transform
+            else
+                nrows = size(base_transform, 1)
+                conversion = conversion_matrix(nrows, a0, b0, a, b)
+                forward_mat = conversion * base_transform
+            end
+            if !dealias_before_converting
+                # Truncate to specified coeff_size
+                forward_mat = forward_mat[1:M, :]
+            end
+            return Matrix{Float64}(forward_mat)
         end
-        if dealias_before_converting
-            # Truncate to specified coeff_size
-            base_transform = base_transform[1:M, :]
-        end
-        # Spectral conversion
-        if a == a0 && b == b0
-            forward_mat = base_transform
-        else
-            nrows = size(base_transform, 1)
-            conversion = conversion_matrix(nrows, a0, b0, a, b)
-            forward_mat = conversion * base_transform
-        end
-        if !dealias_before_converting
-            # Truncate to specified coeff_size
-            forward_mat = forward_mat[1:M, :]
-        end
-        return Matrix{Float64}(forward_mat)
-    end)
+    )
 
     # -- lazy backward matrix -------------------------------------------------
-    bwd_cache = CachedAttribute{Matrix{Float64}}(function()
-        # Construct polynomials on the base grid
-        base_grid = build_grid(N, a0, b0)
-        polynomials = build_polynomials(M, a, b, base_grid)
-        # Zero higher polynomials for transforms with grid_size < coeff_size
-        if size(polynomials, 1) > N
-            polynomials[N+1:end, :] .= 0
+    bwd_cache = CachedAttribute{Matrix{Float64}}(
+        function ()
+            # Construct polynomials on the base grid
+            base_grid = build_grid(N, a0, b0)
+            polynomials = build_polynomials(M, a, b, base_grid)
+            # Zero higher polynomials for transforms with grid_size < coeff_size
+            if size(polynomials, 1) > N
+                polynomials[(N + 1):end, :] .= 0
+            end
+            # Transpose for Julia's column-major layout
+            return Matrix{Float64}(polynomials')
         end
-        # Transpose for Julia's column-major layout
-        return Matrix{Float64}(polynomials')
-    end)
+    )
 
-    return JacobiMMT(N, M, Float64(a), Float64(b), Float64(a0), Float64(b0),
-                     dealias_before_converting, fwd_cache, bwd_cache)
+    return JacobiMMT(
+        N, M, Float64(a), Float64(b), Float64(a0), Float64(b0),
+        dealias_before_converting, fwd_cache, bwd_cache
+    )
 end
 
 """Retrieve the (lazily built) forward transform matrix."""
@@ -275,12 +283,12 @@ forward_matrix(t::JacobiMMT) = get_cached!(t._forward_matrix)
 backward_matrix(t::JacobiMMT) = get_cached!(t._backward_matrix)
 
 function forward!(t::JacobiMMT, gdata::AbstractArray, cdata::AbstractArray, axis::Int)
-    apply_dense(forward_matrix(t), gdata, axis; out=cdata)
+    apply_dense(forward_matrix(t), gdata, axis; out = cdata)
     return cdata
 end
 
 function backward!(t::JacobiMMT, cdata::AbstractArray, gdata::AbstractArray, axis::Int)
-    apply_dense(backward_matrix(t), cdata, axis; out=gdata)
+    apply_dense(backward_matrix(t), cdata, axis; out = gdata)
     return gdata
 end
 
@@ -310,7 +318,7 @@ Ordering: `[0, 1, ..., KM, KM+1, -KM, ..., -1]` (standard FFT order for `M`
 points, with odd `M` having a Nyquist mode that gets zeroed).
 """
 function wavenumbers(N::Int, M::Int, KM::Int)
-    k = collect(0:M-1)
+    k = collect(0:(M - 1))
     return @. (k + KM) % M - KM
 end
 
@@ -342,27 +350,31 @@ function ComplexFourierMMT(grid_size::Int, coeff_size::Int)
 
     wn = wavenumbers(N, M, KM)
 
-    fwd_cache = CachedAttribute{Matrix{ComplexF64}}(function()
-        K = reshape(wn, :, 1)          # column vector (M x 1)
-        X = reshape(collect(0:N-1), 1, :)  # row vector (1 x N)
-        dX = N / 2 / pi
-        quadrature = exp.(-im .* K .* X ./ dX) ./ N
-        # Zero Nyquist and higher modes
-        mask = abs.(K) .<= Kmax
-        quadrature .*= mask
-        return Matrix{ComplexF64}(quadrature)
-    end)
+    fwd_cache = CachedAttribute{Matrix{ComplexF64}}(
+        function ()
+            K = reshape(wn, :, 1)          # column vector (M x 1)
+            X = reshape(collect(0:(N - 1)), 1, :)  # row vector (1 x N)
+            dX = N / 2 / pi
+            quadrature = exp.(-im .* K .* X ./ dX) ./ N
+            # Zero Nyquist and higher modes
+            mask = abs.(K) .<= Kmax
+            quadrature .*= mask
+            return Matrix{ComplexF64}(quadrature)
+        end
+    )
 
-    bwd_cache = CachedAttribute{Matrix{ComplexF64}}(function()
-        K = reshape(wn, 1, :)          # row vector (1 x M)
-        X = reshape(collect(0:N-1), :, 1)  # column vector (N x 1)
-        dX = N / 2 / pi
-        functions = exp.(im .* K .* X ./ dX)
-        # Zero Nyquist and higher modes
-        mask = abs.(K) .<= Kmax
-        functions .*= mask
-        return Matrix{ComplexF64}(functions)
-    end)
+    bwd_cache = CachedAttribute{Matrix{ComplexF64}}(
+        function ()
+            K = reshape(wn, 1, :)          # row vector (1 x M)
+            X = reshape(collect(0:(N - 1)), :, 1)  # column vector (N x 1)
+            dX = N / 2 / pi
+            functions = exp.(im .* K .* X ./ dX)
+            # Zero Nyquist and higher modes
+            mask = abs.(K) .<= Kmax
+            functions .*= mask
+            return Matrix{ComplexF64}(functions)
+        end
+    )
 
     return ComplexFourierMMT(N, M, KN, KM, Kmax, fwd_cache, bwd_cache)
 end
@@ -371,12 +383,12 @@ forward_matrix(t::ComplexFourierMMT) = get_cached!(t._forward_matrix)
 backward_matrix(t::ComplexFourierMMT) = get_cached!(t._backward_matrix)
 
 function forward!(t::ComplexFourierMMT, gdata::AbstractArray, cdata::AbstractArray, axis::Int)
-    apply_dense(forward_matrix(t), gdata, axis; out=cdata)
+    apply_dense(forward_matrix(t), gdata, axis; out = cdata)
     return cdata
 end
 
 function backward!(t::ComplexFourierMMT, cdata::AbstractArray, gdata::AbstractArray, axis::Int)
-    apply_dense(backward_matrix(t), cdata, axis; out=gdata)
+    apply_dense(backward_matrix(t), cdata, axis; out = gdata)
     return gdata
 end
 
@@ -392,9 +404,11 @@ padding/truncation.  Copies positive and negative frequency bands from
 `data_in` to `data_out`, zeroing intermediate (unresolved) frequencies.
 `rescale` is applied multiplicatively; pass `nothing` for a pure copy.
 """
-function resize_coeffs_complex!(data_in::AbstractArray, data_out::AbstractArray,
-                                axis::Int, Kmax::Int,
-                                rescale::Union{Nothing, Real})
+function resize_coeffs_complex!(
+        data_in::AbstractArray, data_out::AbstractArray,
+        axis::Int, Kmax::Int,
+        rescale::Union{Nothing, Real}
+    )
     nd = ndims(data_in)
     if Kmax == 0
         posfreq = axslice(axis, 1, 1)
@@ -412,7 +426,7 @@ function resize_coeffs_complex!(data_in::AbstractArray, data_out::AbstractArray,
     else
         nout = size(data_out, axis)
         # Positive frequencies: indices 1 through Kmax+1 (Kmax = min(KN, KM) <= nout-1)
-        @inbounds for i in 1:Kmax+1
+        @inbounds for i in 1:(Kmax + 1)
             if rescale === nothing
                 selectdim(data_out, axis, i) .= selectdim(data_in, axis, i)
             else
@@ -422,13 +436,13 @@ function resize_coeffs_complex!(data_in::AbstractArray, data_out::AbstractArray,
         # Zero intermediate (bad) frequencies
         neg_start = nout - Kmax + 1  # first negative freq index in output
         if Kmax + 2 <= neg_start - 1
-            @inbounds for i in (Kmax+2):(neg_start-1)
+            @inbounds for i in (Kmax + 2):(neg_start - 1)
                 selectdim(data_out, axis, i) .= 0
             end
         end
         # Negative frequencies: last Kmax indices
         nin = size(data_in, axis)
-        @inbounds for j in 0:Kmax-1
+        @inbounds for j in 0:(Kmax - 1)
             src_idx = nin - Kmax + 1 + j
             dst_idx = nout - Kmax + 1 + j
             if rescale === nothing
@@ -462,8 +476,10 @@ mutable struct FFTWComplexFFT <: ComplexFourierTransform
     _plan_cache::Dict{Tuple, Any}  # (shape, axis) -> (fwd_plan, bwd_plan, fwd_buf, bwd_buf)
 end
 
-function FFTWComplexFFT(grid_size::Int, coeff_size::Int;
-                        rigor::Union{Nothing, AbstractString}=nothing)
+function FFTWComplexFFT(
+        grid_size::Int, coeff_size::Int;
+        rigor::Union{Nothing, AbstractString} = nothing
+    )
     N = grid_size
     M = coeff_size
     KN = (N - 1) >> 1
@@ -491,15 +507,17 @@ function _get_plans(t::FFTWComplexFFT, gshape::Tuple, axis::Int)
     # Create working buffers and in-place plans
     fwd_buf = zeros(ComplexF64, gshape)
     bwd_buf = zeros(ComplexF64, gshape)
-    fwd = plan_fft!(fwd_buf, axis; flags=t.rigor)
-    bwd = plan_bfft!(bwd_buf, axis; flags=t.rigor)
+    fwd = plan_fft!(fwd_buf, axis; flags = t.rigor)
+    bwd = plan_bfft!(bwd_buf, axis; flags = t.rigor)
     entry = (fwd, bwd, fwd_buf, bwd_buf)
     t._plan_cache[key] = entry
     return entry
 end
 
-function forward!(t::FFTWComplexFFT, gdata::AbstractArray{ComplexF64},
-                  cdata::AbstractArray{ComplexF64}, axis::Int)
+function forward!(
+        t::FFTWComplexFFT, gdata::AbstractArray{ComplexF64},
+        cdata::AbstractArray{ComplexF64}, axis::Int
+    )
     fwd, _, fwd_buf, _ = _get_plans(t, size(gdata), axis)
     # Copy input into the plan buffer and apply in-place FFT
     copyto!(fwd_buf, gdata)
@@ -509,8 +527,10 @@ function forward!(t::FFTWComplexFFT, gdata::AbstractArray{ComplexF64},
     return cdata
 end
 
-function backward!(t::FFTWComplexFFT, cdata::AbstractArray{ComplexF64},
-                   gdata::AbstractArray{ComplexF64}, axis::Int)
+function backward!(
+        t::FFTWComplexFFT, cdata::AbstractArray{ComplexF64},
+        gdata::AbstractArray{ComplexF64}, axis::Int
+    )
     _, bwd, _, bwd_buf = _get_plans(t, size(gdata), axis)
     # Resize without rescaling into the cached buffer
     resize_coeffs_complex!(cdata, bwd_buf, axis, t.Kmax, nothing)
@@ -546,7 +566,7 @@ One-dimensional global wavenumber array for real Fourier modes.
 Each wavenumber `k` appears twice (cosine and minus-sine components).
 """
 function wavenumbers_real(KM::Int)
-    return repeat(collect(0:KM); inner=2)
+    return repeat(collect(0:KM); inner = 2)
 end
 
 # ============================================================================
@@ -578,57 +598,61 @@ function RealFourierMMT(grid_size::Int, coeff_size::Int)
     wn = wavenumbers_real(KM)
     M_eff = max(2, M)  # account for sin and cos parts of m=0
 
-    fwd_cache = CachedAttribute{Matrix{Float64}}(function()
-        K = reshape(wn[1:2:end], :, 1)      # unique wavenumbers, column
-        X = reshape(collect(0:N-1), 1, :)    # row
-        dX = N / 2 / pi
-        quadrature = zeros(Float64, M_eff, N)
-        # Cosine rows (even indices: 1, 3, 5, ...)
-        for i in 1:2:M_eff
-            k_idx = (i + 1) >> 1  # 1-based index into K
-            k_val = wn[min(i, length(wn))]
-            quadrature[i, :] .= (2 / N) .* cos.(k_val .* collect(0:N-1) ./ dX)
-        end
-        # Minus-sine rows (even indices: 2, 4, 6, ...)
-        for i in 2:2:M_eff
-            k_idx = i >> 1  # 1-based index into unique K
-            k_val = wn[min(i, length(wn))]
-            quadrature[i, :] .= -(2 / N) .* sin.(k_val .* collect(0:N-1) ./ dX)
-        end
-        # k=0 cos row is just 1/N
-        quadrature[1, :] .= 1 / N
-        # Zero Nyquist and higher modes
-        for i in 1:M_eff
-            if wn[min(i, length(wn))] > Kmax
-                quadrature[i, :] .= 0
+    fwd_cache = CachedAttribute{Matrix{Float64}}(
+        function ()
+            K = reshape(wn[1:2:end], :, 1)      # unique wavenumbers, column
+            X = reshape(collect(0:(N - 1)), 1, :)    # row
+            dX = N / 2 / pi
+            quadrature = zeros(Float64, M_eff, N)
+            # Cosine rows (even indices: 1, 3, 5, ...)
+            for i in 1:2:M_eff
+                k_idx = (i + 1) >> 1  # 1-based index into K
+                k_val = wn[min(i, length(wn))]
+                quadrature[i, :] .= (2 / N) .* cos.(k_val .* collect(0:(N - 1)) ./ dX)
             end
+            # Minus-sine rows (even indices: 2, 4, 6, ...)
+            for i in 2:2:M_eff
+                k_idx = i >> 1  # 1-based index into unique K
+                k_val = wn[min(i, length(wn))]
+                quadrature[i, :] .= -(2 / N) .* sin.(k_val .* collect(0:(N - 1)) ./ dX)
+            end
+            # k=0 cos row is just 1/N
+            quadrature[1, :] .= 1 / N
+            # Zero Nyquist and higher modes
+            for i in 1:M_eff
+                if wn[min(i, length(wn))] > Kmax
+                    quadrature[i, :] .= 0
+                end
+            end
+            return Matrix{Float64}(quadrature[1:M, :])
         end
-        return Matrix{Float64}(quadrature[1:M, :])
-    end)
+    )
 
-    bwd_cache = CachedAttribute{Matrix{Float64}}(function()
-        K = reshape(wn[1:2:end], 1, :)       # unique wavenumbers, row
-        X = reshape(collect(0:N-1), :, 1)     # column
-        dX = N / 2 / pi
-        functions = zeros(Float64, N, M_eff)
-        # Cosine columns (odd indices)
-        for j in 1:2:M_eff
-            k_val = wn[min(j, length(wn))]
-            functions[:, j] .= cos.(k_val .* collect(0:N-1) ./ dX)
-        end
-        # Minus-sine columns (even indices)
-        for j in 2:2:M_eff
-            k_val = wn[min(j, length(wn))]
-            functions[:, j] .= -sin.(k_val .* collect(0:N-1) ./ dX)
-        end
-        # Zero Nyquist and higher modes
-        for j in 1:M_eff
-            if wn[min(j, length(wn))] > Kmax
-                functions[:, j] .= 0
+    bwd_cache = CachedAttribute{Matrix{Float64}}(
+        function ()
+            K = reshape(wn[1:2:end], 1, :)       # unique wavenumbers, row
+            X = reshape(collect(0:(N - 1)), :, 1)     # column
+            dX = N / 2 / pi
+            functions = zeros(Float64, N, M_eff)
+            # Cosine columns (odd indices)
+            for j in 1:2:M_eff
+                k_val = wn[min(j, length(wn))]
+                functions[:, j] .= cos.(k_val .* collect(0:(N - 1)) ./ dX)
             end
+            # Minus-sine columns (even indices)
+            for j in 2:2:M_eff
+                k_val = wn[min(j, length(wn))]
+                functions[:, j] .= -sin.(k_val .* collect(0:(N - 1)) ./ dX)
+            end
+            # Zero Nyquist and higher modes
+            for j in 1:M_eff
+                if wn[min(j, length(wn))] > Kmax
+                    functions[:, j] .= 0
+                end
+            end
+            return Matrix{Float64}(functions[:, 1:M])
         end
-        return Matrix{Float64}(functions[:, 1:M])
-    end)
+    )
 
     return RealFourierMMT(N, M, KN, KM, Kmax, fwd_cache, bwd_cache)
 end
@@ -637,12 +661,12 @@ forward_matrix(t::RealFourierMMT) = get_cached!(t._forward_matrix)
 backward_matrix(t::RealFourierMMT) = get_cached!(t._backward_matrix)
 
 function forward!(t::RealFourierMMT, gdata::AbstractArray, cdata::AbstractArray, axis::Int)
-    apply_dense(forward_matrix(t), gdata, axis; out=cdata)
+    apply_dense(forward_matrix(t), gdata, axis; out = cdata)
     return cdata
 end
 
 function backward!(t::RealFourierMMT, cdata::AbstractArray, gdata::AbstractArray, axis::Int)
-    apply_dense(backward_matrix(t), cdata, axis; out=gdata)
+    apply_dense(backward_matrix(t), cdata, axis; out = gdata)
     return gdata
 end
 
@@ -659,8 +683,10 @@ coefficients in `cdata`, applying `rescale` for unit-amplitude normalization.
 Layout of `cdata` along `axis`:
   [a(0), b(0)=0, a(1), b(1), ..., a(KM), b(KM), zeros...]
 """
-function unpack_rescale_real!(temp::AbstractArray, cdata::AbstractArray,
-                              axis::Int, Kmax::Int, rescale::Real)
+function unpack_rescale_real!(
+        temp::AbstractArray, cdata::AbstractArray,
+        axis::Int, Kmax::Int, rescale::Real
+    )
     # k = 0 cosine coefficient
     selectdim(cdata, axis, 1) .= real.(selectdim(temp, axis, 1)) .* rescale
     # k = 0 minus-sine is always zero
@@ -697,9 +723,11 @@ Repack interleaved real cosine/minus-sine coefficients from `cdata` into
 complex coefficients in `temp` for an inverse RFFT, applying `rescale`.
 `rescale` may be `nothing` for no scaling.
 """
-function repack_rescale_real!(cdata::AbstractArray, temp::AbstractArray,
-                              axis::Int, Kmax::Int,
-                              rescale::Union{Nothing, Real})
+function repack_rescale_real!(
+        cdata::AbstractArray, temp::AbstractArray,
+        axis::Int, Kmax::Int,
+        rescale::Union{Nothing, Real}
+    )
     # k = 0 data
     if rescale === nothing
         selectdim(temp, axis, 1) .= selectdim(cdata, axis, 1)
@@ -726,7 +754,7 @@ function repack_rescale_real!(cdata::AbstractArray, temp::AbstractArray,
     # Zero k > Kmax in temp
     ntemp = size(temp, axis)
     if Kmax + 2 <= ntemp
-        @inbounds for i in (Kmax+2):ntemp
+        @inbounds for i in (Kmax + 2):ntemp
             selectdim(temp, axis, i) .= 0
         end
     end
@@ -755,8 +783,10 @@ mutable struct FFTWRealFFT <: RealFourierTransform
     _plan_cache::Dict{Tuple, Any}  # (shape, axis) -> (fwd_plan, bwd_plan, fwd_buf, bwd_cbuf, bwd_rbuf)
 end
 
-function FFTWRealFFT(grid_size::Int, coeff_size::Int;
-                     rigor::Union{Nothing, AbstractString}=nothing)
+function FFTWRealFFT(
+        grid_size::Int, coeff_size::Int;
+        rigor::Union{Nothing, AbstractString} = nothing
+    )
     N = grid_size
     M = coeff_size
     KN = (N - 1) >> 1
@@ -783,20 +813,22 @@ function _get_plans(t::FFTWRealFFT, gshape::Tuple, axis::Int)
     # Create working buffers and plans
     # Forward: real input buffer, complex output allocated by plan
     fwd_buf = zeros(Float64, gshape)
-    fwd = plan_rfft(fwd_buf, axis; flags=t.rigor)
+    fwd = plan_rfft(fwd_buf, axis; flags = t.rigor)
     # Backward: complex input buffer, real output buffer
     cshape = collect(gshape)
     cshape[axis] = (gshape[axis] >> 1) + 1  # N/2 + 1
     bwd_cbuf = zeros(ComplexF64, Tuple(cshape))
     bwd_rbuf = zeros(Float64, gshape)
-    bwd = plan_irfft(bwd_cbuf, gshape[axis], axis; flags=t.rigor)
+    bwd = plan_irfft(bwd_cbuf, gshape[axis], axis; flags = t.rigor)
     entry = (fwd, bwd, fwd_buf, bwd_cbuf, bwd_rbuf)
     t._plan_cache[key] = entry
     return entry
 end
 
-function forward!(t::FFTWRealFFT, gdata::AbstractArray{Float64},
-                  cdata::AbstractArray{Float64}, axis::Int)
+function forward!(
+        t::FFTWRealFFT, gdata::AbstractArray{Float64},
+        cdata::AbstractArray{Float64}, axis::Int
+    )
     fwd, _, fwd_buf, _, _ = _get_plans(t, size(gdata), axis)
     # Copy input into the plan buffer and execute real FFT
     copyto!(fwd_buf, gdata)
@@ -806,8 +838,10 @@ function forward!(t::FFTWRealFFT, gdata::AbstractArray{Float64},
     return cdata
 end
 
-function backward!(t::FFTWRealFFT, cdata::AbstractArray{Float64},
-                   gdata::AbstractArray{Float64}, axis::Int)
+function backward!(
+        t::FFTWRealFFT, cdata::AbstractArray{Float64},
+        gdata::AbstractArray{Float64}, axis::Int
+    )
     _, bwd, _, bwd_cbuf, bwd_rbuf = _get_plans(t, size(gdata), axis)
     N = t.N
     # Repack into complex form using the cached buffer and rescale
@@ -844,9 +878,9 @@ Reshape `data` into a 3D array `(N0, N1, N2)` where `N1 = size(data, axis)`,
 """
 function reduced_view_3(data::AbstractArray, axis::Int)
     s = size(data)
-    N0 = prod(s[1:axis-1]; init=1)
+    N0 = prod(s[1:(axis - 1)]; init = 1)
     N1 = s[axis]
-    N2 = prod(s[axis+1:end]; init=1)
+    N2 = prod(s[(axis + 1):end]; init = 1)
     return reshape(data, N0, N1, N2)
 end
 
@@ -859,10 +893,10 @@ Reshape `data` into a 4D array `(N0, N1, N2, N3)` where `N1 = size(data, axis)`,
 """
 function reduced_view_4(data::AbstractArray, axis::Int)
     s = size(data)
-    N0 = prod(s[1:axis-1]; init=1)
+    N0 = prod(s[1:(axis - 1)]; init = 1)
     N1 = s[axis]
-    N2 = s[axis+1]
-    N3 = prod(s[axis+2:end]; init=1)
+    N2 = s[axis + 1]
+    N3 = prod(s[(axis + 2):end]; init = 1)
     return reshape(data, N0, N1, N2, N3)
 end
 
@@ -873,11 +907,11 @@ Reshape `data` into a 5D array.
 """
 function reduced_view_5(data::AbstractArray, axis::Int)
     s = size(data)
-    N0 = prod(s[1:axis-1]; init=1)
+    N0 = prod(s[1:(axis - 1)]; init = 1)
     N1 = s[axis]
-    N2 = s[axis+1]
-    N3 = s[axis+2]
-    N4 = prod(s[axis+3:end]; init=1)
+    N2 = s[axis + 1]
+    N3 = s[axis + 2]
+    N4 = prod(s[(axis + 3):end]; init = 1)
     return reshape(data, N0, N1, N2, N3, N4)
 end
 
@@ -958,8 +992,8 @@ function subspace_matrix(op::Differentiate, layout)
         for k_idx in 1:2:N
             k_val = wn[k_idx] / basis.COV.stretch
             if k_idx + 1 <= N
-                mat[k_idx, k_idx+1] = -k_val
-                mat[k_idx+1, k_idx] = k_val
+                mat[k_idx, k_idx + 1] = -k_val
+                mat[k_idx + 1, k_idx] = k_val
             end
         end
         return mat
@@ -1089,8 +1123,10 @@ Apply the forward (grid --> coefficient) non-separable transform.
 Reduces the input to a 4D view centred on `axis` and `axis+1`, then
 delegates to `forward_reduced!`.
 """
-function forward!(t::NonSeparableTransform, gdata::AbstractArray,
-                  cdata::AbstractArray, axis::Int)
+function forward!(
+        t::NonSeparableTransform, gdata::AbstractArray,
+        cdata::AbstractArray, axis::Int
+    )
     gdata4 = reduced_view_4(gdata, axis)
     cdata4 = reduced_view_4(cdata, axis)
     forward_reduced!(t, gdata4, cdata4)
@@ -1104,8 +1140,10 @@ Apply the backward (coefficient --> grid) non-separable transform.
 Reduces the input to a 4D view centred on `axis` and `axis+1`, then
 delegates to `backward_reduced!`.
 """
-function backward!(t::NonSeparableTransform, cdata::AbstractArray,
-                   gdata::AbstractArray, axis::Int)
+function backward!(
+        t::NonSeparableTransform, cdata::AbstractArray,
+        gdata::AbstractArray, axis::Int
+    )
     cdata4 = reduced_view_4(cdata, axis)
     gdata4 = reduced_view_4(gdata, axis)
     backward_reduced!(t, cdata4, gdata4)
@@ -1137,7 +1175,7 @@ mutable struct SWSHColatitudeTransform <: NonSeparableTransform
     Lmax::Int
     m_maps::Any   # tuple of (m, mg_slice, mc_slice, ell_slice) entries
     s::Int
-    _cache::Dict{Symbol,Any}
+    _cache::Dict{Symbol, Any}
 end
 
 """
@@ -1146,7 +1184,7 @@ end
 Construct a SWSH colatitude transform.
 """
 function SWSHColatitudeTransform(Ntheta::Int, Lmax::Int, m_maps, s::Int)
-    return SWSHColatitudeTransform(Ntheta, Lmax, m_maps, s, Dict{Symbol,Any}())
+    return SWSHColatitudeTransform(Ntheta, Lmax, m_maps, s, Dict{Symbol, Any}())
 end
 
 """
@@ -1196,11 +1234,11 @@ function _forward_SWSH_matrices(t::SWSHColatitudeTransform)
             # Y rows map to ell = Lmin:Lmax, which in padded array start at row Lmin-|m|+1
             pad_start = Lmin - abs(m) + 1  # 1-based
             n_Y_rows = size(Y, 1)
-            Yfull[pad_start:pad_start + n_Y_rows - 1, :] .= Float64.(Y .* weights')
+            Yfull[pad_start:(pad_start + n_Y_rows - 1), :] .= Float64.(Y .* weights')
             # Zero higher coefficients than can be correctly computed with base Gauss quadrature
             max_valid = t.Ntheta - abs(m)  # 1-based count of valid rows
             if max_valid + 1 <= size(Yfull, 1)
-                Yfull[max_valid + 1:end, :] .= 0.0
+                Yfull[(max_valid + 1):end, :] .= 0.0
             end
             m_matrices[m] = copy(Yfull)
         end
@@ -1238,11 +1276,11 @@ function _backward_SWSH_matrices(t::SWSHColatitudeTransform)
             Yfull = zeros(Float64, t.Ntheta, Lmax + 1 - abs(m))
             pad_start = Lmin - abs(m) + 1  # 1-based
             n_Y_rows = size(Y, 1)
-            Yfull[:, pad_start:pad_start + n_Y_rows - 1] .= Float64.(Y')
+            Yfull[:, pad_start:(pad_start + n_Y_rows - 1)] .= Float64.(Y')
             # Zero higher coefficients than can be correctly computed with base Gauss quadrature
             max_valid = t.Ntheta - abs(m)
             if max_valid + 1 <= size(Yfull, 2)
-                Yfull[:, max_valid + 1:end] .= 0.0
+                Yfull[:, (max_valid + 1):end] .= 0.0
             end
             m_matrices[m] = copy(Yfull)
         end
@@ -1258,8 +1296,10 @@ Forward SWSH colatitude transform on 4D reduced arrays.
 For each `(m, mg_slice, mc_slice, ell_slice)` in `m_maps`, applies the
 forward matrix along axis 3 (the colatitude axis in the reduced view).
 """
-function forward_reduced!(t::SWSHColatitudeTransform,
-                          gdata::AbstractArray, cdata::AbstractArray)
+function forward_reduced!(
+        t::SWSHColatitudeTransform,
+        gdata::AbstractArray, cdata::AbstractArray
+    )
     m_matrices = _forward_SWSH_matrices(t)
     Lmax = t.Lmax
     for (m, mg_slice, mc_slice, ell_slice) in t.m_maps
@@ -1267,7 +1307,7 @@ function forward_reduced!(t::SWSHColatitudeTransform,
         if abs(m) <= Lmax
             grm = @view gdata[:, mg_slice, :, :]
             crm = @view cdata[:, mc_slice, ell_slice, :]
-            apply_matrix(m_matrices[m], grm, 2; out=crm)
+            apply_matrix(m_matrices[m], grm, 2; out = crm)
         end
     end
     return nothing
@@ -1278,8 +1318,10 @@ end
 
 Backward SWSH colatitude transform on 4D reduced arrays.
 """
-function backward_reduced!(t::SWSHColatitudeTransform,
-                           cdata::AbstractArray, gdata::AbstractArray)
+function backward_reduced!(
+        t::SWSHColatitudeTransform,
+        cdata::AbstractArray, gdata::AbstractArray
+    )
     m_matrices = _backward_SWSH_matrices(t)
     Lmax = t.Lmax
     for (m, mg_slice, mc_slice, ell_slice) in t.m_maps
@@ -1289,7 +1331,7 @@ function backward_reduced!(t::SWSHColatitudeTransform,
         else
             grm = @view gdata[:, mg_slice, :, :]
             crm = @view cdata[:, mc_slice, ell_slice, :]
-            apply_matrix(m_matrices[m], crm, 2; out=grm)
+            apply_matrix(m_matrices[m], crm, 2; out = grm)
         end
     end
     return nothing
@@ -1332,7 +1374,7 @@ mutable struct DiskRadialTransform <: NonSeparableTransform
     alpha::Float64
     dtype::DataType
     dealias_before_converting::Bool
-    _cache::Dict{Symbol,Any}
+    _cache::Dict{Symbol, Any}
 end
 
 """
@@ -1352,10 +1394,12 @@ Construct a disk radial transform.
 - `dtype` -- element type (default `ComplexF64`).
 - `dealias_before_converting` -- if `nothing`, read from config.
 """
-function DiskRadialTransform(grid_shape, basis_shape, axis::Int, m_maps, s::Int,
-                             k::Int, alpha;
-                             dtype::DataType=ComplexF64,
-                             dealias_before_converting::Union{Bool, Nothing}=nothing)
+function DiskRadialTransform(
+        grid_shape, basis_shape, axis::Int, m_maps, s::Int,
+        k::Int, alpha;
+        dtype::DataType = ComplexF64,
+        dealias_before_converting::Union{Bool, Nothing} = nothing
+    )
     Nphi = basis_shape[1]
     Nmax = basis_shape[2] - 1
     N2g = grid_shape[axis]
@@ -1363,8 +1407,10 @@ function DiskRadialTransform(grid_shape, basis_shape, axis::Int, m_maps, s::Int,
     if dealias_before_converting === nothing
         dealias_before_converting = _get_dealias_before_converting()
     end
-    return DiskRadialTransform(Nphi, Nmax, N2g, N2c, m_maps, s, k, Float64(alpha),
-                               dtype, dealias_before_converting, Dict{Symbol,Any}())
+    return DiskRadialTransform(
+        Nphi, Nmax, N2g, N2c, m_maps, s, k, Float64(alpha),
+        dtype, dealias_before_converting, Dict{Symbol, Any}()
+    )
 end
 
 """
@@ -1377,7 +1423,7 @@ function _quadrature(t::DiskRadialTransform)
     if cached !== nothing
         return cached
     end
-    result = zernike_quadrature(2, t.N2g; k=Int(t.alpha))
+    result = zernike_quadrature(2, t.N2g; k = Int(t.alpha))
     t._cache[:quadrature] = result
     return result
 end
@@ -1475,8 +1521,10 @@ Forward disk radial transform on 4D reduced arrays.
 For each `(m, mg_slice, mc_slice, n_slice)` in `m_maps`, applies the
 forward matrix along axis 3 (the radial axis in the reduced view).
 """
-function forward_reduced!(t::DiskRadialTransform,
-                          gdata::AbstractArray, cdata::AbstractArray)
+function forward_reduced!(
+        t::DiskRadialTransform,
+        gdata::AbstractArray, cdata::AbstractArray
+    )
     m_matrices = _forward_matrices(t)
     Nmax = t.Nmax
     for (m, mg_slice, mc_slice, n_slice) in t.m_maps
@@ -1484,7 +1532,7 @@ function forward_reduced!(t::DiskRadialTransform,
         if abs(m) <= 2 * Nmax
             grm = @view gdata[:, mg_slice, :, :]
             crm = @view cdata[:, mc_slice, n_slice, :]
-            apply_matrix(m_matrices[m], grm, 2; out=crm)
+            apply_matrix(m_matrices[m], grm, 2; out = crm)
         end
     end
     return nothing
@@ -1495,8 +1543,10 @@ end
 
 Backward disk radial transform on 4D reduced arrays.
 """
-function backward_reduced!(t::DiskRadialTransform,
-                           cdata::AbstractArray, gdata::AbstractArray)
+function backward_reduced!(
+        t::DiskRadialTransform,
+        cdata::AbstractArray, gdata::AbstractArray
+    )
     m_matrices = _backward_matrices(t)
     Nmax = t.Nmax
     for (m, mg_slice, mc_slice, n_slice) in t.m_maps
@@ -1506,7 +1556,7 @@ function backward_reduced!(t::DiskRadialTransform,
         else
             grm = @view gdata[:, mg_slice, :, :]
             crm = @view cdata[:, mc_slice, n_slice, :]
-            apply_matrix(m_matrices[m], crm, 2; out=grm)
+            apply_matrix(m_matrices[m], crm, 2; out = grm)
         end
     end
     return nothing
@@ -1548,8 +1598,10 @@ function transform_plan(b::DiskBasis, dist, grid_shape_val, axis::Int, s::Int)
     end
     maps = m_maps(b, dist)
     basis_shape = b.shape
-    plan = DiskRadialTransform(grid_shape_val, basis_shape, axis, maps, s,
-                               b.k, b.alpha; dtype=b.dtype)
+    plan = DiskRadialTransform(
+        grid_shape_val, basis_shape, axis, maps, s,
+        b.k, b.alpha; dtype = b.dtype
+    )
     b._cache[cache_key] = plan
     return plan
 end
@@ -1596,7 +1648,7 @@ mutable struct BallRadialTransform <: NonSeparableTransform
     k::Int
     alpha::Float64
     dealias_before_converting::Bool
-    _cache::Dict{Symbol,Any}
+    _cache::Dict{Symbol, Any}
 end
 
 """
@@ -1618,18 +1670,22 @@ Construct a ball radial transform.
 - `dtype` -- element type (default `ComplexF64`).
 - `dealias_before_converting` -- if `nothing`, read from config.
 """
-function BallRadialTransform(grid_shape, coeff_size::Int, axis::Int, ell_maps,
-                             regindex, regtotal, k, alpha;
-                             dtype::DataType=ComplexF64,
-                             dealias_before_converting::Union{Bool, Nothing}=nothing)
+function BallRadialTransform(
+        grid_shape, coeff_size::Int, axis::Int, ell_maps,
+        regindex, regtotal, k, alpha;
+        dtype::DataType = ComplexF64,
+        dealias_before_converting::Union{Bool, Nothing} = nothing
+    )
     N3g = grid_shape[axis]
     N3c = coeff_size
     if dealias_before_converting === nothing
         dealias_before_converting = _get_dealias_before_converting()
     end
-    return BallRadialTransform(N3g, N3c, ell_maps, regindex, Int(regtotal),
-                               Int(k), Float64(alpha), dealias_before_converting,
-                               Dict{Symbol,Any}())
+    return BallRadialTransform(
+        N3g, N3c, ell_maps, regindex, Int(regtotal),
+        Int(k), Float64(alpha), dealias_before_converting,
+        Dict{Symbol, Any}()
+    )
 end
 
 """
@@ -1646,7 +1702,7 @@ function _is_forbidden(t::BallRadialTransform, ell)
     if length(reg_tuple) == 0
         return false
     end
-    Q = Intertwiner(ell; indexing=(-1, +1, 0))
+    Q = Intertwiner(ell; indexing = (-1, +1, 0))
     reg_vals = Tuple(Rb[r] for r in reg_tuple)
     return forbidden_regularity(Q, reg_vals)
 end
@@ -1659,8 +1715,10 @@ Uses `reduced_view_5` to expose the 5D structure
 `(pre, azimuth, colatitude, radial, post)`, then delegates to
 `forward_reduced!`.
 """
-function forward!(t::BallRadialTransform, gdata::AbstractArray,
-                  cdata::AbstractArray, axis::Int)
+function forward!(
+        t::BallRadialTransform, gdata::AbstractArray,
+        cdata::AbstractArray, axis::Int
+    )
     # In Python: reduced_view_5(data, axis-2) with 0-based axis
     # In Julia: reduced_view_5(data, axis-2) with 1-based axis
     # The radial axis is at position `axis`, colatitude at `axis-1`,
@@ -1676,8 +1734,10 @@ end
 
 Apply the backward (coefficient --> grid) ball radial transform.
 """
-function backward!(t::BallRadialTransform, cdata::AbstractArray,
-                   gdata::AbstractArray, axis::Int)
+function backward!(
+        t::BallRadialTransform, cdata::AbstractArray,
+        gdata::AbstractArray, axis::Int
+    )
     cdata5 = reduced_view_5(cdata, axis - 2)
     gdata5 = reduced_view_5(gdata, axis - 2)
     backward_reduced!(t, cdata5, gdata5)
@@ -1694,7 +1754,7 @@ function _quadrature(t::BallRadialTransform)
     if cached !== nothing
         return cached
     end
-    result = zernike_quadrature(3, t.N3g; k=Int(t.alpha))
+    result = zernike_quadrature(3, t.N3g; k = Int(t.alpha))
     t._cache[:quadrature] = result
     return result
 end
@@ -1811,8 +1871,10 @@ along axis 4 (the radial axis in the reduced 5D view).
 The coefficient data is indexed with `Nmin+1:end` along the radial axis
 (1-based) to account for the ell-dependent minimum Zernike degree.
 """
-function forward_reduced!(t::BallRadialTransform,
-                          gdata::AbstractArray, cdata::AbstractArray)
+function forward_reduced!(
+        t::BallRadialTransform,
+        gdata::AbstractArray, cdata::AbstractArray
+    )
     ell_matrices = _forward_matrices(t)
     for (ell, m_ind, ell_ind) in t.ell_maps
         Nmin = zernike_min_degree(ell)
@@ -1822,8 +1884,8 @@ function forward_reduced!(t::BallRadialTransform,
         # radial is dim 4
         grm = @view gdata[:, m_ind, ell_ind, :, :]
         # Nmin+1 for 1-based indexing (Python Nmin: maps to Julia Nmin+1)
-        crm = @view cdata[:, m_ind, ell_ind, Nmin+1:end, :]
-        apply_matrix(ell_matrices[ell], grm, 2; out=crm)
+        crm = @view cdata[:, m_ind, ell_ind, (Nmin + 1):end, :]
+        apply_matrix(ell_matrices[ell], grm, 2; out = crm)
     end
     return nothing
 end
@@ -1833,14 +1895,16 @@ end
 
 Backward ball radial transform on 5D reduced arrays.
 """
-function backward_reduced!(t::BallRadialTransform,
-                           cdata::AbstractArray, gdata::AbstractArray)
+function backward_reduced!(
+        t::BallRadialTransform,
+        cdata::AbstractArray, gdata::AbstractArray
+    )
     ell_matrices = _backward_matrices(t)
     for (ell, m_ind, ell_ind) in t.ell_maps
         Nmin = zernike_min_degree(ell)
         grm = @view gdata[:, m_ind, ell_ind, :, :]
-        crm = @view cdata[:, m_ind, ell_ind, Nmin+1:end, :]
-        apply_matrix(ell_matrices[ell], crm, 2; out=grm)
+        crm = @view cdata[:, m_ind, ell_ind, (Nmin + 1):end, :]
+        apply_matrix(ell_matrices[ell], crm, 2; out = grm)
     end
     return nothing
 end
@@ -1867,32 +1931,32 @@ Union type covering [`ComplexFourierTransform`](@ref) and
 const FourierTransform = Union{ComplexFourierTransform, RealFourierTransform}
 
 export Transform,
-       SeparableTransform,
-       NonSeparableTransform,
-       JacobiTransform,
-       JacobiMMT,
-       FourierTransform,
-       ComplexFourierTransform,
-       ComplexFourierMMT,
-       FFTWComplexFFT,
-       RealFourierTransform,
-       RealFourierMMT,
-       FFTWRealFFT,
-       CosineTransform,
-       SWSHColatitudeTransform,
-       DiskRadialTransform,
-       BallRadialTransform,
-       forward!,
-       backward!,
-       forward_matrix,
-       backward_matrix,
-       wavenumbers,
-       wavenumbers_real,
-       register_transform!,
-       fftw_flag,
-       resize_coeffs_complex!,
-       unpack_rescale_real!,
-       repack_rescale_real!,
-       reduced_view_3,
-       reduced_view_4,
-       reduced_view_5
+    SeparableTransform,
+    NonSeparableTransform,
+    JacobiTransform,
+    JacobiMMT,
+    FourierTransform,
+    ComplexFourierTransform,
+    ComplexFourierMMT,
+    FFTWComplexFFT,
+    RealFourierTransform,
+    RealFourierMMT,
+    FFTWRealFFT,
+    CosineTransform,
+    SWSHColatitudeTransform,
+    DiskRadialTransform,
+    BallRadialTransform,
+    forward!,
+    backward!,
+    forward_matrix,
+    backward_matrix,
+    wavenumbers,
+    wavenumbers_real,
+    register_transform!,
+    fftw_flag,
+    resize_coeffs_complex!,
+    unpack_rescale_real!,
+    repack_rescale_real!,
+    reduced_view_3,
+    reduced_view_4,
+    reduced_view_5

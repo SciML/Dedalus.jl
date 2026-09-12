@@ -1,4 +1,3 @@
-
 # ============================================================================
 # Codomain
 # ============================================================================
@@ -19,17 +18,17 @@ struct Codomain
     arrow::Tuple{Vararg{Int}}
     Output::Type
 
-    function Codomain(arrow::Tuple{Vararg{Int}}; Output::Type=Codomain)
-        new(arrow, Output)
+    function Codomain(arrow::Tuple{Vararg{Int}}; Output::Type = Codomain)
+        return new(arrow, Output)
     end
 end
 
-Codomain(args::Int...; Output::Type=Codomain) = Codomain(args; Output=Output)
+Codomain(args::Int...; Output::Type = Codomain) = Codomain(args; Output = Output)
 
 Base.getindex(c::Codomain, i::Int) = c.arrow[i]
 Base.getindex(c::Codomain, ::Colon) = c.arrow
 function Base.getindex(c::Codomain, r::UnitRange)
-    c.arrow[r]
+    return c.arrow[r]
 end
 
 Base.length(c::Codomain) = length(c.arrow)
@@ -37,11 +36,11 @@ Base.show(io::IO, c::Codomain) = print(io, string(c.arrow))
 Base.iterate(c::Codomain, state...) = iterate(c.arrow, state...)
 
 function Base.:+(a::Codomain, b::Codomain)
-    a.Output(tuple((x + y for (x, y) in zip(a[:], b[:]))...); Output=a.Output)
+    return a.Output(tuple((x + y for (x, y) in zip(a[:], b[:]))...); Output = a.Output)
 end
 
 function (c::Codomain)(args...)
-    tuple((a + b for (a, b) in zip(c.arrow, args))...)
+    return tuple((a + b for (a, b) in zip(c.arrow, args))...)
 end
 
 function Base.:(==)(a::Codomain, b::Codomain)
@@ -54,16 +53,16 @@ function Base.:|(a::Codomain, b::Codomain)
     if a != b
         throw(TypeError("operators have incompatible codomains."))
     end
-    a.Output(tuple((x | y for (x, y) in zip(a[:], b[:]))...); Output=a.Output)
+    return a.Output(tuple((x | y for (x, y) in zip(a[:], b[:]))...); Output = a.Output)
 end
 
 function Base.:-(c::Codomain)
-    c.Output(tuple((-a for a in c.arrow)...); Output=c.Output)
+    return c.Output(tuple((-a for a in c.arrow)...); Output = c.Output)
 end
 
 function Base.:*(c::Codomain, other::Int)
     if other == 0
-        return c.Output(tuple(zeros(Int, length(c.arrow))...); Output=c.Output)
+        return c.Output(tuple(zeros(Int, length(c.arrow))...); Output = c.Output)
     end
     if other < 0
         return -c + (other + 1) * c
@@ -78,7 +77,7 @@ end
 Base.:*(other::Int, c::Codomain) = c * other
 
 function Base.:-(a::Codomain, b::Codomain)
-    a + (-b)
+    return a + (-b)
 end
 
 # ============================================================================
@@ -105,8 +104,8 @@ mutable struct Operator
     _codomain::Codomain
     _Output::Type
 
-    function Operator(func::Function, codomain::Codomain; Output::Type=Operator)
-        new(func, codomain, Output)
+    function Operator(func::Function, codomain::Codomain; Output::Type = Operator)
+        return new(func, codomain, Output)
     end
 end
 
@@ -115,7 +114,7 @@ get_codomain(op::Operator) = op._codomain
 get_output_type(op::Operator) = op._Output
 
 function (op::Operator)(args...)
-    op._function(args...)
+    return op._function(args...)
 end
 
 function compose(a::Operator, b::Operator)
@@ -123,7 +122,7 @@ function compose(a::Operator, b::Operator)
         b_codomain_args = get_codomain(b)(args...)
         return a(b_codomain_args...) * b(args...)
     end
-    return get_output_type(a)(func, get_codomain(a) + get_codomain(b); Output=get_output_type(a))
+    return get_output_type(a)(func, get_codomain(a) + get_codomain(b); Output = get_output_type(a))
 end
 
 function op_transpose(op::Operator)
@@ -131,7 +130,7 @@ function op_transpose(op::Operator)
     function func(args...)
         return sparse(transpose(op(cod(args...)...)))
     end
-    return get_output_type(op)(func, cod; Output=get_output_type(op))
+    return get_output_type(op)(func, cod; Output = get_output_type(op))
 end
 
 function op_identity(op::Operator)
@@ -140,7 +139,7 @@ function op_identity(op::Operator)
         n = size(m, 2)
         return InfiniteCSC(sparse(one(Float64) * I, n, n))
     end
-    return get_output_type(op)(func, 0 * get_codomain(op); Output=get_output_type(op))
+    return get_output_type(op)(func, 0 * get_codomain(op); Output = get_output_type(op))
 end
 
 function Base.:^(op::Operator, exponent::Int)
@@ -158,7 +157,7 @@ function Base.:+(a::Operator, b::Operator)
     function func(args...)
         return a(args...) + b(args...)
     end
-    return get_output_type(a)(func, cod; Output=get_output_type(a))
+    return get_output_type(a)(func, cod; Output = get_output_type(a))
 end
 
 function Base.:+(op::Operator, other::Number)
@@ -178,7 +177,7 @@ function Base.:*(op::Operator, other::Number)
     function func(args...)
         return other * op(args...)
     end
-    return get_output_type(op)(func, get_codomain(op); Output=get_output_type(op))
+    return get_output_type(op)(func, get_codomain(op); Output = get_output_type(op))
 end
 
 Base.:*(other::Number, op::Operator) = op * other
@@ -190,7 +189,7 @@ Base.:+(op::Operator) = op
 Base.:-(op::Operator) = (-1) * op
 
 function Base.:-(a::Operator, b::Operator)
-    a + (-b)
+    return a + (-b)
 end
 
 Base.:-(op::Operator, other::Number) = op + (-other)
@@ -222,19 +221,19 @@ Base.getindex(m::InfiniteCSC, i::Int, j::Int) = getindex(m.data, i, j)
 function Base.show(io::IO, ::MIME"text/plain", m::InfiniteCSC)
     r, c = size(m)
     nnzs = nnz(m.data)
-    print(io, "InfiniteCSC{$(eltype(m))} ($r × $c) with $nnzs stored elements")
+    return print(io, "InfiniteCSC{$(eltype(m))} ($r × $c) with $nnzs stored elements")
 end
 
 SparseArrays.sparse(m::InfiniteCSC) = m.data
 SparseArrays.nnz(m::InfiniteCSC) = nnz(m.data)
 
 function Base.transpose(m::InfiniteCSC)
-    InfiniteCSC(sparse(transpose(m.data)))
+    return InfiniteCSC(sparse(transpose(m.data)))
 end
 
 function inf_identity(m::InfiniteCSC{T}) where {T}
     n = size(m, 2)
-    InfiniteCSC(sparse(one(T) * I, n, n))
+    return InfiniteCSC(sparse(one(T) * I, n, n))
 end
 
 function square(m::InfiniteCSC)
@@ -291,15 +290,15 @@ function Base.:+(a::InfiniteCSC, b::InfiniteCSC)
 end
 
 function Base.:+(a::InfiniteCSC, b::AbstractMatrix)
-    a + InfiniteCSC(b)
+    return a + InfiniteCSC(b)
 end
 
 function Base.:+(a::AbstractMatrix, b::InfiniteCSC)
-    InfiniteCSC(a) + b
+    return InfiniteCSC(a) + b
 end
 
 function Base.:*(a::Number, m::InfiniteCSC)
-    InfiniteCSC(a * m.data)
+    return InfiniteCSC(a * m.data)
 end
 
 Base.:*(m::InfiniteCSC, a::Number) = a * m
@@ -312,15 +311,15 @@ function Base.:*(a::InfiniteCSC, b::InfiniteCSC)
     end
     padded_a = na_cols < nb_rows ? _pad_rows(InfiniteCSC(sparse(transpose(_pad_rows(InfiniteCSC(sparse(transpose(a.data))), nb_rows).data))), size(a, 1)) : a
     padded_b = nb_rows < na_cols ? _pad_rows(b, na_cols) : b
-    InfiniteCSC(padded_a.data * padded_b.data)
+    return InfiniteCSC(padded_a.data * padded_b.data)
 end
 
 function Base.:*(a::InfiniteCSC, b::AbstractMatrix)
-    a * InfiniteCSC(b)
+    return a * InfiniteCSC(b)
 end
 
 function Base.:*(a::AbstractMatrix, b::InfiniteCSC)
-    InfiniteCSC(a) * b
+    return InfiniteCSC(a) * b
 end
 
 # Disambiguate against LinearAlgebra's row-vector rules: a Transpose/Adjoint of
@@ -354,5 +353,5 @@ function resize_matrix(matrix::AbstractMatrix, new_rows::Int, new_cols::Int)
 end
 
 function resize_matrix(matrix::InfiniteCSC, new_rows::Int, new_cols::Int)
-    InfiniteCSC(resize_matrix(matrix.data, new_rows, new_cols))
+    return InfiniteCSC(resize_matrix(matrix.data, new_rows, new_cols))
 end

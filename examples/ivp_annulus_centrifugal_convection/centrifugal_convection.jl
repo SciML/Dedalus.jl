@@ -35,9 +35,9 @@ logger = Logging.current_logger()
 # Parameters
 Nphi, Nr = 256, 64
 eta = 3
-Rayleigh = 1e6
+Rayleigh = 1.0e6
 Prandtl = 1
-dealias = 3/2
+dealias = 3 / 2
 stop_sim_time = 30
 timestepper = RK222
 max_timestep = 0.125
@@ -50,25 +50,25 @@ Ro = 2 * eta / (1 + eta)
 
 # Bases
 coords = PolarCoordinates("phi", "r")
-dist = Distributor(coords; dtype=dtype)
-annulus = AnnulusBasis(coords; shape=(Nphi, Nr), radii=(Ri, Ro), dealias=dealias, dtype=dtype)
+dist = Distributor(coords; dtype = dtype)
+annulus = AnnulusBasis(coords; shape = (Nphi, Nr), radii = (Ri, Ro), dealias = dealias, dtype = dtype)
 annulus_edge = outer_edge(annulus)
 
 # Fields
-p = Field(dist; name="p", bases=(annulus,))
-b = Field(dist; name="b", bases=(annulus,))
-u = VectorField(dist, coords; name="u", bases=(annulus,))
-tau_p = Field(dist; name="tau_p")
-tau_b1 = Field(dist; name="tau_b1", bases=(annulus_edge,))
-tau_b2 = Field(dist; name="tau_b2", bases=(annulus_edge,))
-tau_u1 = VectorField(dist, coords; name="tau_u1", bases=(annulus_edge,))
-tau_u2 = VectorField(dist, coords; name="tau_u2", bases=(annulus_edge,))
+p = Field(dist; name = "p", bases = (annulus,))
+b = Field(dist; name = "b", bases = (annulus,))
+u = VectorField(dist, coords; name = "u", bases = (annulus,))
+tau_p = Field(dist; name = "tau_p")
+tau_b1 = Field(dist; name = "tau_b1", bases = (annulus_edge,))
+tau_b2 = Field(dist; name = "tau_b2", bases = (annulus_edge,))
+tau_u1 = VectorField(dist, coords; name = "tau_u1", bases = (annulus_edge,))
+tau_u2 = VectorField(dist, coords; name = "tau_u2", bases = (annulus_edge,))
 
 # Substitutions
-kappa = (Rayleigh * Prandtl)^(-1/2)
-nu = (Rayleigh / Prandtl)^(-1/2)
+kappa = (Rayleigh * Prandtl)^(-1 / 2)
+nu = (Rayleigh / Prandtl)^(-1 / 2)
 phi, r = local_grids(dist, annulus)
-rvec = VectorField(dist, coords; bases=(radial_basis(annulus),))
+rvec = VectorField(dist, coords; bases = (radial_basis(annulus),))
 rvec["g"][2] = r
 lift_basis = derivative_basis(annulus, 1)
 lift = A -> Lift(A, lift_basis, -1)
@@ -77,7 +77,7 @@ grad_b = gradient(b) + rvec * lift(tau_b1)  # First-order reduction
 g = rvec * 2 * (eta - 1) / (eta + 1)
 
 # Problem
-problem = IVP([p, b, u, tau_p, tau_b1, tau_b2, tau_u1, tau_u2]; namespace=@locals)
+problem = IVP([p, b, u, tau_p, tau_b1, tau_b2, tau_u1, tau_u2]; namespace = @locals)
 add_equation!(problem, "trace(grad_u) + tau_p = 0")
 add_equation!(problem, "dt(b) - kappa*div(grad_b) + lift(tau_b2) = - u@grad(b)")
 add_equation!(problem, "dt(u) - nu*div(grad_u) + grad(p) + b*g + lift(tau_u2) = - u@grad(u)")
@@ -92,25 +92,27 @@ solver = build_solver(problem, timestepper)
 solver.stop_sim_time = stop_sim_time
 
 # Initial conditions
-fill_random!(b, "g"; seed=42, distribution="normal", scale=1e-3) # Random noise
+fill_random!(b, "g"; seed = 42, distribution = "normal", scale = 1.0e-3) # Random noise
 b["g"] .*= (r .- Ri) .* (Ro .- r) # Damp noise at walls
 b["g"] .+= log.(r ./ Ri) ./ log(Ro / Ri) # Add conductive background
 
 # Analysis
-snapshots = add_file_handler(solver.evaluator, "snapshots"; sim_dt=0.1, max_writes=20)
-add_task!(snapshots, -divergence(skew(u)); name="vorticity")
-add_task!(snapshots, b; name="buoyancy")
-scalars = add_file_handler(solver.evaluator, "scalars"; sim_dt=0.01)
-add_task!(scalars, integrate(0.5 * DotProduct(u, u)); name="KE")
+snapshots = add_file_handler(solver.evaluator, "snapshots"; sim_dt = 0.1, max_writes = 20)
+add_task!(snapshots, -divergence(skew(u)); name = "vorticity")
+add_task!(snapshots, b; name = "buoyancy")
+scalars = add_file_handler(solver.evaluator, "scalars"; sim_dt = 0.01)
+add_task!(scalars, integrate(0.5 * DotProduct(u, u)); name = "KE")
 
 # CFL
-cfl = CFL(solver; initial_dt=max_timestep, max_dt=max_timestep, safety=safety,
-          cadence=10, threshold=0.1, max_change=1.5, min_change=0.5)
+cfl = CFL(
+    solver; initial_dt = max_timestep, max_dt = max_timestep, safety = safety,
+    cadence = 10, threshold = 0.1, max_change = 1.5, min_change = 0.5
+)
 add_velocity!(cfl, u)
 
 # Flow properties
-flow = GlobalFlowProperty(solver; cadence=10)
-add_property!(flow, sqrt(DotProduct(u, u)) / nu; name="Re")
+flow = GlobalFlowProperty(solver; cadence = 10)
+add_property!(flow, sqrt(DotProduct(u, u)) / nu; name = "Re")
 
 # Main loop
 try

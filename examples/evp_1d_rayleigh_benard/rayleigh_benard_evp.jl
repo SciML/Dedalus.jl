@@ -30,7 +30,7 @@ using Logging
 logger = Logging.current_logger()
 
 
-function max_growth_rate(Rayleigh, Prandtl, kx, Nz; NEV=10, target=0)
+function max_growth_rate(Rayleigh, Prandtl, kx, Nz; NEV = 10, target = 0)
     """Compute maximum linear growth rate."""
 
     # Parameters
@@ -41,24 +41,24 @@ function max_growth_rate(Rayleigh, Prandtl, kx, Nz; NEV=10, target=0)
 
     # Bases
     coords = CartesianCoordinates("x", "z")
-    dist = Distributor(coords; dtype=ComplexF64)
-    xbasis = ComplexFourier(coords["x"], Nx; bounds=(0, Lx))
-    zbasis = ChebyshevT(coords["z"], Nz; bounds=(0, Lz))
+    dist = Distributor(coords; dtype = ComplexF64)
+    xbasis = ComplexFourier(coords["x"], Nx; bounds = (0, Lx))
+    zbasis = ChebyshevT(coords["z"], Nz; bounds = (0, Lz))
 
     # Fields
-    omega = Field(dist; name="omega")
-    p = Field(dist; name="p", bases=(xbasis, zbasis))
-    b = Field(dist; name="b", bases=(xbasis, zbasis))
-    u = VectorField(dist, coords; name="u", bases=(xbasis, zbasis))
-    tau_p = Field(dist; name="tau_p")
-    tau_b1 = Field(dist; name="tau_b1", bases=(xbasis,))
-    tau_b2 = Field(dist; name="tau_b2", bases=(xbasis,))
-    tau_u1 = VectorField(dist, coords; name="tau_u1", bases=(xbasis,))
-    tau_u2 = VectorField(dist, coords; name="tau_u2", bases=(xbasis,))
+    omega = Field(dist; name = "omega")
+    p = Field(dist; name = "p", bases = (xbasis, zbasis))
+    b = Field(dist; name = "b", bases = (xbasis, zbasis))
+    u = VectorField(dist, coords; name = "u", bases = (xbasis, zbasis))
+    tau_p = Field(dist; name = "tau_p")
+    tau_b1 = Field(dist; name = "tau_b1", bases = (xbasis,))
+    tau_b2 = Field(dist; name = "tau_b2", bases = (xbasis,))
+    tau_u1 = VectorField(dist, coords; name = "tau_u1", bases = (xbasis,))
+    tau_u2 = VectorField(dist, coords; name = "tau_u2", bases = (xbasis,))
 
     # Substitutions
-    kappa = (Rayleigh * Prandtl)^(-1/2)
-    nu = (Rayleigh / Prandtl)^(-1/2)
+    kappa = (Rayleigh * Prandtl)^(-1 / 2)
+    nu = (Rayleigh / Prandtl)^(-1 / 2)
     x, z = local_grids(dist, xbasis, zbasis)
     ex, ez = unit_vector_fields(coords, dist)
     lift_basis = derivative_basis(zbasis, 1)
@@ -70,7 +70,7 @@ function max_growth_rate(Rayleigh, Prandtl, kx, Nz; NEV=10, target=0)
     # Problem
     # First-order form: "div(f)" becomes "trace(grad_f)"
     # First-order form: "lap(f)" becomes "div(grad_f)"
-    problem = EVP([p, b, u, tau_p, tau_b1, tau_b2, tau_u1, tau_u2]; eigenvalue=omega, namespace=@locals)
+    problem = EVP([p, b, u, tau_p, tau_b1, tau_b2, tau_u1, tau_u2]; eigenvalue = omega, namespace = @locals)
     add_equation!(problem, "trace(grad_u) + tau_p = 0")
     add_equation!(problem, "dt(b) - kappa*div(grad_b) + lift(tau_b2) - ez@u = 0")
     add_equation!(problem, "dt(u) - nu*div(grad_u) + grad(p) - b*ez + lift(tau_u2) = 0")
@@ -81,8 +81,8 @@ function max_growth_rate(Rayleigh, Prandtl, kx, Nz; NEV=10, target=0)
     add_equation!(problem, "integ(p) = 0") # Pressure gauge
 
     # Solver
-    solver = build_solver(problem; entry_cutoff=0)
-    solve_sparse!(solver, solver.subproblems[2], NEV; target=target)  # Julia 1-based: [2] instead of [1]
+    solver = build_solver(problem; entry_cutoff = 0)
+    solve_sparse!(solver, solver.subproblems[2], NEV; target = target)  # Julia 1-based: [2] instead of [1]
     return maximum(imag.(solver.eigenvalues))
 end
 
@@ -92,12 +92,12 @@ end
 Nz = 64
 Rayleigh = 1710
 Prandtl = 1
-kx_global = range(3.0, 3.25; length=50)
+kx_global = range(3.0, 3.25; length = 50)
 NEV = 10
 
 # Compute growth rate over local wavenumbers (serial version)
 t1 = time()
-growth_global = [max_growth_rate(Rayleigh, Prandtl, kx, Nz; NEV=NEV) for kx in kx_global]
+growth_global = [max_growth_rate(Rayleigh, Prandtl, kx, Nz; NEV = NEV) for kx in kx_global]
 t2 = time()
 @info "Elapsed solve time: $(t2 - t1)"
 

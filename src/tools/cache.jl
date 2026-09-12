@@ -12,10 +12,10 @@ Provides caching patterns translated from the Python Dedalus `cache.py` module:
 
 
 export CachedAttribute, get_cached!, reset_cached!,
-       CachedFunction, serialize_call,
-       CachedMethod, get_cached_method,
-       CachedClass, cached_construct,
-       @cached_attribute, @cached_method
+    CachedFunction, serialize_call,
+    CachedMethod, get_cached_method,
+    CachedClass, cached_construct,
+    @cached_attribute, @cached_method
 
 # ---------------------------------------------------------------------------
 # CachedAttribute
@@ -46,7 +46,7 @@ mutable struct CachedAttribute{T}
     value::Union{Nothing, T}
 
     function CachedAttribute{T}(compute_fn::Function) where {T}
-        new{T}(compute_fn, nothing)
+        return new{T}(compute_fn, nothing)
     end
 end
 
@@ -140,10 +140,12 @@ This mirrors the Python `serialize_call` helper used by [`CachedFunction`](@ref)
 # Returns
 A `Tuple` containing one element per entry in `argnames`.
 """
-function serialize_call(args::Tuple, kw, argnames::Vector{Symbol},
-                        defaults::Dict{Symbol})
+function serialize_call(
+        args::Tuple, kw, argnames::Vector{Symbol},
+        defaults::Dict{Symbol}
+    )
     call = collect(Any, args)
-    for name in argnames[length(args)+1:end]
+    for name in argnames[(length(args) + 1):end]
         if haskey(kw, name)
             push!(call, kw[name])
         else
@@ -185,15 +187,15 @@ cf(1.0)            # returns cached result
 """
 struct CachedFunction{F}
     func::F
-    cache::OrderedDict{Any,Any}
+    cache::OrderedDict{Any, Any}
     max_size::Float64
     argnames::Vector{Symbol}
     defaults::Dict{Symbol}
 
-    function CachedFunction(func::F; max_size::Real=Inf) where {F}
+    function CachedFunction(func::F; max_size::Real = Inf) where {F}
         argnames = _extract_argnames(func)
         defaults = _extract_defaults(func)
-        new{F}(func, OrderedDict{Any,Any}(), Float64(max_size), argnames, defaults)
+        return new{F}(func, OrderedDict{Any, Any}(), Float64(max_size), argnames, defaults)
     end
 end
 
@@ -213,7 +215,7 @@ function (cf::CachedFunction)(args...; kwargs...)
     end
 
     # Try resolved (canonical) form.
-    kw_dict = Dict{Symbol,Any}(pairs(kwargs))
+    kw_dict = Dict{Symbol, Any}(pairs(kwargs))
     resolved_call = serialize_call(args, kw_dict, cf.argnames, cf.defaults)
 
     if haskey(cf.cache, resolved_call)
@@ -265,7 +267,7 @@ defaults at runtime, so this returns an empty `Dict` as a safe baseline.
 Users may supply defaults explicitly via [`serialize_call`](@ref).
 """
 function _extract_defaults(::Any)::Dict{Symbol}
-    return Dict{Symbol,Any}()
+    return Dict{Symbol, Any}()
 end
 
 # ---------------------------------------------------------------------------
@@ -297,10 +299,10 @@ cm(instance, arg1, arg2)   # caches per `instance`
 struct CachedMethod{F}
     func::F
     max_size::Float64
-    instance_caches::IdDict{Any,CachedFunction}
+    instance_caches::IdDict{Any, CachedFunction}
 
-    function CachedMethod(func::F; max_size::Real=Inf) where {F}
-        new{F}(func, Float64(max_size), IdDict{Any,CachedFunction}())
+    function CachedMethod(func::F; max_size::Real = Inf) where {F}
+        return new{F}(func, Float64(max_size), IdDict{Any, CachedFunction}())
     end
 end
 
@@ -313,7 +315,7 @@ seen.
 """
 function (cm::CachedMethod)(instance, args...; kwargs...)
     cf = get!(cm.instance_caches, instance) do
-        CachedFunction(cm.func; max_size=cm.max_size)
+        CachedFunction(cm.func; max_size = cm.max_size)
     end
     return cf(instance, args...; kwargs...)
 end
@@ -327,7 +329,7 @@ directly.
 """
 @inline function get_cached_method(cm::CachedMethod, instance)
     return get!(cm.instance_caches, instance) do
-        CachedFunction(cm.func; max_size=cm.max_size)
+        CachedFunction(cm.func; max_size = cm.max_size)
     end
 end
 
@@ -344,7 +346,7 @@ Wrap a function definition so that it is automatically memoized per-instance
 end
 ```
 """
-macro cached_method(expr, max_size=Inf)
+macro cached_method(expr, max_size = Inf)
     if expr.head === :function || expr.head === :(=)
         sig = expr.args[1]
         name = sig isa Symbol ? sig : sig.args[1]
@@ -353,7 +355,7 @@ macro cached_method(expr, max_size=Inf)
         escaped_max = esc(max_size)
         return quote
             $(escaped_expr)
-            $(escaped_name) = CachedMethod($(escaped_name); max_size=$(escaped_max))
+            $(escaped_name) = CachedMethod($(escaped_name); max_size = $(escaped_max))
         end
     else
         error("@cached_method requires a function definition")
@@ -395,15 +397,16 @@ a === b  # true – same instance returned from cache
 """
 struct CachedClass{T}
     constructor::Function
-    cache::Dict{Any,WeakRef}
+    cache::Dict{Any, WeakRef}
     preprocess_args::Function
     preprocess_cache_args::Function
 
-    function CachedClass{T}(constructor::Function;
-                            preprocess_args::Function = _default_preprocess_args,
-                            preprocess_cache_args::Function = _default_preprocess_cache_args
-                           ) where {T}
-        new{T}(constructor, Dict{Any,WeakRef}(), preprocess_args, preprocess_cache_args)
+    function CachedClass{T}(
+            constructor::Function;
+            preprocess_args::Function = _default_preprocess_args,
+            preprocess_cache_args::Function = _default_preprocess_cache_args
+        ) where {T}
+        return new{T}(constructor, Dict{Any, WeakRef}(), preprocess_args, preprocess_cache_args)
     end
 end
 
@@ -436,7 +439,7 @@ function cached_construct(cc::CachedClass{T}, args...; kwargs...) where {T}
     full_args = if isempty(processed_kw)
         processed_args
     else
-        kw_sorted = Tuple(v for (_, v) in sort(collect(pairs(processed_kw)); by=first))
+        kw_sorted = Tuple(v for (_, v) in sort(collect(pairs(processed_kw)); by = first))
         (processed_args..., kw_sorted...)
     end
 

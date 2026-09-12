@@ -21,26 +21,26 @@ logger = Logging.current_logger()
 
 # Parameters
 N = 32
-q_list = range(0, 30; length=100)
+q_list = range(0, 30; length = 100)
 
 # Basis
 coord = Coordinate("x")
-dist = Distributor(coord; dtype=ComplexF64)
-basis = ComplexFourier(coord, N; bounds=(0, 2*pi))
+dist = Distributor(coord; dtype = ComplexF64)
+basis = ComplexFourier(coord, N; bounds = (0, 2 * pi))
 
 # Fields
-y = Field(dist; bases=(basis,))
+y = Field(dist; bases = (basis,))
 a = Field(dist)
 
 # Substitutions
 x = local_grid(dist, basis)
 q = Field(dist)
-cos_2x = Field(dist; bases=(basis,))
+cos_2x = Field(dist; bases = (basis,))
 cos_2x["g"] = cos.(2 .* x)
 dx = A -> Differentiate(A, coord)
 
 # Problem
-problem = EVP([y]; eigenvalue=a, namespace=@locals)
+problem = EVP([y]; eigenvalue = a, namespace = @locals)
 add_equation!(problem, "dx(dx(y)) + (a - 2*q*cos_2x)*y = 0")
 
 # Solver
@@ -48,7 +48,7 @@ solver = build_solver(problem)
 evals = []
 for qi in q_list
     q["g"] .= qi
-    solve_dense!(solver, solver.subproblems[1]; rebuild_matrices=true)
+    solve_dense!(solver, solver.subproblems[1]; rebuild_matrices = true)
     sorted_evals = sort(real.(solver.eigenvalues))
     push!(evals, sorted_evals[1:10])
 end

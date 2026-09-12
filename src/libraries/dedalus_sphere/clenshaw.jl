@@ -136,7 +136,7 @@ Clenshaw algorithm on scalar coefficients, matrix argument:
 
 Returns (n_terms, max_term, result_matrix).
 """
-function dsc_matrix_clenshaw(c, A, B, f0; cutoff::Float64=1e-6)
+function dsc_matrix_clenshaw(c, A, B, f0; cutoff::Float64 = 1.0e-6)
     N = length(c)
     Id = sparse(one(Float64) * eye_I, size(f0, 1), size(f0, 1))
 
@@ -184,11 +184,11 @@ Called from basis of NCC (i.e., r). A, B are from basis that the NCC is in;
 arg_basis is the basis of the thing we're multiplying by (i.e., if we are
 doing u.grad X, then arg_basis is the basis of u).
 """
-function dsc_ncc_matrix(N::Int, a_ncc, b_ncc, a_arg, b_arg, coeffs; cutoff::Float64=1e-6)
+function dsc_ncc_matrix(N::Int, a_ncc, b_ncc, a_arg, b_arg, coeffs; cutoff::Float64 = 1.0e-6)
     # Kronecker Clenshaw on argument Jacobi matrix
     J = dsc_jacobi_matrix(N, a_arg, b_arg)
     A, B = dsc_jacobi_recursion(N, a_ncc, b_ncc, J)
     f0 = (1.0 / sqrt(jacobi_mass(a_ncc, b_ncc))) * sparse(one(Float64) * eye_I, N, N)
-    total = dsc_matrix_clenshaw(coeffs, A, B, f0; cutoff=cutoff)
+    total = dsc_matrix_clenshaw(coeffs, A, B, f0; cutoff = cutoff)
     return total
 end
