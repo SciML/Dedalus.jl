@@ -30,3 +30,7 @@ profiles/
 # Log files
 logs/
 *.log
+
+# Literate-generated example pages
+/docs/src/examples/*.md
+!/docs/src/examples/index.md

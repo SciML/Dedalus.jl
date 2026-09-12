@@ -21,9 +21,6 @@ problem types that represent systems of equations to be solved.
 - Python `isinstance` checks -> Julia multiple dispatch.
 """
 
-using SparseArrays
-using LinearAlgebra
-using Logging
 
 # ============================================================================
 # Parseable namespace (operators + arithmetic aliases)
@@ -310,7 +307,7 @@ mutable struct LinearBoundaryValueProblem <: ProblemBase
     data::ProblemData
 end
 
-function LinearBoundaryValueProblem(variables; namespace=nothing)
+function LinearBoundaryValueProblem(variables::AbstractVector; namespace=nothing)
     data = _make_problem_data(variables; namespace=namespace)
     return LinearBoundaryValueProblem(data)
 end
@@ -684,7 +681,7 @@ mutable struct EigenvalueProblem <: ProblemBase
     eigenvalue::Any
 end
 
-function EigenvalueProblem(variables, eigenvalue; namespace=nothing)
+function EigenvalueProblem(variables::AbstractVector, eigenvalue; namespace=nothing)
     data = _make_problem_data(variables; namespace=namespace)
     if any(eigenvalue.domain.nonconstant)
         throw(ArgumentError("Eigenvalue field cannot have any bases."))

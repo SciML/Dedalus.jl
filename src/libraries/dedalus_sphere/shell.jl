@@ -6,7 +6,6 @@ Provides codomain and operator construction for spherical shell domains
 built on the Jacobi framework.
 """
 
-using SparseArrays
 
 # ============================================================================
 # ShellCodomain

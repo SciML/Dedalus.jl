@@ -6,7 +6,6 @@ reverse enumeration, oscillating iterators, unification helpers, deferred tuples
 element replacement iterators, and dtype classification.
 """
 
-using OrderedCollections: OrderedDict
 
 # ---------------------------------------------------------------------------
 # OrderedSet

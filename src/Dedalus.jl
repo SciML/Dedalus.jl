@@ -1,24 +1,31 @@
 module Dedalus
 
-__precompile__(false)
 
 const VERSION = "3.0.5"
 
 # ============================================================
 # Standard library imports
 # ============================================================
-using LinearAlgebra
-using SparseArrays
-using TOML
-using Logging
-using Random
+import TOML
+using Dates: Dates
+using LinearAlgebra: LinearAlgebra, Diagonal, SymTridiagonal, Symmetric,
+    UpperTriangular, axpy!, cond, diag, diagm, dot, eigen, eigvals, ldiv!, lu,
+    mul!, norm, qr, rank, I, I as eye_I
+using Logging: Logging, AbstractLogger, LogLevel
+using Random: Random, AbstractRNG, Xoshiro
+using SparseArrays: SparseArrays, AbstractSparseMatrix, SparseMatrixCSC,
+    blockdiag, findnz, issparse, nnz, nonzeros, nzrange, rowvals, sparse,
+    spdiagm, spzeros
 
 # ============================================================
 # External package imports
 # ============================================================
-using FFTW
-using SpecialFunctions
-using HDF5
+using FFTW: FFTW, plan_bfft!, plan_fft!, plan_irfft, plan_rfft
+using HDF5: HDF5, attrs, create_dataset, create_group, h5open, write_dataset
+using OrderedCollections: OrderedDict
+using SpecialFunctions: SpecialFunctions, beta as _beta, logbeta as _logbeta,
+    loggamma
+using UUIDs: uuid4
 
 # ============================================================
 # Layer 1: Tools and utilities (no internal dependencies)

@@ -25,7 +25,6 @@ delegates to one of four specialised kernels:
 - `_mid`   -- operation along the middle axis of a 3-D view (general case).
 """
 
-using SparseArrays: SparseMatrixCSC, sparse
 
 export CSRMatrix, apply_csr!, solve_upper_csr!
 

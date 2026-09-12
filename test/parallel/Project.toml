@@ -1,0 +1,13 @@
+[deps]
+Dedalus = "d8e4c038-7a2e-4b8f-9c1a-1e3f5d2a7b9c"
+HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
+MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[compat]
+HDF5 = "0.17"
+MPI = "0.20"
+julia = "1.10"
+
+[sources]
+Dedalus = { path = "../.." }

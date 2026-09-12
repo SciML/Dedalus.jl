@@ -6,7 +6,6 @@ Provides quadrature, trial functions, and operator construction
 for annular domains built on the Jacobi framework.
 """
 
-using SparseArrays
 
 # ============================================================================
 # Constants

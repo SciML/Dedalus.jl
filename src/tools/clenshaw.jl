@@ -9,8 +9,6 @@ Uses SparseArrays for sparse matrix operations and the `DeferredTuple` type
 from general.jl for lazy coefficient computation.
 """
 
-using SparseArrays
-using LinearAlgebra: I
 
 # ---------------------------------------------------------------------------
 # scalar_clenshaw

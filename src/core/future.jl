@@ -23,13 +23,17 @@ argument sub-trees and then perform their own operation.
 - Python `self.evaluate(id, force)` -> `evaluate_future(future; id, force)`.
 """
 
-using SparseArrays
 
 # ============================================================================
 # Configuration
 # ============================================================================
 
+"""Whether future fields reuse cached output buffers
+(`[memory] STORE_OUTPUTS` in `dedalus.toml`)."""
 const STORE_OUTPUTS = get_config_bool("memory", "STORE_OUTPUTS")
+
+"""Default `store_last` flag for future fields
+(`[memory] STORE_LAST_DEFAULT` in `dedalus.toml`)."""
 const STORE_LAST_DEFAULT = get_config_bool("memory", "STORE_LAST_DEFAULT")
 
 # ============================================================================

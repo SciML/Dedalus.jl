@@ -21,9 +21,6 @@ coupled modes for efficient matrix assembly and linear algebra.
 - 0-based indexing -> 1-based indexing throughout
 """
 
-using SparseArrays
-using LinearAlgebra
-using Logging
 
 # ============================================================================
 # Module-level builder functions

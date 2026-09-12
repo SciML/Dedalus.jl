@@ -29,9 +29,9 @@ using Dedalus
     # Helper: build Fourier basis matching dtype
     function make_fourier(coord, T; size, bounds, dealias)
         if T == ComplexF64
-            return ComplexFourier(coord, size=size, bounds=bounds, dealias=dealias)
+            return ComplexFourier(coord, size, bounds; dealias=dealias)
         else
-            return RealFourier(coord, size=size, bounds=bounds, dealias=dealias)
+            return RealFourier(coord, size, bounds; dealias=dealias)
         end
     end
 

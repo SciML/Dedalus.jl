@@ -28,8 +28,6 @@ data across distributed spectral layouts.
   separately or not needed for correctness).
 """
 
-using SparseArrays
-using LinearAlgebra
 
 # ============================================================================
 # Abstract type hierarchy
@@ -581,7 +579,7 @@ mutable struct Field <: AbstractCurrent
         preset_scales!(f, ntuple(_ -> 1, get_dim(dist)))
         # Add weak reference to distributor's field set
         if hasproperty(dist, :fields) && dist.fields !== nothing
-            push!(dist.fields, f)
+            dist.fields[f] = nothing
         end
         return f
     end

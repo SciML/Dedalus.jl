@@ -23,9 +23,6 @@ build and solve the matrix systems arising from Dedalus problem types.
 - Python class attributes `matsolver_default`, `matrices` -> Julia functions
 """
 
-using SparseArrays
-using LinearAlgebra
-using Logging
 
 # ============================================================================
 # Configuration defaults

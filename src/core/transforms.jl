@@ -48,8 +48,6 @@ types (`Jacobi`, `RealFourier`, `ComplexFourier`) are not yet created; we
 reference them via forward-declared abstract types where needed.
 """
 
-using LinearAlgebra
-using FFTW
 
 # Pull helpers from the tools modules (assumed already included in the parent module).
 # axslice, apply_dense, apply_sparse, apply_matrix are from tools/array.jl
@@ -1860,6 +1858,12 @@ _ball_basis_transforms["matrix"] = BallRadialTransform
 # Exports
 # ============================================================================
 
+"""
+    FourierTransform
+
+Union type covering [`ComplexFourierTransform`](@ref) and
+[`RealFourierTransform`](@ref) transform plans.
+"""
 const FourierTransform = Union{ComplexFourierTransform, RealFourierTransform}
 
 export Transform,

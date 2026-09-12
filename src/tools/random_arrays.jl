@@ -11,7 +11,6 @@ NumPy conventions:
   - `"standard_normal"` -> `randn`
 """
 
-using Random
 
 # ---------------------------------------------------------------------------
 # Distribution dispatch

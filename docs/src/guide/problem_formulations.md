@@ -40,7 +40,7 @@ solver = build_solver(problem, SBDF2)
 ```
 
 The `time` keyword sets the name of the time variable (default `"t"`). The
-[`@locals`](@ref) macro (Julia's `Base.@locals`) captures the current scope so
+`@locals` macro (Julia's `Base.@locals`) captures the current scope so
 that variables referenced in equation strings are resolved automatically.
 
 ## Eigenvalue Problems (EVP)

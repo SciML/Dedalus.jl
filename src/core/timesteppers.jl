@@ -33,9 +33,6 @@ explicit) timestepping methods for initial value problems.
 - Python `@classmethod compute_coefficients` -> Julia functions with type dispatch
 """
 
-using LinearAlgebra
-using SparseArrays
-using Logging
 
 # ============================================================================
 # Scheme registry
@@ -328,6 +325,12 @@ function CNAB1(solver)
     return CNAB1(data, 1, 1)
 end
 
+"""
+    compute_coefficients(stepper, timesteps, iteration)
+
+Return the `(a, b, c)` coefficient arrays for the multistep `stepper` given the
+recent `timesteps` history and the current `iteration` count.
+"""
 function compute_coefficients(::CNAB1, timesteps, iteration)
     a = zeros(CNAB1_AMAX + 1)
     b = zeros(CNAB1_BMAX + 1)

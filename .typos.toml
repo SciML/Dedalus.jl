@@ -1,0 +1,6 @@
+[default.extend-words]
+# Matrix/dimension variable names used throughout the numerics code
+ba = "ba"
+BA = "BA"
+nd = "nd"
+nin = "nin"

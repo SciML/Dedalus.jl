@@ -30,8 +30,6 @@ Both `Coordinate` and `AbstractCoordinateSystem` participate in the
 - `numpy` → Julia `LinearAlgebra` / `SparseArrays` operations.
 """
 
-using LinearAlgebra
-using SparseArrays
 
 # ============================================================================
 # Forward-reference abstract types (used by other modules)

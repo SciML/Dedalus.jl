@@ -29,7 +29,7 @@ install in development mode:
 
 ```julia
 using Pkg
-Pkg.develop(url="https://github.com/DedalusProject/Dedalus.jl.git")
+Pkg.develop(url="https://github.com/SciML/Dedalus.jl.git")
 ```
 
 Or, if you have already cloned the repository locally:
@@ -69,8 +69,8 @@ For a quick functional test, try building a minimal domain:
 using Dedalus
 
 coords = CartesianCoordinates("x")
-dist = Distributor(coords; dtype=Float64)
-xbasis = ChebyshevT(coords["x"], 32; bounds=(0, 1))
+dist = Distributor(coords, Float64)
+xbasis = ChebyshevT(coords["x"], 32, (0, 1))
 f = Field(dist; bases=(xbasis,))
 x = local_grids(dist, xbasis)
 f["g"] = @. sin(pi * x[1])
@@ -90,7 +90,7 @@ When running with MPI, you can specify a processor mesh to control the domain
 decomposition:
 
 ```julia
-dist = Distributor(coords; dtype=Float64, mesh=(2, 2))
+dist = Distributor(coords, Float64; mesh=(2, 2))
 ```
 
 The `mesh` tuple defines how the distributor splits the domain across MPI

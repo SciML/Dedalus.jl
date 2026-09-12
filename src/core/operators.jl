@@ -11,8 +11,6 @@
 #   require_grid_space!, require_coeff_space!, change_layout!,
 #   unify_attributes, get_basis, get_axis, get_basis_axis, substitute_basis
 
-using SparseArrays
-using LinearAlgebra
 
 # ============================================================================
 # Abstract operator types
@@ -52,6 +50,12 @@ const AbstractField = Union{AbstractCurrent, FutureField}
 """Global alias dictionary for operator dispatch from string names."""
 const OPERATOR_ALIASES = Dict{String, Any}()
 
+"""
+    register_operator_alias!(name::String, op)
+
+Register `op` as the operator that `name` resolves to when parsing equation
+strings (see [`OPERATOR_ALIASES`](@ref)).
+"""
 function register_operator_alias!(name::String, op)
     OPERATOR_ALIASES[name] = op
     return op
@@ -1000,6 +1004,13 @@ function new_operand(op::Integrate, operand; kw...)
     return Integrate(operand, op.coord; kw...)
 end
 
+"""
+    integrate(arg, coord)
+    integrate(arg)
+
+Integrate a field or operator expression over `coord` (or over every basis of
+`arg` when the coordinate is omitted). Returns an [`Integrate`](@ref) operator.
+"""
 function integrate(arg, coord)
     return Integrate(arg, coord)
 end
@@ -1096,6 +1107,13 @@ function new_operand(op::Average, operand; kw...)
     return Average(operand, op.coord; kw...)
 end
 
+"""
+    average(arg, coord)
+    average(arg)
+
+Average a field or operator expression along `coord` (or over every basis of
+`arg` when the coordinate is omitted). Returns an [`Average`](@ref) operator.
+"""
 function average(arg, coord)
     return Average(arg, coord)
 end
@@ -1195,6 +1213,13 @@ function new_operand(op::Lift, operand; kw...)
     return Lift(operand, op.output_basis, op.n; kw...)
 end
 
+"""
+    lift(arg, basis, n)
+
+Lift `arg` into the space of the `n`-th derivative of `basis`, used to raise
+the polynomial order of expressions containing derivatives. Returns a
+[`Lift`](@ref) operator.
+"""
 function lift(arg, basis, n)
     return Lift(arg, basis, n)
 end
@@ -2114,12 +2139,6 @@ end
 
 # Laplacian dispatch moved to end of file (after all operator types defined)
 
-"""Trace of tensor field (contracts first two indices)."""
-trace_op(field) = CartesianTrace(field)
-
-"""Transpose first two tensor components."""
-transpose_components(field) = CartesianTransposeComponents(field)
-
 """Lock field to grid space."""
 grid_op(field) = GridOperator(field)
 
@@ -2135,6 +2154,12 @@ function component(field, index, comp)
 end
 
 # Aliases for equation namespace
+"""
+    dt
+
+Alias for [`time_derivative`](@ref): the temporal-derivative operator used when
+building initial value problems, e.g. `"dt(u) + lap(u) = f"`.
+"""
 const dt = time_derivative
 
 # ============================================================================
@@ -2253,11 +2278,13 @@ export AbstractOperator, AbstractLinearOperator, SpectralOperator, SpectralOpera
 # Convenience functions (re-added after duplicate removal)
 # ============================================================================
 
+"""
+    differentiate(arg, coord)
+
+Differentiate a field or operator expression with respect to `coord`.
+Returns a [`Differentiate`](@ref) operator.
+"""
 differentiate(arg, coord) = Differentiate(arg, coord)
-interpolate(arg, coord, position) = Interpolate(arg, coord, position)
-integrate(arg, coord) = Integrate(arg, coord)
-average(arg, coord) = Average(arg, coord)
-lift(arg, basis, n) = Lift(arg, basis, n)
 
 # ============================================================================
 # Stubs for subsystem/solver wiring
@@ -3583,6 +3610,12 @@ end
 # Updated dispatch functions for trace, transpose, skew
 # --------------------------------------------------------------------------
 
+"""
+    trace_op(field)
+
+Trace a tensor field over its last two indices, dispatching to the
+geometry-specific trace operator for the field's coordinate system.
+"""
 function trace_op(field)
     if isa(field, Number) || field == 0
         return 0
@@ -3599,6 +3632,12 @@ function trace_op(field)
     end
 end
 
+"""
+    transpose_components(field; indices=(1, 2))
+
+Transpose the `indices` components of a tensor field, dispatching to the
+geometry-specific operator for the field's coordinate system.
+"""
 function transpose_components(field; indices=(1,2))
     if isa(field, Number) || field == 0
         return 0
@@ -4449,6 +4488,12 @@ gradient(field, cs::PolarCoordinates) = PolarGradient(field, cs)
 gradient(field, cs::S2Coordinates) = SphereGradient(field, cs)
 gradient(field, cs::SphericalCoordinates) = SphericalGradient(field, cs)
 
+"""
+    divergence(field; index=1)
+
+Divergence of a tensor field contracted over component `index`, dispatching to
+the geometry-specific divergence operator for the field's coordinate system.
+"""
 function divergence(field; index=1)
     if isa(field, Number) || field == 0
         return 0
@@ -4469,6 +4514,12 @@ function divergence(field; index=1)
     end
 end
 
+"""
+    laplacian(field, cs)
+
+Laplacian of a field with respect to the coordinate system `cs`, dispatching
+to the geometry-specific Laplacian operator.
+"""
 function laplacian(field, cs)
     if isa(field, Number) || field == 0
         return 0
@@ -5944,4 +5995,10 @@ function coeff_size(subproblem, domain)
 end
 
 
+"""
+    lap
+
+Alias for [`laplacian`](@ref), used in equation strings such as
+`"lap(u) = f"`.
+"""
 const lap = laplacian
