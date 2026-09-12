@@ -129,14 +129,14 @@ mutable struct Coordinate
     name::String
     cs::Union{Nothing, AbstractCoordinateSystem}
 
-    function Coordinate(name::AbstractString; cs::Union{Nothing, AbstractCoordinateSystem}=nothing)
+    function Coordinate(name::AbstractString; cs::Union{Nothing, AbstractCoordinateSystem} = nothing)
         return new(String(name), cs)
     end
 end
 
 # Convenience constructor matching Python `Coordinate(name, cs=None)`
 Coordinate(name::AbstractString, cs::Union{Nothing, AbstractCoordinateSystem}) =
-    Coordinate(name; cs=cs)
+    Coordinate(name; cs = cs)
 
 # --- display ------------------------------------------------------------------
 
@@ -191,13 +191,13 @@ mutable struct AzimuthalCoordinate
     name::String
     cs::Union{Nothing, AbstractCoordinateSystem}
 
-    function AzimuthalCoordinate(name::AbstractString; cs::Union{Nothing, AbstractCoordinateSystem}=nothing)
+    function AzimuthalCoordinate(name::AbstractString; cs::Union{Nothing, AbstractCoordinateSystem} = nothing)
         return new(String(name), cs)
     end
 end
 
 AzimuthalCoordinate(name::AbstractString, cs::Union{Nothing, AbstractCoordinateSystem}) =
-    AzimuthalCoordinate(name; cs=cs)
+    AzimuthalCoordinate(name; cs = cs)
 
 # AzimuthalCoordinate shares all the same interfaces as Coordinate
 Base.show(io::IO, c::AzimuthalCoordinate) = print(io, c.name)
@@ -347,17 +347,19 @@ struct CartesianCoordinates{N} <: AbstractCoordinateSystem
     _default_nonconst_groups::NTuple{N, Int}
     _unit_vector_cache::Dict{UInt, Any}
 
-    function CartesianCoordinates(names::Vararg{AbstractString, N}; right_handed::Bool=true) where {N}
+    function CartesianCoordinates(names::Vararg{AbstractString, N}; right_handed::Bool = true) where {N}
         str_names = ntuple(i -> String(names[i]), Val(N))
         if length(Set(str_names)) < N
             throw(ArgumentError("Must specify unique names."))
         end
         # Placeholder: cs reference is set after construction via _set_cs!
-        coord_objs = ntuple(i -> Coordinate(str_names[i]; cs=nothing), Val(N))
-        inst = new{N}(str_names, coord_objs, N,
-                      right_handed,
-                      ntuple(_ -> 1, Val(N)),
-                      Dict{UInt, Any}())
+        coord_objs = ntuple(i -> Coordinate(str_names[i]; cs = nothing), Val(N))
+        inst = new{N}(
+            str_names, coord_objs, N,
+            right_handed,
+            ntuple(_ -> 1, Val(N)),
+            Dict{UInt, Any}()
+        )
         # Back-link coordinates to their parent coordinate system
         for c in coord_objs
             c.cs = inst
@@ -377,7 +379,7 @@ CartesianCoordinates(names::AbstractVector{<:AbstractString}; kw...) =
 @inline default_nonconst_groups(cc::CartesianCoordinates) = cc._default_nonconst_groups
 
 function Base.show(io::IO, cc::CartesianCoordinates)
-    print(io, "{", join([c.name for c in cc.coords], ","), "}")
+    return print(io, "{", join([c.name for c in cc.coords], ","), "}")
 end
 
 # --- separable intertwiner interface ------------------------------------------
@@ -413,7 +415,7 @@ function unit_vector_fields(cc::CartesianCoordinates, dist)
     end
     fields = []
     for (i, c) in enumerate(cc.coords)
-        ec = VectorField(dist, cc; name="e$(c.name)")
+        ec = VectorField(dist, cc; name = "e$(c.name)")
         ec["g"][i] = 1
         push!(fields, ec)
     end
@@ -448,8 +450,8 @@ struct S2Coordinates <: CurvilinearCoordinateSystem
 
     function S2Coordinates(azimuth_name::AbstractString, colatitude_name::AbstractString)
         names = (String(azimuth_name), String(colatitude_name))
-        az = AzimuthalCoordinate(azimuth_name; cs=nothing)
-        co = Coordinate(colatitude_name; cs=nothing)
+        az = AzimuthalCoordinate(azimuth_name; cs = nothing)
+        co = Coordinate(colatitude_name; cs = nothing)
         inst = new(names, az, co, (az, co))
         az.cs = inst
         co.cs = inst
@@ -541,8 +543,8 @@ struct PolarCoordinates <: CurvilinearCoordinateSystem
 
     function PolarCoordinates(azimuth_name::AbstractString, radius_name::AbstractString)
         names = (String(azimuth_name), String(radius_name))
-        az = AzimuthalCoordinate(azimuth_name; cs=nothing)
-        rad = Coordinate(radius_name; cs=nothing)
+        az = AzimuthalCoordinate(azimuth_name; cs = nothing)
+        rad = Coordinate(radius_name; cs = nothing)
         inst = new(names, az, rad, (az, rad))
         az.cs = inst
         rad.cs = inst
@@ -652,13 +654,15 @@ struct SphericalCoordinates <: CurvilinearCoordinateSystem
     coords::Tuple{AzimuthalCoordinate, Coordinate, Coordinate}
     right_handed::Bool
 
-    function SphericalCoordinates(azimuth_name::AbstractString,
-                                  colatitude_name::AbstractString,
-                                  radius_name::AbstractString)
+    function SphericalCoordinates(
+            azimuth_name::AbstractString,
+            colatitude_name::AbstractString,
+            radius_name::AbstractString
+        )
         names = (String(azimuth_name), String(colatitude_name), String(radius_name))
-        az = AzimuthalCoordinate(azimuth_name; cs=nothing)
-        co = Coordinate(colatitude_name; cs=nothing)
-        rad = Coordinate(radius_name; cs=nothing)
+        az = AzimuthalCoordinate(azimuth_name; cs = nothing)
+        co = Coordinate(colatitude_name; cs = nothing)
+        rad = Coordinate(radius_name; cs = nothing)
         s2 = S2Coordinates(azimuth_name, colatitude_name)
         inst = new(names, az, co, rad, s2, (az, co, rad), false)
         az.cs = inst
@@ -687,7 +691,7 @@ function _U_forward_spherical(order::Int)
     Ui = Dict(
         +1 => ComplexF64[+1im, 1, 0] / sqrt(2),
         -1 => ComplexF64[-1im, 1, 0] / sqrt(2),
-         0 => ComplexF64[  0,  0, 1]
+        0 => ComplexF64[0, 0, 1]
     )
     U = vcat([transpose(Ui[spin]) for spin in SPHERICAL_SPIN_ORDERING]...)
     return nkron(U, order)
@@ -848,7 +852,7 @@ mutable struct DirectProduct <: AbstractCoordinateSystem
     _curvilinear::Union{Nothing, Bool}
     _default_nonconst_groups::Union{Nothing, Tuple}
 
-    function DirectProduct(coordsystems::Vararg{Any}; right_handed::Union{Nothing, Bool}=nothing)
+    function DirectProduct(coordsystems::Vararg{Any}; right_handed::Union{Nothing, Bool} = nothing)
         # Validate that all constituents support separable intertwiners
         # (In Julia we check by whether they have the right methods defined —
         #  all Coordinate, CartesianCoordinates, S2Coordinates, PolarCoordinates
@@ -890,8 +894,10 @@ mutable struct DirectProduct <: AbstractCoordinateSystem
             subaxis += get_dim(cs)
         end
 
-        return new(coordsystems, all_coords, total_dim, rh,
-                   subaxis_dict, nothing, nothing)
+        return new(
+            coordsystems, all_coords, total_dim, rh,
+            subaxis_dict, nothing, nothing
+        )
     end
 end
 
@@ -985,26 +991,26 @@ end
 # ============================================================================
 
 export AbstractCoordinateSystem,
-       CurvilinearCoordinateSystem,
-       Coordinate,
-       AzimuthalCoordinate,
-       CoordinateOrAzimuthal,
-       CartesianCoordinates,
-       S2Coordinates,
-       PolarCoordinates,
-       SphericalCoordinates,
-       DirectProduct,
-       get_dim,
-       get_coords,
-       get_names,
-       is_curvilinear,
-       default_nonconst_groups,
-       check_bounds,
-       sub_cs,
-       cartesian,
-       unit_vector_fields,
-       forward_intertwiner,
-       backward_intertwiner,
-       forward_vector_intertwiner,
-       backward_vector_intertwiner,
-       subaxis_by_cs
+    CurvilinearCoordinateSystem,
+    Coordinate,
+    AzimuthalCoordinate,
+    CoordinateOrAzimuthal,
+    CartesianCoordinates,
+    S2Coordinates,
+    PolarCoordinates,
+    SphericalCoordinates,
+    DirectProduct,
+    get_dim,
+    get_coords,
+    get_names,
+    is_curvilinear,
+    default_nonconst_groups,
+    check_bounds,
+    sub_cs,
+    cartesian,
+    unit_vector_fields,
+    forward_intertwiner,
+    backward_intertwiner,
+    forward_vector_intertwiner,
+    backward_vector_intertwiner,
+    subaxis_by_cs

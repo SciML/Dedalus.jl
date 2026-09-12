@@ -56,8 +56,8 @@ function _jacobi_norm_sq(n::Integer, a, b)
     end
     return exp(
         (a + b + 1) * log(2.0) - log(2.0 * n + a + b + 1) +
-        loggamma(n + a + 1) + loggamma(n + b + 1) -
-        loggamma(Float64(n + 1)) - loggamma(n + a + b + 1)
+            loggamma(n + a + 1) + loggamma(n + b + 1) -
+            loggamma(Float64(n + 1)) - loggamma(n + a + b + 1)
     )
 end
 
@@ -105,7 +105,7 @@ function jacobi_matrix(N::Integer, a, b)
     # Diagonal entries
     for n in 0:(N - 1)
         s = 2.0 * n + a + b
-        if abs(s) < 1e-15
+        if abs(s) < 1.0e-15
             # When 2n+a+b = 0, use L'Hopital: (b^2-a^2)/(s*(s+2)) -> (b-a)/(s+2)
             d[n + 1] = (b - a) / (s + 2)
         else
@@ -118,11 +118,11 @@ function jacobi_matrix(N::Integer, a, b)
         s = 2.0 * n + a + b + 2.0
         num = 4.0 * (n + 1) * (n + a + 1) * (n + b + 1) * (n + a + b + 1)
         den = s^2 * (s^2 - 1)
-        if n == 0 && abs(a + b + 1) < 1e-15
+        if n == 0 && abs(a + b + 1) < 1.0e-15
             # Special case: a+b=-1, n=0. Both num and den -> 0.
             # Limit: 2*(a+1)*(b+1)
             e[n + 1] = sqrt(abs(2.0 * (a + 1) * (b + 1)))
-        elseif abs(den) < 1e-30
+        elseif abs(den) < 1.0e-30
             e[n + 1] = 0.0
         else
             e[n + 1] = sqrt(abs(num / den))
@@ -322,7 +322,7 @@ function _raising_A_normalized(N::Integer, a, b)
     for n in 0:(N - 1)
         s = 2.0 * n + a + b
         # Classical diagonal coefficient
-        if n == 0 && abs(a + b + 1) < 1e-15
+        if n == 0 && abs(a + b + 1) < 1.0e-15
             c_diag = 1.0
         elseif n == 0
             c_diag = (n + a + b + 1) / (a + b + 1)
@@ -441,10 +441,10 @@ end
 # ---------------------------------------------------------------------------
 
 export mass,
-       build_grid,
-       build_weights,
-       build_polynomials,
-       conversion_matrix,
-       differentiation_matrix,
-       jacobi_matrix,
-       integration_vector
+    build_grid,
+    build_weights,
+    build_polynomials,
+    conversion_matrix,
+    differentiation_matrix,
+    jacobi_matrix,
+    integration_vector

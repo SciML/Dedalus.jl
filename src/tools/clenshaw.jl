@@ -41,7 +41,7 @@ function scalar_clenshaw(c, A, B, f0)
         b2 = b1
         b1 = b0
         # Python uses 0-based indexing: A[n], B[n+1] -> Julia 1-based: A[n], B[n+1]
-        b0 = c[n] .+ (A[n] .* b1) .+ (B[n+1] .* b2)
+        b0 = c[n] .+ (A[n] .* b1) .+ (B[n + 1] .* b2)
     end
     return b0 .* f0
 end
@@ -80,9 +80,9 @@ function matrix_clenshaw(c, A, B, f0, cutoff)
         b2 = b1
         b1 = b0
         if abs(c[n]) > cutoff
-            b0 = (c[n] * Imat) + (A[n] * b1) + (B[n+1] * b2)
+            b0 = (c[n] * Imat) + (A[n] * b1) + (B[n + 1] * b2)
         else
-            b0 = (A[n] * b1) + (B[n+1] * b2)
+            b0 = (A[n] * b1) + (B[n + 1] * b2)
         end
     end
     return f0 * b0
@@ -116,7 +116,7 @@ If `val_c[1]` is a scalar, falls back to [`matrix_clenshaw`](@ref).
 # Returns
 The evaluated Kronecker-product sum.
 """
-function kronecker_clenshaw(val_c, norm_c, A, B, f0, cutoff; coeffs_left::Bool=true)
+function kronecker_clenshaw(val_c, norm_c, A, B, f0, cutoff; coeffs_left::Bool = true)
     function _kron(X, C)
         if coeffs_left
             return kron(C, X)
@@ -142,7 +142,7 @@ function kronecker_clenshaw(val_c, norm_c, A, B, f0, cutoff; coeffs_left::Bool=t
     for n in N:-1:1
         b2 = b1
         b1 = b0
-        b0 = (_kron(A[n], I1) * b1) + (_kron(B[n+1], I1) * b2)
+        b0 = (_kron(A[n], I1) * b1) + (_kron(B[n + 1], I1) * b2)
         if norm_c[n] > cutoff
             b0 = b0 + _kron(I0, val_c[n])
         end
@@ -210,7 +210,7 @@ function jacobi_recursion(N::Integer, a, b, X)
         idx = n - 1  # 0-based index into Python's recursion
         if 0 <= idx < (N - 1)
             # J is 1-based Julia matrix: J[idx+1, idx+1] = diagonal, J[idx+1, idx+2] = super-diagonal
-            return (X_val - J[idx+1, idx+1] * Ident) / J[idx+1, idx+2]
+            return (X_val - J[idx + 1, idx + 1] * Ident) / J[idx + 1, idx + 2]
         else
             return 0 * Ident
         end
@@ -220,7 +220,7 @@ function jacobi_recursion(N::Integer, a, b, X)
         # n is 1-based DeferredTuple index, maps to Python's 0-based index (n-1)
         idx = n - 1  # 0-based index into Python's recursion
         if 0 < idx < (N - 1)
-            return (-J[idx+1, idx] / J[idx+1, idx+2]) * Ident
+            return (-J[idx + 1, idx] / J[idx + 1, idx + 2]) * Ident
         else
             return 0 * Ident
         end
@@ -236,6 +236,6 @@ end
 # ---------------------------------------------------------------------------
 
 export scalar_clenshaw,
-       matrix_clenshaw,
-       kronecker_clenshaw,
-       jacobi_recursion
+    matrix_clenshaw,
+    kronecker_clenshaw,
+    jacobi_recursion

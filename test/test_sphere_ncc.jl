@@ -21,7 +21,7 @@ using Dedalus
 function build_sphere(Nphi, Ntheta, dealias, T)
     c = S2Coordinates("phi", "theta")
     d = Distributor(c, T)
-    b = SphereBasis(c, (Nphi, Ntheta), radius=1.0, dealias=(dealias, dealias), dtype=T)
+    b = SphereBasis(c, (Nphi, Ntheta), radius = 1.0, dealias = (dealias, dealias), dtype = T)
     phi, theta = local_grids(d, b)
     return c, d, b, phi, theta
 end
@@ -32,9 +32,9 @@ end
 # Returns true if results match within tolerance.
 # ---------------------------------------------------------------------------
 
-function ncc_test_scalar_product(f, g, vars; atol=1e-10)
+function ncc_test_scalar_product(f, g, vars; atol = 1.0e-10)
     w0 = f * g
-    w1 = reinitialize(w0, ncc=true, ncc_vars=vars)
+    w1 = reinitialize(w0, ncc = true, ncc_vars = vars)
     problem = LBVP(vars)
     add_equation!(problem, (w1, 0))
     solver = build_solver(problem)
@@ -43,12 +43,12 @@ function ncc_test_scalar_product(f, g, vars; atol=1e-10)
     w1 = evaluate_as_ncc(w1)
     change_scales!(w0, 1)
     change_scales!(w1, 1)
-    return isapprox(w0["g"], w1["g"], atol=atol)
+    return isapprox(w0["g"], w1["g"], atol = atol)
 end
 
-function ncc_test_dot_product(f, g, vars; atol=1e-10)
+function ncc_test_dot_product(f, g, vars; atol = 1.0e-10)
     w0 = DotProduct(f, g)
-    w1 = reinitialize(w0, ncc=true, ncc_vars=vars)
+    w1 = reinitialize(w0, ncc = true, ncc_vars = vars)
     problem = LBVP(vars)
     add_equation!(problem, (w1, 0))
     solver = build_solver(problem)
@@ -57,7 +57,7 @@ function ncc_test_dot_product(f, g, vars; atol=1e-10)
     w1 = evaluate_as_ncc(w1)
     change_scales!(w0, 1)
     change_scales!(w1, 1)
-    return isapprox(w0["g"], w1["g"], atol=atol)
+    return isapprox(w0["g"], w1["g"], atol = atol)
 end
 
 # ---------------------------------------------------------------------------
@@ -70,8 +70,8 @@ f(theta) is a latitude-only scalar NCC, g(phi, theta) is a full scalar field.
 """
 function test_scalar_prod_scalar(c, d, b, phi, theta, ncc_first)
     lb = latitude_basis(b)
-    f = Field(d, bases=(lb,), dtype=eltype(theta))
-    g = Field(d, bases=(b,), dtype=eltype(theta))
+    f = Field(d, bases = (lb,), dtype = eltype(theta))
+    g = Field(d, bases = (b,), dtype = eltype(theta))
     f["g"] = @. cos(theta)^4
     g["g"] = @. 3 * (sin(theta) * cos(phi))^2 + 2 * (sin(theta) * sin(phi))
     vars = [g]
@@ -88,8 +88,8 @@ f(theta) is a latitude-only scalar NCC, g(phi, theta) is a full vector field.
 """
 function test_scalar_prod_vector(c, d, b, phi, theta, ncc_first)
     lb = latitude_basis(b)
-    f = Field(d, bases=(lb,), dtype=eltype(theta))
-    g = VectorField(d, c, bases=(b,), dtype=eltype(theta))
+    f = Field(d, bases = (lb,), dtype = eltype(theta))
+    g = VectorField(d, c, bases = (b,), dtype = eltype(theta))
     f["g"] = @. cos(theta)^4
     g["g"][1] = @. 3 * (sin(theta) * cos(phi))^2 + 2 * (sin(theta) * sin(phi))
     g["g"][2] = @. sin(theta) * cos(phi) + 4 * cos(theta)^2
@@ -107,8 +107,8 @@ f(theta) is a latitude-only scalar NCC, g(phi, theta) is a full rank-2 tensor.
 """
 function test_scalar_prod_tensor(c, d, b, phi, theta, ncc_first)
     lb = latitude_basis(b)
-    f = Field(d, bases=(lb,), dtype=eltype(theta))
-    g = TensorField(d, (c, c), bases=(b,), dtype=eltype(theta))
+    f = Field(d, bases = (lb,), dtype = eltype(theta))
+    g = TensorField(d, (c, c), bases = (b,), dtype = eltype(theta))
     f["g"] = @. cos(theta)^4
     g["g"][1, 1] = @. 3 * (sin(theta) * cos(phi))^2 + 2 * (sin(theta) * sin(phi))
     g["g"][1, 2] = @. sin(theta) * cos(phi) + 4 * cos(theta)^2
@@ -128,8 +128,8 @@ f(theta) is a latitude-only vector NCC, g(phi, theta) is a full scalar field.
 """
 function test_vector_prod_scalar(c, d, b, phi, theta, ncc_first)
     lb = latitude_basis(b)
-    f = VectorField(d, c, bases=(lb,), dtype=eltype(theta))
-    g = Field(d, bases=(b,), dtype=eltype(theta))
+    f = VectorField(d, c, bases = (lb,), dtype = eltype(theta))
+    g = Field(d, bases = (b,), dtype = eltype(theta))
     f["g"][1] = @. cos(theta)^2
     f["g"][2] = @. cos(theta)^4
     g["g"] = @. 3 * (sin(theta) * cos(phi))^2 + 2 * (sin(theta) * sin(phi))
@@ -147,8 +147,8 @@ f(theta) is a latitude-only vector NCC, g(phi, theta) is a full vector field.
 """
 function test_vector_prod_vector(c, d, b, phi, theta, ncc_first)
     lb = latitude_basis(b)
-    f = VectorField(d, c, bases=(lb,), dtype=eltype(theta))
-    g = VectorField(d, c, bases=(b,), dtype=eltype(theta))
+    f = VectorField(d, c, bases = (lb,), dtype = eltype(theta))
+    g = VectorField(d, c, bases = (b,), dtype = eltype(theta))
     f["g"][1] = @. cos(theta)^2
     f["g"][2] = @. cos(theta)^4
     g["g"][1] = @. 3 * (sin(theta) * cos(phi))^2 + 2 * (sin(theta) * sin(phi))
@@ -167,8 +167,8 @@ f(theta) is a latitude-only vector NCC, g(phi, theta) is a full vector field.
 """
 function test_vector_dot_vector(c, d, b, phi, theta, ncc_first)
     lb = latitude_basis(b)
-    f = VectorField(d, c, bases=(lb,), dtype=eltype(theta))
-    g = VectorField(d, c, bases=(b,), dtype=eltype(theta))
+    f = VectorField(d, c, bases = (lb,), dtype = eltype(theta))
+    g = VectorField(d, c, bases = (b,), dtype = eltype(theta))
     f["g"][1] = @. cos(theta)^2
     f["g"][2] = @. cos(theta)^4
     g["g"][1] = @. 3 * (sin(theta) * cos(phi))^2 + 2 * (sin(theta) * sin(phi))
@@ -187,8 +187,8 @@ f(theta) is a latitude-only vector NCC, g(phi, theta) is a full rank-2 tensor.
 """
 function test_vector_dot_tensor(c, d, b, phi, theta, ncc_first)
     lb = latitude_basis(b)
-    f = VectorField(d, c, bases=(lb,), dtype=eltype(theta))
-    g = TensorField(d, (c, c), bases=(b,), dtype=eltype(theta))
+    f = VectorField(d, c, bases = (lb,), dtype = eltype(theta))
+    g = TensorField(d, (c, c), bases = (b,), dtype = eltype(theta))
     f["g"][1] = @. cos(theta)^2
     f["g"][2] = @. cos(theta)^4
     g["g"][1, 1] = @. 3 * (sin(theta) * cos(phi))^2 + 2 * (sin(theta) * sin(phi))
@@ -209,8 +209,8 @@ f(theta) is a latitude-only rank-2 tensor NCC, g(phi, theta) is a full scalar.
 """
 function test_tensor_prod_scalar(c, d, b, phi, theta, ncc_first)
     lb = latitude_basis(b)
-    f = TensorField(d, (c, c), bases=(lb,), dtype=eltype(theta))
-    g = Field(d, bases=(b,), dtype=eltype(theta))
+    f = TensorField(d, (c, c), bases = (lb,), dtype = eltype(theta))
+    g = Field(d, bases = (b,), dtype = eltype(theta))
     f["g"][1, 1] = @. cos(theta)^2
     f["g"][1, 2] = @. cos(theta)^3
     f["g"][2, 1] = @. cos(theta)^4
@@ -230,8 +230,8 @@ f(theta) is a latitude-only rank-2 tensor NCC, g(phi, theta) is a full vector.
 """
 function test_tensor_dot_vector(c, d, b, phi, theta, ncc_first)
     lb = latitude_basis(b)
-    f = TensorField(d, (c, c), bases=(lb,), dtype=eltype(theta))
-    g = VectorField(d, c, bases=(b,), dtype=eltype(theta))
+    f = TensorField(d, (c, c), bases = (lb,), dtype = eltype(theta))
+    g = VectorField(d, c, bases = (b,), dtype = eltype(theta))
     f["g"][1, 1] = @. cos(theta)^2
     f["g"][1, 2] = @. cos(theta)^3
     f["g"][2, 1] = @. cos(theta)^4
@@ -252,8 +252,8 @@ f(theta) is a latitude-only rank-2 tensor NCC, g(phi, theta) is a full rank-2 te
 """
 function test_tensor_dot_tensor(c, d, b, phi, theta, ncc_first)
     lb = latitude_basis(b)
-    f = TensorField(d, (c, c), bases=(lb,), dtype=eltype(theta))
-    g = TensorField(d, (c, c), bases=(b,), dtype=eltype(theta))
+    f = TensorField(d, (c, c), bases = (lb,), dtype = eltype(theta))
+    g = TensorField(d, (c, c), bases = (b,), dtype = eltype(theta))
     f["g"][1, 1] = @. cos(theta)^2
     f["g"][1, 2] = @. cos(theta)^3
     f["g"][2, 1] = @. cos(theta)^4
@@ -275,7 +275,7 @@ end
 # ---------------------------------------------------------------------------
 
 macro sphere_ncc_test(test_expr, label)
-    quote
+    return quote
         try
             result = $(esc(test_expr))
             @test result
@@ -293,7 +293,7 @@ end
 @testset "Sphere NCC" begin
 
     @testset "scalar_prod_scalar Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T ncc_first=$ncc_first" for
-            Nphi in [32],
+        Nphi in [32],
             Ntheta in [16],
             dealias in [1, 1.5],
             T in [Float64, ComplexF64],
@@ -307,7 +307,7 @@ end
     end
 
     @testset "scalar_prod_vector Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T ncc_first=$ncc_first" for
-            Nphi in [32],
+        Nphi in [32],
             Ntheta in [16],
             dealias in [1, 1.5],
             T in [Float64, ComplexF64],
@@ -321,7 +321,7 @@ end
     end
 
     @testset "scalar_prod_tensor Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T ncc_first=$ncc_first" for
-            Nphi in [32],
+        Nphi in [32],
             Ntheta in [16],
             dealias in [1, 1.5],
             T in [Float64, ComplexF64],
@@ -335,7 +335,7 @@ end
     end
 
     @testset "vector_prod_scalar Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T ncc_first=$ncc_first" for
-            Nphi in [32],
+        Nphi in [32],
             Ntheta in [16],
             dealias in [1, 1.5],
             T in [Float64, ComplexF64],
@@ -349,7 +349,7 @@ end
     end
 
     @testset "vector_prod_vector Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T ncc_first=$ncc_first" for
-            Nphi in [32],
+        Nphi in [32],
             Ntheta in [16],
             dealias in [1, 1.5],
             T in [Float64, ComplexF64],
@@ -363,7 +363,7 @@ end
     end
 
     @testset "vector_dot_vector Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T ncc_first=$ncc_first" for
-            Nphi in [32],
+        Nphi in [32],
             Ntheta in [16],
             dealias in [1, 1.5],
             T in [Float64, ComplexF64],
@@ -377,7 +377,7 @@ end
     end
 
     @testset "vector_dot_tensor Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T ncc_first=$ncc_first" for
-            Nphi in [32],
+        Nphi in [32],
             Ntheta in [16],
             dealias in [1, 1.5],
             T in [Float64, ComplexF64],
@@ -391,7 +391,7 @@ end
     end
 
     @testset "tensor_prod_scalar Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T ncc_first=$ncc_first" for
-            Nphi in [32],
+        Nphi in [32],
             Ntheta in [16],
             dealias in [1, 1.5],
             T in [Float64, ComplexF64],
@@ -405,7 +405,7 @@ end
     end
 
     @testset "tensor_dot_vector Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T ncc_first=$ncc_first" for
-            Nphi in [32],
+        Nphi in [32],
             Ntheta in [16],
             dealias in [1, 1.5],
             T in [Float64, ComplexF64],
@@ -419,7 +419,7 @@ end
     end
 
     @testset "tensor_dot_tensor Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T ncc_first=$ncc_first" for
-            Nphi in [32],
+        Nphi in [32],
             Ntheta in [16],
             dealias in [1, 1.5],
             T in [Float64, ComplexF64],

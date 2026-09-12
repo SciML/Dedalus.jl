@@ -17,12 +17,12 @@ function main(filename, start, count, output)
     # Plot settings
     tasks = ["buoyancy"]
     savename_func(write) = "write_$(lpad(write, 6, '0')).png"
-    title_func(sim_time) = "t = $(round(sim_time; digits=3))"
+    title_func(sim_time) = "t = $(round(sim_time; digits = 3))"
     dpi = 200
     coord_func(phi, r, data) = (r .* cos.(phi), r .* sin.(phi), data)
 
     # Plotting loop
-    h5open(filename, "r") do file
+    return h5open(filename, "r") do file
         for index in start:(start + count - 1)
             for (n, task) in enumerate(tasks)
                 dset = file["tasks"][task]
@@ -57,7 +57,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     files = String[]
     for arg in ARGS
         if startswith(arg, "--output=")
-            output = arg[length("--output=") + 1:end]
+            output = arg[(length("--output=") + 1):end]
         else
             push!(files, arg)
         end

@@ -20,8 +20,8 @@ struct ShellCodomain
     arrow::NTuple{2, Int}
     Output::Type
 
-    function ShellCodomain(dn::Int=0, dk::Int=0; Output::Type=ShellCodomain)
-        new((dn, dk), Output)
+    function ShellCodomain(dn::Int = 0, dk::Int = 0; Output::Type = ShellCodomain)
+        return new((dn, dk), Output)
     end
 end
 
@@ -37,11 +37,11 @@ function Base.show(io::IO, c::ShellCodomain)
     s = "(n->n+$(c[1]),k->k+$(c[2]))"
     s = replace(s, "+0" => "")
     s = replace(s, "+-" => "-")
-    print(io, s)
+    return print(io, s)
 end
 
 function Base.:+(a::ShellCodomain, b::ShellCodomain)
-    return a.Output(a[1] + b[1], a[2] + b[2]; Output=a.Output)
+    return a.Output(a[1] + b[1], a[2] + b[2]; Output = a.Output)
 end
 
 function (c::ShellCodomain)(args...)
@@ -66,12 +66,12 @@ function Base.:|(a::ShellCodomain, b::ShellCodomain)
 end
 
 function Base.:-(c::ShellCodomain)
-    return c.Output(-c[1], -c[2]; Output=c.Output)
+    return c.Output(-c[1], -c[2]; Output = c.Output)
 end
 
 function Base.:*(c::ShellCodomain, other::Int)
     if other == 0
-        return c.Output(0, 0; Output=c.Output)
+        return c.Output(0, 0; Output = c.Output)
     end
     if other < 0
         return -c + (other + 1) * c
@@ -86,12 +86,12 @@ end
 Base.:*(other::Int, c::ShellCodomain) = c * other
 
 function Base.:-(a::ShellCodomain, b::ShellCodomain)
-    a + (-b)
+    return a + (-b)
 end
 
 """Convert a ShellCodomain to a base Codomain for use with Operator."""
 function _shell_to_codomain(sc::ShellCodomain)
-    Codomain(sc.arrow...; Output=Codomain)
+    return Codomain(sc.arrow...; Output = Codomain)
 end
 
 # ============================================================================
@@ -119,7 +119,7 @@ Parameters:
 For most operators, returns an Operator directly.
 For "D", returns a callable that takes (dl, l) and returns an Operator.
 """
-function shell_operator(dimension, radii, name::String; alpha=shell_alpha)
+function shell_operator(dimension, radii, name::String; alpha = shell_alpha)
     width = radii[2] - radii[1]
     aspectratio = (radii[2] + radii[1]) / width
 
@@ -151,28 +151,28 @@ function shell_operator(dimension, radii, name::String; alpha=shell_alpha)
         function Z_func(n, k)
             return _J_Z(n, k + alpha[1], k + alpha[2])
         end
-        return Operator(Z_func, _shell_to_codomain(ShellCodomain(0, 0)); Output=Operator)
+        return Operator(Z_func, _shell_to_codomain(ShellCodomain(0, 0)); Output = Operator)
     end
 
     if name == "Id"
         function I_func(n, k)
             return _J_Id(n, k + alpha[1], k + alpha[2])
         end
-        return Operator(I_func, _shell_to_codomain(ShellCodomain(0, 0)); Output=Operator)
+        return Operator(I_func, _shell_to_codomain(ShellCodomain(0, 0)); Output = Operator)
     end
 
     if name == "R"
         function R_func(n, k)
             return (0.5 * width) * _Z_shell(n, k + alpha[1], k + alpha[2])
         end
-        return Operator(R_func, _shell_to_codomain(ShellCodomain(1, 0)); Output=Operator)
+        return Operator(R_func, _shell_to_codomain(ShellCodomain(1, 0)); Output = Operator)
     end
 
     if name == "AB"
         function AB_func(n, k)
             return _AB_compose(n, k + alpha[1], k + alpha[2])
         end
-        return Operator(AB_func, _shell_to_codomain(ShellCodomain(0, 1)); Output=Operator)
+        return Operator(AB_func, _shell_to_codomain(ShellCodomain(0, 1)); Output = Operator)
     end
 
     if name == "E"
@@ -188,7 +188,7 @@ function shell_operator(dimension, radii, name::String; alpha=shell_alpha)
             AB_mat = _AB_compose(n + 1, a_k, b_k)
             return 0.5 * (AB_mat * Z_mat)
         end
-        return Operator(E_func, _shell_to_codomain(ShellCodomain(1, 1)); Output=Operator)
+        return Operator(E_func, _shell_to_codomain(ShellCodomain(1, 1)); Output = Operator)
     end
 
     if name == "D"
@@ -221,7 +221,7 @@ function shell_operator(dimension, radii, name::String; alpha=shell_alpha)
 
                 return result
             end
-            return Operator(D_func, _shell_to_codomain(ShellCodomain(0, 1)); Output=Operator)
+            return Operator(D_func, _shell_to_codomain(ShellCodomain(0, 1)); Output = Operator)
         end
         return D_factory
     end

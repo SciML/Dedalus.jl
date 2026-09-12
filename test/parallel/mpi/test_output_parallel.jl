@@ -29,9 +29,9 @@ using Dedalus
     # Helper: build Fourier basis matching dtype
     function make_fourier(coord, T; size, bounds, dealias)
         if T == ComplexF64
-            return ComplexFourier(coord, size, bounds; dealias=dealias)
+            return ComplexFourier(coord, size, bounds; dealias = dealias)
         else
-            return RealFourier(coord, size, bounds; dealias=dealias)
+            return RealFourier(coord, size, bounds; dealias = dealias)
         end
     end
 
@@ -41,21 +41,21 @@ using Dedalus
     # Each rank reads its own file and compares to evaluated fields.
     # ========================================================================
     @testset "cartesian output T=$T dealias=$dealias output_scales=$output_scales" for
-            T in dtype_range,
+        T in dtype_range,
             dealias in dealias_range,
             output_scales in [0.5, 1, 1.5]
         Nx = Ny = Nz = 16
         Lx = Ly = Lz = 2 * pi
         # Bases
         c = CartesianCoordinates("x", "y", "z")
-        d = Distributor(c, T; mesh=(2, 2))
-        xb = make_fourier(c.coords[1], T; size=Nx, bounds=(0, Lx), dealias=dealias)
-        yb = make_fourier(c.coords[2], T; size=Ny, bounds=(0, Ly), dealias=dealias)
-        zb = make_fourier(c.coords[3], T; size=Nz, bounds=(0, Lz), dealias=dealias)
-        x, y, z = local_grids(d, xb, yb, zb; scales=1)
+        d = Distributor(c, T; mesh = (2, 2))
+        xb = make_fourier(c.coords[1], T; size = Nx, bounds = (0, Lx), dealias = dealias)
+        yb = make_fourier(c.coords[2], T; size = Ny, bounds = (0, Ly), dealias = dealias)
+        zb = make_fourier(c.coords[3], T; size = Nz, bounds = (0, Lz), dealias = dealias)
+        x, y, z = local_grids(d, xb, yb, zb; scales = 1)
         # Fields
-        u = Field(d, name="u", bases=(xb, yb, zb), dtype=T)
-        v = VectorField(d, c, name="v", bases=(xb, yb, zb), dtype=T)
+        u = Field(d, name = "u", bases = (xb, yb, zb), dtype = T)
+        v = VectorField(d, c, name = "v", bases = (xb, yb, zb), dtype = T)
         u["g"] = @. sin(x) * sin(y) * sin(z)
         # Problem
         problem = IVP([u, v])
@@ -64,21 +64,25 @@ using Dedalus
         solver = build_solver(problem, "RK222")
         # Output -- default parallel mode (per-process files)
         test_dir = "test_output"
-        tasks = [u, u(x=0), u(y=0), u(z=0),
-                 u(x=0, y=0), u(x=0, z=0), u(y=0, z=0),
-                 u(x=0, y=0, z=0),
-                 v, v(x=0), v(y=0), v(z=0),
-                 v(x=0, y=0), v(x=0, z=0), v(y=0, z=0),
-                 v(x=0, y=0, z=0)]
-        output = add_file_handler(solver.evaluator, test_dir, iter=1)
+        tasks = [
+            u, u(x = 0), u(y = 0), u(z = 0),
+            u(x = 0, y = 0), u(x = 0, z = 0), u(y = 0, z = 0),
+            u(x = 0, y = 0, z = 0),
+            v, v(x = 0), v(y = 0), v(z = 0),
+            v(x = 0, y = 0), v(x = 0, z = 0), v(y = 0, z = 0),
+            v(x = 0, y = 0, z = 0),
+        ]
+        output = add_file_handler(solver.evaluator, test_dir, iter = 1)
         for task in tasks
-            add_task!(output, task, layout="g", name=string(task), scales=output_scales)
+            add_task!(output, task, layout = "g", name = string(task), scales = output_scales)
         end
         evaluate_handlers(solver.evaluator, [output])
         # Check solution -- each rank reads its per-process file
         errors = Float64[]
-        h5_path = joinpath(test_dir, "$(basename(test_dir))_s1",
-                           "$(basename(test_dir))_s1_p$(rank).h5")
+        h5_path = joinpath(
+            test_dir, "$(basename(test_dir))_s1",
+            "$(basename(test_dir))_s1_p$(rank).h5"
+        )
         if isfile(h5_path)
             h5open(h5_path, "r") do file
                 for task in tasks
@@ -95,10 +99,10 @@ using Dedalus
         # Cleanup
         sync() do
             if mpi_rank() == 0
-                rm(test_dir, recursive=true, force=true)
+                rm(test_dir, recursive = true, force = true)
             end
         end
-        @test all(e -> e < 1e-12, errors)
+        @test all(e -> e < 1.0e-12, errors)
     end
 
     # ========================================================================
@@ -107,21 +111,21 @@ using Dedalus
     # Each rank reads from the joint virtual file, extracting local slices.
     # ========================================================================
     @testset "cartesian output virtual T=$T dealias=$dealias output_scales=$output_scales" for
-            T in dtype_range,
+        T in dtype_range,
             dealias in dealias_range,
             output_scales in [0.5]
         Nx = Ny = Nz = 16
         Lx = Ly = Lz = 2 * pi
         # Bases
         c = CartesianCoordinates("x", "y", "z")
-        d = Distributor(c, T; mesh=(2, 2))
-        xb = make_fourier(c.coords[1], T; size=Nx, bounds=(0, Lx), dealias=dealias)
-        yb = make_fourier(c.coords[2], T; size=Ny, bounds=(0, Ly), dealias=dealias)
-        zb = make_fourier(c.coords[3], T; size=Nz, bounds=(0, Lz), dealias=dealias)
-        x, y, z = local_grids(d, xb, yb, zb; scales=1)
+        d = Distributor(c, T; mesh = (2, 2))
+        xb = make_fourier(c.coords[1], T; size = Nx, bounds = (0, Lx), dealias = dealias)
+        yb = make_fourier(c.coords[2], T; size = Ny, bounds = (0, Ly), dealias = dealias)
+        zb = make_fourier(c.coords[3], T; size = Nz, bounds = (0, Lz), dealias = dealias)
+        x, y, z = local_grids(d, xb, yb, zb; scales = 1)
         # Fields
-        u = Field(d, name="u", bases=(xb, yb, zb), dtype=T)
-        v = VectorField(d, c, name="v", bases=(xb, yb, zb), dtype=T)
+        u = Field(d, name = "u", bases = (xb, yb, zb), dtype = T)
+        v = VectorField(d, c, name = "v", bases = (xb, yb, zb), dtype = T)
         u["g"] = @. sin(x) * sin(y) * sin(z)
         # Problem
         problem = IVP([u, v])
@@ -130,16 +134,20 @@ using Dedalus
         solver = build_solver(problem, "RK222")
         # Output -- virtual file mode
         test_dir = "test_output"
-        tasks = [u, u(x=0), u(y=0), u(z=0),
-                 u(x=0, y=0), u(x=0, z=0), u(y=0, z=0),
-                 u(x=0, y=0, z=0),
-                 v, v(x=0), v(y=0), v(z=0),
-                 v(x=0, y=0), v(x=0, z=0), v(y=0, z=0),
-                 v(x=0, y=0, z=0)]
-        output = add_file_handler(solver.evaluator, test_dir, iter=1,
-                                  max_writes=1, parallel="virtual")
+        tasks = [
+            u, u(x = 0), u(y = 0), u(z = 0),
+            u(x = 0, y = 0), u(x = 0, z = 0), u(y = 0, z = 0),
+            u(x = 0, y = 0, z = 0),
+            v, v(x = 0), v(y = 0), v(z = 0),
+            v(x = 0, y = 0), v(x = 0, z = 0), v(y = 0, z = 0),
+            v(x = 0, y = 0, z = 0),
+        ]
+        output = add_file_handler(
+            solver.evaluator, test_dir, iter = 1,
+            max_writes = 1, parallel = "virtual"
+        )
         for task in tasks
-            add_task!(output, task, layout="g", name=string(task), scales=output_scales)
+            add_task!(output, task, layout = "g", name = string(task), scales = output_scales)
         end
         evaluate_handlers(solver.evaluator, [output])
         # Check solution -- read from joint virtual file
@@ -169,10 +177,10 @@ using Dedalus
         # Cleanup
         sync() do
             if mpi_rank() == 0
-                rm(test_dir, recursive=true, force=true)
+                rm(test_dir, recursive = true, force = true)
             end
         end
-        @test all(e -> e < 1e-12, errors)
+        @test all(e -> e < 1.0e-12, errors)
     end
 
     # ========================================================================
@@ -180,21 +188,21 @@ using Dedalus
     # Virtual output with post.merge_virtual_analysis.
     # ========================================================================
     @testset "cartesian output merged virtual T=$T dealias=$dealias output_scales=$output_scales" for
-            T in dtype_range,
+        T in dtype_range,
             dealias in dealias_range,
             output_scales in [0.5, 1]
         Nx = Ny = Nz = 16
         Lx = Ly = Lz = 2 * pi
         # Bases
         c = CartesianCoordinates("x", "y", "z")
-        d = Distributor(c, T; mesh=(2, 2))
-        xb = make_fourier(c.coords[1], T; size=Nx, bounds=(0, Lx), dealias=dealias)
-        yb = make_fourier(c.coords[2], T; size=Ny, bounds=(0, Ly), dealias=dealias)
-        zb = make_fourier(c.coords[3], T; size=Nz, bounds=(0, Lz), dealias=dealias)
-        x, y, z = local_grids(d, xb, yb, zb; scales=1)
+        d = Distributor(c, T; mesh = (2, 2))
+        xb = make_fourier(c.coords[1], T; size = Nx, bounds = (0, Lx), dealias = dealias)
+        yb = make_fourier(c.coords[2], T; size = Ny, bounds = (0, Ly), dealias = dealias)
+        zb = make_fourier(c.coords[3], T; size = Nz, bounds = (0, Lz), dealias = dealias)
+        x, y, z = local_grids(d, xb, yb, zb; scales = 1)
         # Fields
-        u = Field(d, name="u", bases=(xb, yb, zb), dtype=T)
-        v = VectorField(d, c, name="v", bases=(xb, yb, zb), dtype=T)
+        u = Field(d, name = "u", bases = (xb, yb, zb), dtype = T)
+        v = VectorField(d, c, name = "v", bases = (xb, yb, zb), dtype = T)
         u["g"] = @. sin(x) * sin(y) * sin(z)
         # Problem
         problem = IVP([u, v])
@@ -203,22 +211,26 @@ using Dedalus
         solver = build_solver(problem, "RK222")
         # Output -- virtual file mode
         test_dir = "test_output"
-        tasks = [u, u(x=0), u(y=0), u(z=0),
-                 u(x=0, y=0), u(x=0, z=0), u(y=0, z=0),
-                 u(x=0, y=0, z=0),
-                 v, v(x=0), v(y=0), v(z=0),
-                 v(x=0, y=0), v(x=0, z=0), v(y=0, z=0),
-                 v(x=0, y=0, z=0)]
-        output = add_file_handler(solver.evaluator, test_dir, iter=1,
-                                  max_writes=1, parallel="virtual")
+        tasks = [
+            u, u(x = 0), u(y = 0), u(z = 0),
+            u(x = 0, y = 0), u(x = 0, z = 0), u(y = 0, z = 0),
+            u(x = 0, y = 0, z = 0),
+            v, v(x = 0), v(y = 0), v(z = 0),
+            v(x = 0, y = 0), v(x = 0, z = 0), v(y = 0, z = 0),
+            v(x = 0, y = 0, z = 0),
+        ]
+        output = add_file_handler(
+            solver.evaluator, test_dir, iter = 1,
+            max_writes = 1, parallel = "virtual"
+        )
         for task in tasks
-            add_task!(output, task, layout="g", name=string(task), scales=output_scales)
+            add_task!(output, task, layout = "g", name = string(task), scales = output_scales)
         end
         evaluate_handlers(solver.evaluator, [output])
         # Merge virtual datasets into a single file
         # (Julia equivalent of post.merge_virtual_analysis)
         if isdefined(Dedalus, :merge_virtual_analysis)
-            Dedalus.merge_virtual_analysis(test_dir; cleanup=true)
+            Dedalus.merge_virtual_analysis(test_dir; cleanup = true)
         end
         MPI.Barrier(comm)
         # Check solution -- read from merged joint file
@@ -247,10 +259,10 @@ using Dedalus
         # Cleanup
         sync() do
             if mpi_rank() == 0
-                rm(test_dir, recursive=true, force=true)
+                rm(test_dir, recursive = true, force = true)
             end
         end
-        @test all(e -> e < 1e-12, errors)
+        @test all(e -> e < 1.0e-12, errors)
     end
 
     # ========================================================================
@@ -258,21 +270,21 @@ using Dedalus
     # Per-process output with post.merge_analysis.
     # ========================================================================
     @testset "cartesian output merged T=$T dealias=$dealias output_scales=$output_scales" for
-            T in dtype_range,
+        T in dtype_range,
             dealias in dealias_range,
             output_scales in [0.5, 1]
         Nx = Ny = Nz = 16
         Lx = Ly = Lz = 2 * pi
         # Bases
         c = CartesianCoordinates("x", "y", "z")
-        d = Distributor(c, T; mesh=(2, 2))
-        xb = make_fourier(c.coords[1], T; size=Nx, bounds=(0, Lx), dealias=dealias)
-        yb = make_fourier(c.coords[2], T; size=Ny, bounds=(0, Ly), dealias=dealias)
-        zb = make_fourier(c.coords[3], T; size=Nz, bounds=(0, Lz), dealias=dealias)
-        x, y, z = local_grids(d, xb, yb, zb; scales=1)
+        d = Distributor(c, T; mesh = (2, 2))
+        xb = make_fourier(c.coords[1], T; size = Nx, bounds = (0, Lx), dealias = dealias)
+        yb = make_fourier(c.coords[2], T; size = Ny, bounds = (0, Ly), dealias = dealias)
+        zb = make_fourier(c.coords[3], T; size = Nz, bounds = (0, Lz), dealias = dealias)
+        x, y, z = local_grids(d, xb, yb, zb; scales = 1)
         # Fields
-        u = Field(d, name="u", bases=(xb, yb, zb), dtype=T)
-        v = VectorField(d, c, name="v", bases=(xb, yb, zb), dtype=T)
+        u = Field(d, name = "u", bases = (xb, yb, zb), dtype = T)
+        v = VectorField(d, c, name = "v", bases = (xb, yb, zb), dtype = T)
         u["g"] = @. sin(x) * sin(y) * sin(z)
         # Problem
         problem = IVP([u, v])
@@ -281,22 +293,26 @@ using Dedalus
         solver = build_solver(problem, "RK222")
         # Output -- per-process file mode (not virtual)
         test_dir = "test_output"
-        tasks = [u, u(x=0), u(y=0), u(z=0),
-                 u(x=0, y=0), u(x=0, z=0), u(y=0, z=0),
-                 u(x=0, y=0, z=0),
-                 v, v(x=0), v(y=0), v(z=0),
-                 v(x=0, y=0), v(x=0, z=0), v(y=0, z=0),
-                 v(x=0, y=0, z=0)]
-        output = add_file_handler(solver.evaluator, test_dir, iter=1,
-                                  max_writes=1, parallel="virtual")
+        tasks = [
+            u, u(x = 0), u(y = 0), u(z = 0),
+            u(x = 0, y = 0), u(x = 0, z = 0), u(y = 0, z = 0),
+            u(x = 0, y = 0, z = 0),
+            v, v(x = 0), v(y = 0), v(z = 0),
+            v(x = 0, y = 0), v(x = 0, z = 0), v(y = 0, z = 0),
+            v(x = 0, y = 0, z = 0),
+        ]
+        output = add_file_handler(
+            solver.evaluator, test_dir, iter = 1,
+            max_writes = 1, parallel = "virtual"
+        )
         for task in tasks
-            add_task!(output, task, layout="g", name=string(task), scales=output_scales)
+            add_task!(output, task, layout = "g", name = string(task), scales = output_scales)
         end
         evaluate_handlers(solver.evaluator, [output])
         # Merge per-process files into a single file
         # (Julia equivalent of post.merge_analysis)
         if isdefined(Dedalus, :merge_analysis)
-            Dedalus.merge_analysis(test_dir; cleanup=true)
+            Dedalus.merge_analysis(test_dir; cleanup = true)
         end
         MPI.Barrier(comm)
         # Check solution -- read from merged file
@@ -325,10 +341,10 @@ using Dedalus
         # Cleanup
         sync() do
             if mpi_rank() == 0
-                rm(test_dir, recursive=true, force=true)
+                rm(test_dir, recursive = true, force = true)
             end
         end
-        @test all(e -> e < 1e-12, errors)
+        @test all(e -> e < 1.0e-12, errors)
     end
 
 end

@@ -40,24 +40,31 @@ function build_subsystems(solver)
     all_local_groupsets = Vector{Any}()
     # Collect groupsets for variables
     for var in solver.problem.variables
-        push!(all_local_groupsets,
-              local_groupsets(coeff_layout, matrix_coupling, var.domain; scales=1))
+        push!(
+            all_local_groupsets,
+            local_groupsets(coeff_layout, matrix_coupling, var.domain; scales = 1)
+        )
     end
     # Collect groupsets for equations
     for eqn in solver.problem.equations
-        push!(all_local_groupsets,
-              local_groupsets(coeff_layout, matrix_coupling, eqn["domain"]; scales=1))
+        push!(
+            all_local_groupsets,
+            local_groupsets(coeff_layout, matrix_coupling, eqn["domain"]; scales = 1)
+        )
     end
     # Combine and check that groupsets are nested
     local_gs = OrderedSet()
     for (i, lgs1) in enumerate(all_local_groupsets)
-        for lgs2 in all_local_groupsets[i+1:end]
+        for lgs2 in all_local_groupsets[(i + 1):end]
             s1 = Set(lgs1)
             s2 = Set(lgs2)
             if !(s1 <= s2 || s1 >= s2)
-                throw(ArgumentError(
-                    "Incompatible group distributions. " *
-                    "Are distributed dimensions the same size?"))
+                throw(
+                    ArgumentError(
+                        "Incompatible group distributions. " *
+                            "Are distributed dimensions the same size?"
+                    )
+                )
             end
         end
         union!(local_gs, lgs1)
@@ -71,7 +78,7 @@ end
 Arrange subsystems by matrix group and build `Subproblem` objects.
 Optionally builds matrices immediately if `build_matrices_list` is provided.
 """
-function build_subproblems(solver, subsystems; build_matrices_list=nothing)
+function build_subproblems(solver, subsystems; build_matrices_list = nothing)
     # Group subsystems by matrix group
     subsystems_by_group = Dict{Any, Vector{Subsystem}}()
     for ss in subsystems
@@ -119,6 +126,7 @@ function build_subproblem_matrices(solver, subproblems, matrices)
         end
         build_matrices!(sp, matrices)
     end
+    return
 end
 
 # ============================================================================
@@ -168,8 +176,10 @@ function Subsystem(solver, group)
         end
     end
     matrix_group = Tuple(matrix_group_arr)
-    return Subsystem(solver, problem, dist, dtype, Tuple(group),
-                     matrix_group, nothing, Dict{Symbol, Any}())
+    return Subsystem(
+        solver, problem, dist, dtype, Tuple(group),
+        matrix_group, nothing, Dict{Symbol, Any}()
+    )
 end
 
 """
@@ -179,7 +189,7 @@ Return the local coefficient slices for this subsystem's group within the
 given domain.
 """
 function coeff_slices(ss::Subsystem, domain)
-    slices = local_groupset_slices(ss.dist.coeff_layout, ss.group, domain; scales=1)
+    slices = local_groupset_slices(ss.dist.coeff_layout, ss.group, domain; scales = 1)
     if length(slices) == 0
         return Tuple(UnitRange(1, 0) for _ in 1:ss.dist.dim)
     elseif length(slices) > 1
@@ -268,7 +278,7 @@ function gather(ss::Subsystem, fields)
             fsl = field_slices(ss, f)
             fshp = field_shape(ss, f)
             src = view(f.data, fsl...)
-            copyto!(view(data, offset+1:offset+fsize), vec(src))
+            copyto!(view(data, (offset + 1):(offset + fsize)), vec(src))
             offset += fsize
         end
     end
@@ -287,12 +297,13 @@ function scatter!(ss::Subsystem, data::AbstractVector, fields)
         if fsize > 0
             fsl = field_slices(ss, f)
             fshp = field_shape(ss, f)
-            src = view(data, offset+1:offset+fsize)
+            src = view(data, (offset + 1):(offset + fsize))
             dest = view(f.data, fsl...)
             copyto!(dest, reshape(src, fshp))
             offset += fsize
         end
     end
+    return
 end
 
 """
@@ -457,7 +468,7 @@ Build input and output buffers and views for gather/scatter operations.
 function _build_buffers!(sp::Subproblem)
     sp._input_buffer, sp._input_views = _build_buffer_views(sp, sp.problem.LHS_variables)
     eqs = sp.problem.equations
-    if !isempty(eqs) && haskey(eqs[1], "F")
+    return if !isempty(eqs) && haskey(eqs[1], "F")
         F_fields = [eqn["F"] for eqn in eqs]
         sp._output_buffer, sp._output_views = _build_buffer_views(sp, F_fields)
     end
@@ -481,7 +492,7 @@ function _build_buffer_views(sp::Subproblem, fields)
             fshape = field_shape(sp.subsystems[1], field)
             i1 = i0 + fsize
             for (j, ss) in enumerate(sp.subsystems)
-                ss_view = reshape(view(buffer, i0+1:i1, j), fshape)
+                ss_view = reshape(view(buffer, (i0 + 1):i1, j), fshape)
                 ss_slices = field_slices(ss, field)
                 push!(field_views, (ss_view, ss_slices))
             end
@@ -522,7 +533,7 @@ subproblem_size(sp::Subproblem) = prod(subproblem_shape(sp))
 
 Gather and precondition subproblem data from input-like fields.
 """
-function gather_inputs(sp::Subproblem, fields; out=nothing)
+function gather_inputs(sp::Subproblem, fields; out = nothing)
     # Gather from fields into buffer
     for (field, buffer_data) in zip(fields, sp._input_views)
         for (buffer_view, field_slcs) in buffer_data
@@ -543,7 +554,7 @@ end
 
 Gather and precondition subproblem data from output-like fields.
 """
-function gather_outputs(sp::Subproblem, fields; out=nothing)
+function gather_outputs(sp::Subproblem, fields; out = nothing)
     for (field, buffer_data) in zip(fields, sp._output_views)
         for (buffer_view, field_slcs) in buffer_data
             copyto!(buffer_view, view(field.data, field_slcs...))
@@ -594,11 +605,11 @@ Apply sparse matrix `A` along axis 0 (rows) of matrix `X`, writing to `out`.
 Equivalent to `out = A * X` for 2D arrays, or `out = A * x` for vectors.
 """
 function _apply_sparse_axis0!(A, X::AbstractMatrix, out::AbstractMatrix)
-    mul!(out, A, X)
+    return mul!(out, A, X)
 end
 
 function _apply_sparse_axis0!(A, X::AbstractVector, out::AbstractVector)
-    mul!(out, A, X)
+    return mul!(out, A, X)
 end
 
 """
@@ -629,10 +640,12 @@ function build_matrices!(sp::Subproblem, names)
         i0 = 0
         for (eqn, eqn_size, eqn_cond) in zip(eqns, eqn_sizes, eqn_conditions)
             if eqn_size > 0 && eqn_cond && get(eqn, name, 0) != 0
-                eqn_blocks = expression_matrices(eqn[name];
-                    subproblem=sp, vars=vars,
-                    ncc_cutoff=solver.ncc_cutoff,
-                    max_ncc_terms=solver.max_ncc_terms)
+                eqn_blocks = expression_matrices(
+                    eqn[name];
+                    subproblem = sp, vars = vars,
+                    ncc_cutoff = solver.ncc_cutoff,
+                    max_ncc_terms = solver.max_ncc_terms
+                )
                 j0 = 0
                 for (var, var_size) in zip(vars, var_sizes)
                     if var_size > 0 && haskey(eqn_blocks, var)
@@ -655,20 +668,26 @@ function build_matrices!(sp::Subproblem, names)
                 values[k] = zero(dtype)
             end
         end
-        matrices[name] = sparse(row_indices, col_indices, values,
-                                I_total, J_total)
+        matrices[name] = sparse(
+            row_indices, col_indices, values,
+            I_total, J_total
+        )
     end
 
     # Valid modes
     valid_eqn_vecs = Any[]
     for eqn in eqns
-        push!(valid_eqn_vecs,
-              valid_modes(sp.subsystems[1], eqn["eqn"], eqn["valid_modes"]))
+        push!(
+            valid_eqn_vecs,
+            valid_modes(sp.subsystems[1], eqn["eqn"], eqn["valid_modes"])
+        )
     end
     valid_var_vecs = Any[]
     for var in vars
-        push!(valid_var_vecs,
-              valid_modes(sp.subsystems[1], var, var.valid_modes))
+        push!(
+            valid_var_vecs,
+            valid_modes(sp.subsystems[1], var, var.valid_modes)
+        )
     end
     # Invalidate equations that fail condition test
     for (n, eqn_cond) in enumerate(eqn_conditions)
@@ -686,17 +705,24 @@ function build_matrices!(sp::Subproblem, names)
     nnz_eqn = count(!iszero, valid_eqn_flat)
     nnz_var = count(!iszero, valid_var_flat)
     if nnz_eqn != nnz_var
-        throw(ArgumentError(
-            "Non-square system: group=$(sp.group), I=$nnz_eqn, J=$nnz_var"))
+        throw(
+            ArgumentError(
+                "Non-square system: group=$(sp.group), I=$nnz_eqn, J=$nnz_var"
+            )
+        )
     end
 
     # Permutations
-    left_perm = left_permutation(sp, eqns;
-        bc_top=solver.bc_top,
-        interleave_components=solver.interleave_components)
-    right_perm = right_permutation(sp, vars;
-        tau_left=solver.tau_left,
-        interleave_components=solver.interleave_components)
+    left_perm = left_permutation(
+        sp, eqns;
+        bc_top = solver.bc_top,
+        interleave_components = solver.interleave_components
+    )
+    right_perm = right_permutation(
+        sp, vars;
+        tau_left = solver.tau_left,
+        interleave_components = solver.interleave_components
+    )
 
     # Preconditioners
     sp.pre_left = _drop_empty_rows(left_perm * valid_eqn_diag)
@@ -734,10 +760,10 @@ function build_matrices!(sp::Subproblem, names)
         if cond
             d = eqn["domain"].dim
             eqn_dofs_by_dim[d] = get(eqn_dofs_by_dim, d, 0) +
-                                  field_size(sp.subsystems[1], eqn["eqn"])
+                field_size(sp.subsystems[1], eqn["eqn"])
         end
     end
-    if !isempty(eqn_dofs_by_dim)
+    return if !isempty(eqn_dofs_by_dim)
         max_dim = maximum(keys(eqn_dofs_by_dim))
         sp.update_rank = sum(values(eqn_dofs_by_dim)) - eqn_dofs_by_dim[max_dim]
     end
@@ -756,6 +782,7 @@ function expand_matrices!(sp::Subproblem, matrix_names)
         expanded = _expand_pattern(matrix, combined)
         sp._matrix_store["$(name)_exp"] = expanded
     end
+    return
 end
 
 # Property-like access for stored matrices (M_min, L_min, etc.)
@@ -795,7 +822,7 @@ Build the left permutation matrix acting on equations.
 Input ordering:  Equations > Components > Modes
 Output ordering: Modes > [Components|Equations] (depending on interleave_components)
 """
-function left_permutation(sp, equations; bc_top::Bool=false, interleave_components::Bool=false)
+function left_permutation(sp, equations; bc_top::Bool = false, interleave_components::Bool = false)
     # Compute hierarchy of input equation indices
     i = 1  # 1-based
     L0 = Vector{Vector{Vector{Int}}}()
@@ -804,7 +831,7 @@ function left_permutation(sp, equations; bc_top::Bool=false, interleave_componen
         vfshape = field_shape(sp.subsystems[1], eqn["eqn"])
         rank = length(eqn["tensorsig"])
         comp_size = rank > 0 ? prod(vfshape[1:rank]) : 1
-        mode_size = rank > 0 ? prod(vfshape[rank+1:end]) : prod(vfshape)
+        mode_size = rank > 0 ? prod(vfshape[(rank + 1):end]) : prod(vfshape)
         if comp_size == 0
             push!(L1, Int[])
             push!(L0, L1)
@@ -833,7 +860,7 @@ Build the right permutation matrix acting on variables.
 Input ordering:  Variables > Components > Modes
 Output ordering: Modes > [Components|Variables] (depending on interleave_components)
 """
-function right_permutation(sp, variables; tau_left::Bool=false, interleave_components::Bool=false)
+function right_permutation(sp, variables; tau_left::Bool = false, interleave_components::Bool = false)
     i = 1
     L0 = Vector{Vector{Vector{Int}}}()
     for var in variables
@@ -841,7 +868,7 @@ function right_permutation(sp, variables; tau_left::Bool=false, interleave_compo
         vfshape = field_shape(sp.subsystems[1], var)
         rank = length(var.tensorsig)
         comp_size = rank > 0 ? prod(vfshape[1:rank]) : 1
-        mode_size = rank > 0 ? prod(vfshape[rank+1:end]) : prod(vfshape)
+        mode_size = rank > 0 ? prod(vfshape[(rank + 1):end]) : prod(vfshape)
         if comp_size == 0
             push!(L1, Int[])
             push!(L0, L1)
@@ -883,7 +910,7 @@ end
 
 function _build_permutation_with_dims(L0, dims_list, forward::Bool, interleave_components::Bool)
     n1max = length(L0)
-    n2max = maximum(length(L1) for L1 in L0; init=0)
+    n2max = maximum(length(L1) for L1 in L0; init = 0)
     n3max = 0
     for L1 in L0
         for L2 in L1
@@ -1014,27 +1041,27 @@ end
 # ============================================================================
 
 export Subsystem,
-       Subproblem,
-       build_subsystems,
-       build_subproblems,
-       build_subproblem_matrices,
-       build_matrices!,
-       coeff_slices,
-       coeff_shape,
-       coeff_size,
-       field_slices,
-       field_shape,
-       field_size,
-       gather,
-       scatter!,
-       gather_inputs,
-       gather_outputs,
-       scatter_inputs!,
-       scatter_outputs!,
-       subproblem_shape,
-       subproblem_size,
-       left_permutation,
-       right_permutation,
-       expand_matrices!,
-       check_condition,
-       valid_modes
+    Subproblem,
+    build_subsystems,
+    build_subproblems,
+    build_subproblem_matrices,
+    build_matrices!,
+    coeff_slices,
+    coeff_shape,
+    coeff_size,
+    field_slices,
+    field_shape,
+    field_size,
+    gather,
+    scatter!,
+    gather_inputs,
+    gather_outputs,
+    scatter_inputs!,
+    scatter_outputs!,
+    subproblem_shape,
+    subproblem_size,
+    left_permutation,
+    right_permutation,
+    expand_matrices!,
+    check_condition,
+    valid_modes

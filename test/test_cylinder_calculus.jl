@@ -20,9 +20,9 @@ using Dedalus
         cp = PolarCoordinates("phi", "r")
         c = DirectProduct(cz, cp)
         d = Distributor(c, T)
-        bz = Fourier(cz, Nz, (0, cyl_length); dealias=dealias, dtype=T)
-        bp = DiskBasis(cp, (Nphi, Nr), T; radius=cyl_radius_disk, alpha=alpha, k=k, dealias=dealias)
-        z, phi, r = local_grids(d, bz, bp, scales=dealias)
+        bz = Fourier(cz, Nz, (0, cyl_length); dealias = dealias, dtype = T)
+        bp = DiskBasis(cp, (Nphi, Nr), T; radius = cyl_radius_disk, alpha = alpha, k = k, dealias = dealias)
+        z, phi, r = local_grids(d, bz, bp, scales = dealias)
         x, y = cartesian(PolarCoordinates, phi, r)
         return c, d, (bz, bp), z, phi, r, x, y
     end
@@ -32,9 +32,9 @@ using Dedalus
         cp = PolarCoordinates("phi", "r")
         c = DirectProduct(cz, cp)
         d = Distributor(c, T)
-        bz = Fourier(cz, Nz, (0, cyl_length); dealias=dealias, dtype=T)
-        bp = AnnulusBasis(cp, (Nphi, Nr), T; radii=cyl_radii_annulus, k=k, dealias=dealias)
-        z, phi, r = local_grids(d, bz, bp, scales=dealias)
+        bz = Fourier(cz, Nz, (0, cyl_length); dealias = dealias, dtype = T)
+        bp = AnnulusBasis(cp, (Nphi, Nr), T; radii = cyl_radii_annulus, k = k, dealias = dealias)
+        z, phi, r = local_grids(d, bz, bp, scales = dealias)
         x, y = cartesian(PolarCoordinates, phi, r)
         return c, d, (bz, bp), z, phi, r, x, y
     end
@@ -61,7 +61,7 @@ using Dedalus
 
         # -- 1. gradient of scalar: grad(3*x^2 + 2*y + sin(kz*z)) --
         @testset "gradient scalar $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -72,7 +72,7 @@ using Dedalus
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
                 kz = 2 * pi / cyl_length
-                f = Field(d, bases=b)
+                f = Field(d, bases = b)
                 preset_scales!(f, dealias)
                 f["g"] = @. 3 * x^2 + 2 * y + sin(kz * z)
                 # Expected gradient: (6x, 2, kz*cos(kz*z))
@@ -87,12 +87,12 @@ using Dedalus
                 #                = 3*r*(1 + cos(2*phi)) + 2*sin(phi)
                 g = gradient(f, c)
                 g_eval = evaluate(g)
-                ge = VectorField(d, c, bases=b)
+                ge = VectorField(d, c, bases = b)
                 preset_scales!(ge, dealias)
                 ge["g"][1, :, :, :] = @. kz * cos(kz * z) + 0 * phi + 0 * r
                 ge["g"][2, :, :, :] = @. -3 * r * sin(2 * phi) + 2 * cos(phi) + 0 * z
                 ge["g"][3, :, :, :] = @. 3 * r * (1 + cos(2 * phi)) + 2 * sin(phi) + 0 * z
-                @test isapprox(g_eval["g"], ge["g"], atol=1e-9)
+                @test isapprox(g_eval["g"], ge["g"], atol = 1.0e-9)
             catch e
                 @test_broken false
             end
@@ -100,7 +100,7 @@ using Dedalus
 
         # -- 2. gradient of vector: grad(grad(f)) --
         @testset "gradient vector $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -111,7 +111,7 @@ using Dedalus
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
                 kz = 2 * pi / cyl_length
-                f = Field(d, bases=b)
+                f = Field(d, bases = b)
                 preset_scales!(f, dealias)
                 f["g"] = @. 3 * x^2 + 2 * y + sin(kz * z)
                 # grad(grad(f)) is a rank-2 tensor
@@ -119,7 +119,7 @@ using Dedalus
                 T_eval = evaluate(T_op)
                 # Check symmetry: T[i,j] == T[j,i]
                 for i in 1:3, j in 1:3
-                    @test isapprox(T_eval["g"][i, j, :, :, :], T_eval["g"][j, i, :, :, :], atol=1e-9)
+                    @test isapprox(T_eval["g"][i, j, :, :, :], T_eval["g"][j, i, :, :, :], atol = 1.0e-9)
                 end
             catch e
                 @test_broken false
@@ -128,7 +128,7 @@ using Dedalus
 
         # -- 3. divergence of vector: div(grad(f)) should equal laplacian(f) --
         @testset "divergence vector $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -139,14 +139,14 @@ using Dedalus
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
                 kz = 2 * pi / cyl_length
-                f = Field(d, bases=b)
+                f = Field(d, bases = b)
                 preset_scales!(f, dealias)
                 f["g"] = @. 3 * x^2 + 2 * y + sin(kz * z)
                 div_grad_f = divergence(gradient(f, c))
                 lap_f = laplacian(f, c)
                 div_grad_eval = evaluate(div_grad_f)
                 lap_eval = evaluate(lap_f)
-                @test isapprox(div_grad_eval["g"], lap_eval["g"], atol=1e-9)
+                @test isapprox(div_grad_eval["g"], lap_eval["g"], atol = 1.0e-9)
             catch e
                 @test_broken false
             end
@@ -154,7 +154,7 @@ using Dedalus
 
         # -- 4. divergence of tensor: div(grad(v)) --
         @testset "divergence tensor $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -166,7 +166,7 @@ using Dedalus
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
                 kz = 2 * pi / cyl_length
                 # Build a vector field
-                v = VectorField(d, c, bases=b)
+                v = VectorField(d, c, bases = b)
                 preset_scales!(v, dealias)
                 v["g"][1, :, :, :] = @. sin(kz * z) + 0 * phi + 0 * r
                 v["g"][2, :, :, :] = @. 0 * z + sin(phi) * r + 0 * r
@@ -176,7 +176,7 @@ using Dedalus
                 lv = laplacian(v, c)
                 dg_eval = evaluate(dg)
                 lv_eval = evaluate(lv)
-                @test isapprox(dg_eval["g"], lv_eval["g"], atol=1e-9)
+                @test isapprox(dg_eval["g"], lv_eval["g"], atol = 1.0e-9)
             catch e
                 @test_broken false
             end
@@ -184,7 +184,7 @@ using Dedalus
 
         # -- 5. curl of vector --
         @testset "curl vector $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -196,13 +196,13 @@ using Dedalus
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
                 kz = 2 * pi / cyl_length
                 # Simple test: curl of gradient should be zero
-                f = Field(d, bases=b)
+                f = Field(d, bases = b)
                 preset_scales!(f, dealias)
                 f["g"] = @. 3 * x^2 + 2 * y + sin(kz * z)
                 curl_grad_f = curl(gradient(f, c))
                 cg_eval = evaluate(curl_grad_f)
                 expected_zero = zeros(size(cg_eval["g"]))
-                @test isapprox(cg_eval["g"], expected_zero, atol=1e-9)
+                @test isapprox(cg_eval["g"], expected_zero, atol = 1.0e-9)
             catch e
                 @test_broken false
             end
@@ -210,7 +210,7 @@ using Dedalus
 
         # -- 6. laplacian of scalar --
         @testset "laplacian scalar $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -221,16 +221,16 @@ using Dedalus
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
                 kz = 2 * pi / cyl_length
-                f = Field(d, bases=b)
+                f = Field(d, bases = b)
                 preset_scales!(f, dealias)
                 f["g"] = @. 3 * x^2 + 2 * y + sin(kz * z)
                 lap_f = laplacian(f, c)
                 lap_eval = evaluate(lap_f)
                 # Analytic: laplacian(3x^2 + 2y + sin(kz*z)) = 6 - kz^2*sin(kz*z)
-                expected = Field(d, bases=b)
+                expected = Field(d, bases = b)
                 preset_scales!(expected, dealias)
                 expected["g"] = @. 6 - kz^2 * sin(kz * z) + 0 * phi + 0 * r
-                @test isapprox(lap_eval["g"], expected["g"], atol=1e-9)
+                @test isapprox(lap_eval["g"], expected["g"], atol = 1.0e-9)
             catch e
                 @test_broken false
             end
@@ -238,7 +238,7 @@ using Dedalus
 
         # -- 7. laplacian of vector --
         @testset "laplacian vector $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -249,7 +249,7 @@ using Dedalus
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
                 kz = 2 * pi / cyl_length
-                v = VectorField(d, c, bases=b)
+                v = VectorField(d, c, bases = b)
                 preset_scales!(v, dealias)
                 v["g"][1, :, :, :] = @. sin(kz * z) + 0 * phi + 0 * r
                 v["g"][2, :, :, :] = @. 0 * z + 0 * phi + 0 * r
@@ -257,12 +257,12 @@ using Dedalus
                 # laplacian of (sin(kz*z), 0, 0) should be (-kz^2*sin(kz*z), 0, 0)
                 lap_v = laplacian(v, c)
                 lap_eval = evaluate(lap_v)
-                expected = VectorField(d, c, bases=b)
+                expected = VectorField(d, c, bases = b)
                 preset_scales!(expected, dealias)
                 expected["g"][1, :, :, :] = @. -kz^2 * sin(kz * z) + 0 * phi + 0 * r
                 expected["g"][2, :, :, :] = @. 0 * z + 0 * phi + 0 * r
                 expected["g"][3, :, :, :] = @. 0 * z + 0 * phi + 0 * r
-                @test isapprox(lap_eval["g"], expected["g"], atol=1e-9)
+                @test isapprox(lap_eval["g"], expected["g"], atol = 1.0e-9)
             catch e
                 @test_broken false
             end
@@ -292,7 +292,7 @@ using Dedalus
 
         # -- 8. trace of tensor (explicit) --
         @testset "trace explicit $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -302,12 +302,12 @@ using Dedalus
                 T in dtype_range
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
-                f = TensorField(d, (c, c), bases=b)
-                fill_random!(f, layout="g")
+                f = TensorField(d, (c, c), bases = b)
+                fill_random!(f, layout = "g")
                 g = evaluate(trace_op(f))
                 # Trace is sum of diagonal elements (3D: z, phi, r)
                 expected = f["g"][1, 1, :, :, :] .+ f["g"][2, 2, :, :, :] .+ f["g"][3, 3, :, :, :]
-                @test isapprox(g["g"], expected, atol=1e-12)
+                @test isapprox(g["g"], expected, atol = 1.0e-12)
             catch e
                 @test_broken false
             end
@@ -315,7 +315,7 @@ using Dedalus
 
         # -- 9. trace of tensor (implicit via LBVP) --
         @testset "trace implicit $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -325,20 +325,24 @@ using Dedalus
                 T in dtype_range
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
-                f = Field(d, bases=b)
-                fill_random!(f, layout="g")
-                u = Field(d, bases=b)
+                f = Field(d, bases = b)
+                fill_random!(f, layout = "g")
+                u = Field(d, bases = b)
                 # Build identity tensor
                 I_tensor = TensorField(d, (c, c))
                 for i in 1:3
                     I_tensor["g"][i, i, :] .= 1
                 end
-                problem = LBVP([u], namespace=Dict("u" => u, "f" => f, "I" => I_tensor,
-                                                   "dim" => 3, "trace" => trace_op))
+                problem = LBVP(
+                    [u], namespace = Dict(
+                        "u" => u, "f" => f, "I" => I_tensor,
+                        "dim" => 3, "trace" => trace_op
+                    )
+                )
                 add_equation!(problem, "trace(I*u) = dim*f")
                 solver = build_solver(problem)
                 solve!(solver)
-                @test isapprox(u["c"], f["c"], atol=1e-10)
+                @test isapprox(u["c"], f["c"], atol = 1.0e-10)
             catch e
                 @test_broken false
             end
@@ -346,7 +350,7 @@ using Dedalus
 
         # -- 10. transpose of tensor (explicit) --
         @testset "transpose explicit $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -356,12 +360,12 @@ using Dedalus
                 T in dtype_range
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
-                f = TensorField(d, (c, c), bases=b)
-                fill_random!(f, layout="g")
+                f = TensorField(d, (c, c), bases = b)
+                fill_random!(f, layout = "g")
                 g = evaluate(transpose_components(f))
                 # Transposed: g[i,j,...] = f[j,i,...]
                 for i in 1:3, j in 1:3
-                    @test isapprox(g["g"][i, j, :, :, :], f["g"][j, i, :, :, :], atol=1e-12)
+                    @test isapprox(g["g"][i, j, :, :, :], f["g"][j, i, :, :, :], atol = 1.0e-12)
                 end
             catch e
                 @test_broken false
@@ -370,7 +374,7 @@ using Dedalus
 
         # -- 11. transpose of tensor (implicit via LBVP) --
         @testset "transpose implicit $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -380,15 +384,19 @@ using Dedalus
                 T in dtype_range
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
-                f = TensorField(d, (c, c), bases=b)
-                fill_random!(f, layout="g")
-                u = TensorField(d, (c, c), bases=b)
-                problem = LBVP([u], namespace=Dict("u" => u, "f" => f,
-                                                   "transpose" => transpose_components))
+                f = TensorField(d, (c, c), bases = b)
+                fill_random!(f, layout = "g")
+                u = TensorField(d, (c, c), bases = b)
+                problem = LBVP(
+                    [u], namespace = Dict(
+                        "u" => u, "f" => f,
+                        "transpose" => transpose_components
+                    )
+                )
                 add_equation!(problem, "transpose(u) = transpose(f)")
                 solver = build_solver(problem)
                 solve!(solver)
-                @test isapprox(u["c"], f["c"], atol=1e-10)
+                @test isapprox(u["c"], f["c"], atol = 1.0e-10)
             catch e
                 @test_broken false
             end
@@ -396,7 +404,7 @@ using Dedalus
 
         # -- 12. integrate scalar --
         @testset "integrate scalar $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -406,7 +414,7 @@ using Dedalus
                 T in dtype_range
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
-                f = Field(d, bases=b)
+                f = Field(d, bases = b)
                 preset_scales!(f, dealias)
                 # f = 1 so integral = volume
                 f["g"] = @. 1 + 0 * z + 0 * phi + 0 * r
@@ -417,7 +425,7 @@ using Dedalus
                 else
                     expected_volume = cyl_length * pi * (cyl_radii_annulus[2]^2 - cyl_radii_annulus[1]^2)
                 end
-                @test isapprox(int_f["g"][1], expected_volume, rtol=1e-9)
+                @test isapprox(int_f["g"][1], expected_volume, rtol = 1.0e-9)
             catch e
                 @test_broken false
             end
@@ -425,7 +433,7 @@ using Dedalus
 
         # -- 13. average scalar --
         @testset "average scalar $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -435,12 +443,12 @@ using Dedalus
                 T in dtype_range
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
-                f = Field(d, bases=b)
+                f = Field(d, bases = b)
                 preset_scales!(f, dealias)
                 # f = 1, average should be 1
                 f["g"] = @. 1 + 0 * z + 0 * phi + 0 * r
                 avg_f = evaluate(average(f))
-                @test isapprox(avg_f["g"][1], 1.0, atol=1e-9)
+                @test isapprox(avg_f["g"][1], 1.0, atol = 1.0e-9)
             catch e
                 @test_broken false
             end
@@ -470,7 +478,7 @@ using Dedalus
 
         # -- 14. scalar * scalar NCC --
         @testset "scalar prod scalar $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -480,13 +488,13 @@ using Dedalus
                 T in dtype_range
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
-                f = Field(d, bases=b)
-                g = Field(d, bases=b)
-                fill_random!(f, layout="g")
-                fill_random!(g, layout="g")
+                f = Field(d, bases = b)
+                g = Field(d, bases = b)
+                fill_random!(f, layout = "g")
+                fill_random!(g, layout = "g")
                 vars = [g]
                 w0 = f * g
-                w1 = reinitialize(w0, ncc=true, ncc_vars=vars)
+                w1 = reinitialize(w0, ncc = true, ncc_vars = vars)
                 problem = LBVP(vars)
                 add_equation!(problem, (w1, 0))
                 solver = build_solver(problem)
@@ -495,7 +503,7 @@ using Dedalus
                 w1 = evaluate_as_ncc(w1)
                 change_scales!(w0, 1)
                 change_scales!(w1, 1)
-                @test isapprox(w0["g"], w1["g"], atol=1e-10)
+                @test isapprox(w0["g"], w1["g"], atol = 1.0e-10)
             catch e
                 @test_broken false
             end
@@ -503,7 +511,7 @@ using Dedalus
 
         # -- 15. scalar * vector NCC --
         @testset "scalar prod vector $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -513,16 +521,16 @@ using Dedalus
                 T in dtype_range
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
-                f = Field(d, bases=b)
-                g = VectorField(d, c, bases=b)
-                fill_random!(f, layout="g")
-                fill_random!(g, layout="g")
+                f = Field(d, bases = b)
+                g = VectorField(d, c, bases = b)
+                fill_random!(f, layout = "g")
+                fill_random!(g, layout = "g")
                 vars = [g]
                 w0 = f * g
-                w1 = reinitialize(w0, ncc=true, ncc_vars=vars)
+                w1 = reinitialize(w0, ncc = true, ncc_vars = vars)
                 # Need a scalar placeholder for the equation
-                s = Field(d, bases=b)
-                fill_random!(s, layout="g")
+                s = Field(d, bases = b)
+                fill_random!(s, layout = "g")
                 problem = LBVP(vars)
                 add_equation!(problem, (s * g, 0))
                 solver = build_solver(problem)
@@ -531,7 +539,7 @@ using Dedalus
                 w1 = evaluate_as_ncc(w1)
                 change_scales!(w0, 1)
                 change_scales!(w1, 1)
-                @test isapprox(w0["g"], w1["g"], atol=1e-10)
+                @test isapprox(w0["g"], w1["g"], atol = 1.0e-10)
             catch e
                 @test_broken false
             end
@@ -539,7 +547,7 @@ using Dedalus
 
         # -- 16. vector * scalar NCC --
         @testset "vector prod scalar $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -549,16 +557,16 @@ using Dedalus
                 T in dtype_range
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
-                f = VectorField(d, c, bases=b)
-                g = Field(d, bases=b)
-                fill_random!(f, layout="g")
-                fill_random!(g, layout="g")
+                f = VectorField(d, c, bases = b)
+                g = Field(d, bases = b)
+                fill_random!(f, layout = "g")
+                fill_random!(g, layout = "g")
                 vars = [g]
                 w0 = f * g
-                w1 = reinitialize(w0, ncc=true, ncc_vars=vars)
+                w1 = reinitialize(w0, ncc = true, ncc_vars = vars)
                 # Need a scalar placeholder for the equation
-                s = Field(d, bases=b)
-                fill_random!(s, layout="g")
+                s = Field(d, bases = b)
+                fill_random!(s, layout = "g")
                 problem = LBVP(vars)
                 add_equation!(problem, (s * g, 0))
                 solver = build_solver(problem)
@@ -567,7 +575,7 @@ using Dedalus
                 w1 = evaluate_as_ncc(w1)
                 change_scales!(w0, 1)
                 change_scales!(w1, 1)
-                @test isapprox(w0["g"], w1["g"], atol=1e-10)
+                @test isapprox(w0["g"], w1["g"], atol = 1.0e-10)
             catch e
                 @test_broken false
             end
@@ -575,7 +583,7 @@ using Dedalus
 
         # -- 17. vector dot vector NCC --
         @testset "vector dot vector $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -585,16 +593,16 @@ using Dedalus
                 T in dtype_range
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
-                f = VectorField(d, c, bases=b)
-                g = VectorField(d, c, bases=b)
-                fill_random!(f, layout="g")
-                fill_random!(g, layout="g")
+                f = VectorField(d, c, bases = b)
+                g = VectorField(d, c, bases = b)
+                fill_random!(f, layout = "g")
+                fill_random!(g, layout = "g")
                 vars = [g]
                 w0 = f * g  # dot product for vectors
-                w1 = reinitialize(w0, ncc=true, ncc_vars=vars)
+                w1 = reinitialize(w0, ncc = true, ncc_vars = vars)
                 # Need a scalar placeholder for the equation
-                s = Field(d, bases=b)
-                fill_random!(s, layout="g")
+                s = Field(d, bases = b)
+                fill_random!(s, layout = "g")
                 problem = LBVP(vars)
                 add_equation!(problem, (s * g, 0))
                 solver = build_solver(problem)
@@ -603,7 +611,7 @@ using Dedalus
                 w1 = evaluate_as_ncc(w1)
                 change_scales!(w0, 1)
                 change_scales!(w1, 1)
-                @test isapprox(w0["g"], w1["g"], atol=1e-10)
+                @test isapprox(w0["g"], w1["g"], atol = 1.0e-10)
             catch e
                 @test_broken false
             end
@@ -611,7 +619,7 @@ using Dedalus
 
         # -- 18. tensor dot vector NCC --
         @testset "tensor dot vector $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -621,16 +629,16 @@ using Dedalus
                 T in dtype_range
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
-                f = TensorField(d, (c, c), bases=b)
-                g = VectorField(d, c, bases=b)
-                fill_random!(f, layout="g")
-                fill_random!(g, layout="g")
+                f = TensorField(d, (c, c), bases = b)
+                g = VectorField(d, c, bases = b)
+                fill_random!(f, layout = "g")
+                fill_random!(g, layout = "g")
                 vars = [g]
                 w0 = f * g  # tensor dot vector -> vector
-                w1 = reinitialize(w0, ncc=true, ncc_vars=vars)
+                w1 = reinitialize(w0, ncc = true, ncc_vars = vars)
                 # Need a scalar placeholder for the equation
-                s = Field(d, bases=b)
-                fill_random!(s, layout="g")
+                s = Field(d, bases = b)
+                fill_random!(s, layout = "g")
                 problem = LBVP(vars)
                 add_equation!(problem, (s * g, 0))
                 solver = build_solver(problem)
@@ -639,7 +647,7 @@ using Dedalus
                 w1 = evaluate_as_ncc(w1)
                 change_scales!(w0, 1)
                 change_scales!(w1, 1)
-                @test isapprox(w0["g"], w1["g"], atol=1e-10)
+                @test isapprox(w0["g"], w1["g"], atol = 1.0e-10)
             catch e
                 @test_broken false
             end
@@ -647,7 +655,7 @@ using Dedalus
 
         # -- 19. scalar * tensor NCC --
         @testset "scalar prod tensor $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -657,15 +665,15 @@ using Dedalus
                 T in dtype_range
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
-                f = Field(d, bases=b)
-                g = TensorField(d, (c, c), bases=b)
-                fill_random!(f, layout="g")
-                fill_random!(g, layout="g")
+                f = Field(d, bases = b)
+                g = TensorField(d, (c, c), bases = b)
+                fill_random!(f, layout = "g")
+                fill_random!(g, layout = "g")
                 vars = [g]
                 w0 = f * g
-                w1 = reinitialize(w0, ncc=true, ncc_vars=vars)
-                s = Field(d, bases=b)
-                fill_random!(s, layout="g")
+                w1 = reinitialize(w0, ncc = true, ncc_vars = vars)
+                s = Field(d, bases = b)
+                fill_random!(s, layout = "g")
                 problem = LBVP(vars)
                 add_equation!(problem, (s * g, 0))
                 solver = build_solver(problem)
@@ -674,7 +682,7 @@ using Dedalus
                 w1 = evaluate_as_ncc(w1)
                 change_scales!(w0, 1)
                 change_scales!(w1, 1)
-                @test isapprox(w0["g"], w1["g"], atol=1e-10)
+                @test isapprox(w0["g"], w1["g"], atol = 1.0e-10)
             catch e
                 @test_broken false
             end
@@ -682,7 +690,7 @@ using Dedalus
 
         # -- 20. vector * vector (outer product) NCC --
         @testset "vector prod vector $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -692,15 +700,15 @@ using Dedalus
                 T in dtype_range
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
-                f = VectorField(d, c, bases=b)
-                g = VectorField(d, c, bases=b)
-                fill_random!(f, layout="g")
-                fill_random!(g, layout="g")
+                f = VectorField(d, c, bases = b)
+                g = VectorField(d, c, bases = b)
+                fill_random!(f, layout = "g")
+                fill_random!(g, layout = "g")
                 vars = [g]
                 w0 = f * g  # outer product for vector * vector
-                w1 = reinitialize(w0, ncc=true, ncc_vars=vars)
-                s = Field(d, bases=b)
-                fill_random!(s, layout="g")
+                w1 = reinitialize(w0, ncc = true, ncc_vars = vars)
+                s = Field(d, bases = b)
+                fill_random!(s, layout = "g")
                 problem = LBVP(vars)
                 add_equation!(problem, (s * g, 0))
                 solver = build_solver(problem)
@@ -709,7 +717,7 @@ using Dedalus
                 w1 = evaluate_as_ncc(w1)
                 change_scales!(w0, 1)
                 change_scales!(w1, 1)
-                @test isapprox(w0["g"], w1["g"], atol=1e-10)
+                @test isapprox(w0["g"], w1["g"], atol = 1.0e-10)
             catch e
                 @test_broken false
             end
@@ -717,7 +725,7 @@ using Dedalus
 
         # -- 21. vector dot tensor NCC --
         @testset "vector dot tensor $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -727,15 +735,15 @@ using Dedalus
                 T in dtype_range
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
-                f = VectorField(d, c, bases=b)
-                g = TensorField(d, (c, c), bases=b)
-                fill_random!(f, layout="g")
-                fill_random!(g, layout="g")
+                f = VectorField(d, c, bases = b)
+                g = TensorField(d, (c, c), bases = b)
+                fill_random!(f, layout = "g")
+                fill_random!(g, layout = "g")
                 vars = [g]
                 w0 = DotProduct(f, g)  # vector dot tensor -> vector
-                w1 = reinitialize(w0, ncc=true, ncc_vars=vars)
-                s = Field(d, bases=b)
-                fill_random!(s, layout="g")
+                w1 = reinitialize(w0, ncc = true, ncc_vars = vars)
+                s = Field(d, bases = b)
+                fill_random!(s, layout = "g")
                 problem = LBVP(vars)
                 add_equation!(problem, (s * g, 0))
                 solver = build_solver(problem)
@@ -744,7 +752,7 @@ using Dedalus
                 w1 = evaluate_as_ncc(w1)
                 change_scales!(w0, 1)
                 change_scales!(w1, 1)
-                @test isapprox(w0["g"], w1["g"], atol=1e-10)
+                @test isapprox(w0["g"], w1["g"], atol = 1.0e-10)
             catch e
                 @test_broken false
             end
@@ -752,7 +760,7 @@ using Dedalus
 
         # -- 22. tensor * scalar NCC --
         @testset "tensor prod scalar $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -762,15 +770,15 @@ using Dedalus
                 T in dtype_range
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
-                f = TensorField(d, (c, c), bases=b)
-                g = Field(d, bases=b)
-                fill_random!(f, layout="g")
-                fill_random!(g, layout="g")
+                f = TensorField(d, (c, c), bases = b)
+                g = Field(d, bases = b)
+                fill_random!(f, layout = "g")
+                fill_random!(g, layout = "g")
                 vars = [g]
                 w0 = f * g
-                w1 = reinitialize(w0, ncc=true, ncc_vars=vars)
-                s = Field(d, bases=b)
-                fill_random!(s, layout="g")
+                w1 = reinitialize(w0, ncc = true, ncc_vars = vars)
+                s = Field(d, bases = b)
+                fill_random!(s, layout = "g")
                 problem = LBVP(vars)
                 add_equation!(problem, (s * g, 0))
                 solver = build_solver(problem)
@@ -779,7 +787,7 @@ using Dedalus
                 w1 = evaluate_as_ncc(w1)
                 change_scales!(w0, 1)
                 change_scales!(w1, 1)
-                @test isapprox(w0["g"], w1["g"], atol=1e-10)
+                @test isapprox(w0["g"], w1["g"], atol = 1.0e-10)
             catch e
                 @test_broken false
             end
@@ -787,7 +795,7 @@ using Dedalus
 
         # -- 23. tensor dot tensor NCC --
         @testset "tensor dot tensor $bname Nz=$Nz Nphi=$Nphi Nr=$Nr alpha=$alpha k=$k dealias=$dealias T=$T" for
-                (bname, basis_fn) in basis_range,
+            (bname, basis_fn) in basis_range,
                 Nz in Nz_range,
                 Nphi in Nphi_range,
                 Nr in Nr_range,
@@ -797,15 +805,15 @@ using Dedalus
                 T in dtype_range
             try
                 c, d, b, z, phi, r, x, y = basis_fn(Nz, Nphi, Nr, alpha, k, dealias, T)
-                f = TensorField(d, (c, c), bases=b)
-                g = TensorField(d, (c, c), bases=b)
-                fill_random!(f, layout="g")
-                fill_random!(g, layout="g")
+                f = TensorField(d, (c, c), bases = b)
+                g = TensorField(d, (c, c), bases = b)
+                fill_random!(f, layout = "g")
+                fill_random!(g, layout = "g")
                 vars = [g]
                 w0 = DotProduct(f, g)  # tensor dot tensor -> tensor
-                w1 = reinitialize(w0, ncc=true, ncc_vars=vars)
-                s = Field(d, bases=b)
-                fill_random!(s, layout="g")
+                w1 = reinitialize(w0, ncc = true, ncc_vars = vars)
+                s = Field(d, bases = b)
+                fill_random!(s, layout = "g")
                 problem = LBVP(vars)
                 add_equation!(problem, (s * g, 0))
                 solver = build_solver(problem)
@@ -814,7 +822,7 @@ using Dedalus
                 w1 = evaluate_as_ncc(w1)
                 change_scales!(w0, 1)
                 change_scales!(w1, 1)
-                @test isapprox(w0["g"], w1["g"], atol=1e-10)
+                @test isapprox(w0["g"], w1["g"], atol = 1.0e-10)
             catch e
                 @test_broken false
             end

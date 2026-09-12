@@ -165,11 +165,11 @@ function add_build_bases(args...)
         # All constant bases yields constant basis
         if all(b === nothing for b in ax_bases)
             push!(bases, nothing)
-        # Combine any constant bases to avoid adding nothing to nothing
+            # Combine any constant bases to avoid adding nothing to nothing
         elseif any(b === nothing for b in ax_bases)
             ax_bases_nonnull = [b for b in ax_bases if b !== nothing]
             push!(bases, reduce(basis_add, ax_bases_nonnull) + nothing)
-        # Add all bases
+            # Add all bases
         else
             push!(bases, reduce(basis_add, ax_bases))
         end
@@ -193,7 +193,7 @@ Display an Add node as `arg1 + arg2 + ...`.
 """
 function Base.show(io::IO, op::Add)
     str_args = [string(arg) for arg in op.args]
-    print(io, join(str_args, " + "))
+    return print(io, join(str_args, " + "))
 end
 
 """
@@ -268,6 +268,7 @@ function require_linearity(op::Add, vars...; kw...)
     for arg in op.args
         require_linearity(arg, vars...; kw...)
     end
+    return
 end
 
 """
@@ -279,6 +280,7 @@ function require_first_order(op::Add, vars...; kw...)
     for arg in op.args
         require_first_order(arg, vars...; kw...)
     end
+    return
 end
 
 """
@@ -311,6 +313,7 @@ function build_ncc_matrices(op::Add, separability, vars; kw...)
     for arg in op.args
         build_ncc_matrices(arg, separability, vars; kw...)
     end
+    return
 end
 
 """
@@ -385,7 +388,7 @@ is_future_field(::AddFields) = true
 Construct an AddFields node. Arguments are converted to the output bases
 before storage.
 """
-function AddFields(args...; out=nothing, kw...)
+function AddFields(args...; out = nothing, kw...)
     _bases = add_build_bases(args...)
     # Convert arguments to output bases
     converted_args = [convert_operand(arg, _bases) for arg in args]
@@ -395,9 +398,11 @@ function AddFields(args...; out=nothing, kw...)
     domain = Domain(dist, _bases)
     tensorsig = unify_attributes(converted_args, :tensorsig)
     dtype = promote_type([arg.dtype for arg in converted_args]...)
-    return AddFields(arg_list, original, out, dist, domain, tensorsig, dtype, _bases, 1,
-                      "Add", nothing, nothing, STORE_LAST_DEFAULT,
-                      dist.grid_layout, dist.coeff_layout)
+    return AddFields(
+        arg_list, original, out, dist, domain, tensorsig, dtype, _bases, 1,
+        "Add", nothing, nothing, STORE_LAST_DEFAULT,
+        dist.grid_layout, dist.coeff_layout
+    )
 end
 
 """
@@ -420,6 +425,7 @@ function enforce_conditions(op::AddFields)
     for arg in op.args
         change_layout!(arg, layout)
     end
+    return
 end
 
 """
@@ -463,7 +469,7 @@ abstract type Product <: AbstractFuture end
 
 Build output bases for a product operation.
 """
-function product_build_bases(arg0, arg1; ncc::Bool=false, ncc_vars=nothing, kw...)
+function product_build_bases(arg0, arg1; ncc::Bool = false, ncc_vars = nothing, kw...)
     bases = []
     arg0_bases = bases_by_coord(arg0.domain)
     arg1_bases = bases_by_coord(arg1.domain)
@@ -473,7 +479,7 @@ function product_build_bases(arg0, arg1; ncc::Bool=false, ncc_vars=nothing, kw..
         # All constant bases yields constant basis
         if b0 === nothing && b1 === nothing
             continue
-        # Multiply all bases
+            # Multiply all bases
         elseif ncc && has_operand(arg0, ncc_vars...)
             push!(bases, b1 * b0)  # matmul order: b1 @ b0
         elseif ncc && has_operand(arg1, ncc_vars...)
@@ -535,7 +541,7 @@ function split(op::Product, vars...)
     end
     # Last combo is all negative splittings, others contain at least one positive
     if length(split_ops) > 1
-        return (sum(split_ops[1:end-1]), split_ops[end])
+        return (sum(split_ops[1:(end - 1)]), split_ops[end])
     else
         return (0, split_ops[1])
     end
@@ -589,12 +595,14 @@ end
 
 Require expression to be linear in specified variables.
 """
-function require_linearity(op::Product, vars...;
-                           allow_affine::Bool=false,
-                           self_name=nothing,
-                           vars_name=nothing,
-                           error_type::Type=ErrorException,
-                           recurse::Bool=true)
+function require_linearity(
+        op::Product, vars...;
+        allow_affine::Bool = false,
+        self_name = nothing,
+        vars_name = nothing,
+        error_type::Type = ErrorException,
+        recurse::Bool = true
+    )
     arg0, arg1 = op.args[1], op.args[2]
     op_arg0 = (arg0 isa AbstractOperand) && has_operand(arg0, vars...)
     op_arg1 = (arg1 isa AbstractOperand) && has_operand(arg1, vars...)
@@ -605,11 +613,13 @@ function require_linearity(op::Product, vars...;
     elseif op_arg0 || op_arg1
         op_index = op_arg1 ? 2 : 1
         if recurse
-            require_linearity(op.args[op_index], vars...;
-                              allow_affine=allow_affine,
-                              self_name=self_name,
-                              vars_name=vars_name,
-                              error_type=error_type)
+            require_linearity(
+                op.args[op_index], vars...;
+                allow_affine = allow_affine,
+                self_name = self_name,
+                vars_name = vars_name,
+                error_type = error_type
+            )
         end
         return op_index
     elseif !allow_affine
@@ -631,6 +641,7 @@ function require_first_order(op::Product, args...; kw...)
             require_first_order(arg, args...; kw...)
         end
     end
+    return
 end
 
 """
@@ -641,12 +652,12 @@ and which is the NCC (non-constant coefficient).
 """
 function prep_nccs(op::Product, vars)
     op._ncc_vars = vars
-    op_index = require_linearity(op, vars...; recurse=false)
+    op_index = require_linearity(op, vars...; recurse = false)
     op.ncc_first = (op_index == 2)
     op.operand = op.args[op_index]
     op.ncc = op.args[3 - op_index]  # Assumes 2 operands (1-based: other is 3-i)
     # Recurse
-    prep_nccs(op.operand, vars)
+    return prep_nccs(op.operand, vars)
 end
 
 """
@@ -663,7 +674,7 @@ function gather_ncc_coeffs(op::Product)
         ncc = evaluate(ncc)
     end
     # Allgather NCC coefficients
-    if ncc isa Field
+    return if ncc isa Field
         require_coeff_space!(ncc)
         op._ncc_data = allgather_data(ncc)
     else
@@ -680,12 +691,15 @@ function store_ncc_matrices(op::Product, vars, subproblems; kw...)
     prep_nccs(op, vars)
     gather_ncc_coeffs(op)
     op._ncc_matrices = Dict{Any, Any}()
-    ncc_cutoff = get(kw, :ncc_cutoff, 1e-6)
+    ncc_cutoff = get(kw, :ncc_cutoff, 1.0e-6)
     max_ncc_terms = get(kw, :max_ncc_terms, nothing)
     for subproblem in subproblems
-        op._ncc_matrices[subproblem] = build_ncc_matrix(op, subproblem;
-            ncc_cutoff=ncc_cutoff, max_ncc_terms=max_ncc_terms)
+        op._ncc_matrices[subproblem] = build_ncc_matrix(
+            op, subproblem;
+            ncc_cutoff = ncc_cutoff, max_ncc_terms = max_ncc_terms
+        )
     end
+    return
 end
 
 """
@@ -712,15 +726,17 @@ end
 
 Build NCC multiplication matrix for a given subproblem.
 """
-function build_ncc_matrix(op::Product, subproblem; ncc_cutoff=1e-6, max_ncc_terms=nothing)
+function build_ncc_matrix(op::Product, subproblem; ncc_cutoff = 1.0e-6, max_ncc_terms = nothing)
     if op.dist.single_coordsys !== nothing && !op.dist.single_coordsys.curvilinear
-        return build_cartesian_ncc_matrix(op, subproblem; ncc_cutoff=ncc_cutoff, max_ncc_terms=max_ncc_terms)
+        return build_cartesian_ncc_matrix(op, subproblem; ncc_cutoff = ncc_cutoff, max_ncc_terms = max_ncc_terms)
     elseif length(op.domain.bases) > 0
         out_basis = op.domain.bases[end]
         return build_ncc_matrix(out_basis, op, subproblem, ncc_cutoff, max_ncc_terms)
     else
-        return _last_axis_field_ncc_matrix(op, subproblem, 0, nothing, nothing, nothing,
-            op._ncc_data, ncc_cutoff, max_ncc_terms)
+        return _last_axis_field_ncc_matrix(
+            op, subproblem, 0, nothing, nothing, nothing,
+            op._ncc_data, ncc_cutoff, max_ncc_terms
+        )
     end
 end
 
@@ -729,7 +745,7 @@ end
 
 Build NCC matrix for Cartesian coordinate systems (no intertwiners).
 """
-function build_cartesian_ncc_matrix(op::Product, subproblem; ncc_cutoff=1e-6, max_ncc_terms=nothing)
+function build_cartesian_ncc_matrix(op::Product, subproblem; ncc_cutoff = 1.0e-6, max_ncc_terms = nothing)
     ncc = op.ncc
     arg = op.operand
     out = op
@@ -752,15 +768,17 @@ function build_cartesian_ncc_matrix(op::Product, subproblem; ncc_cutoff=1e-6, ma
         ncc_data = op._ncc_data
         # Iterate over NCC mode indices (tensor components are first ncc_rank dims)
         ncc_shape = size(ncc_data)
-        spatial_shape = ncc_shape[ncc_rank+1:end]
+        spatial_shape = ncc_shape[(ncc_rank + 1):end]
         for ncc_mode in CartesianIndices(spatial_shape)
             ncc_mode_tuple = Tuple(ncc_mode)
             # Extract tensor-valued coefficient at this mode
             select_idx = ntuple(i -> i <= ncc_rank ? Colon() : ncc_mode_tuple[i - ncc_rank], ndims(ncc_data))
             ncc_coeffs = ncc_data[select_idx...]
             if maximum(abs.(ncc_coeffs)) > ncc_cutoff
-                mode_matrix = cartesian_mode_matrix(subproblem_shape,
-                    ncc.domain, arg.domain, out.domain, ncc_mode_tuple)
+                mode_matrix = cartesian_mode_matrix(
+                    subproblem_shape,
+                    ncc.domain, arg.domain, out.domain, ncc_mode_tuple
+                )
                 ncc_coeffs_flat = vec(ncc_coeffs)
                 G_contracted = reshape(G, :, size(G, 3)) * ncc_coeffs_flat
                 G_matrix = reshape(G_contracted, size(G, 1), size(G, 2))
@@ -865,6 +883,7 @@ function enforce_conditions(op::Product)
     for arg in op.args
         require_grid_space!(arg)
     end
+    return
 end
 
 """
@@ -875,25 +894,39 @@ Compute Gamma(a,b,c) in components after intertwiners for specified axis.
 Requires mode groups of previous axes, i.e. `length(group) == axis - 1`
 (0-based in Python, 1-based axis here means axis-1 previous axes).
 """
-function Gamma(op::Product, A_tensorsig, B_tensorsig, C_tensorsig,
-               A_group, B_group, C_group, axis)
+function Gamma(
+        op::Product, A_tensorsig, B_tensorsig, C_tensorsig,
+        A_group, B_group, C_group, axis
+    )
     # Base case
     if axis == 1
         return GammaCoord(op, A_tensorsig, B_tensorsig, C_tensorsig)
     end
     # Recurse
-    G = Gamma(op, A_tensorsig, B_tensorsig, C_tensorsig,
-              A_group, B_group, C_group, axis - 1)
+    G = Gamma(
+        op, A_tensorsig, B_tensorsig, C_tensorsig,
+        A_group, B_group, C_group, axis - 1
+    )
     # Apply Q (intertwiner transforms)
     cs = get_coordsystem(op.dist, axis)
     cs_axis = get_axis(op.dist, cs)
     subaxis = axis - cs_axis
-    QA = transpose(backward_intertwiner(cs, subaxis, length(A_tensorsig),
-                                        A_group[cs_axis:end]))
-    QB = transpose(backward_intertwiner(cs, subaxis, length(B_tensorsig),
-                                        B_group[cs_axis:end]))
-    QC = forward_intertwiner(cs, subaxis, length(C_tensorsig),
-                             C_group[cs_axis:end])
+    QA = transpose(
+        backward_intertwiner(
+            cs, subaxis, length(A_tensorsig),
+            A_group[cs_axis:end]
+        )
+    )
+    QB = transpose(
+        backward_intertwiner(
+            cs, subaxis, length(B_tensorsig),
+            B_group[cs_axis:end]
+        )
+    )
+    QC = forward_intertwiner(
+        cs, subaxis, length(C_tensorsig),
+        C_group[cs_axis:end]
+    )
     Q = kronecker(QA, QB, QC)
     G = reshape(Q * vec(G), size(G))
     return G
@@ -950,7 +983,7 @@ mutable struct DotProduct <: Product
     _grid_layout::Any
     _coeff_layout::Any
 
-    function DotProduct(arg0, arg1; indices=(-1, 1), out=nothing, kw...)
+    function DotProduct(arg0, arg1; indices = (-1, 1), out = nothing, kw...)
         checked_indices = _check_dot_indices(arg0, arg1, indices)
         # Build output tensor signature
         arg0_ts = collect(arg0.tensorsig)
@@ -973,7 +1006,7 @@ mutable struct DotProduct <: Product
         rank0 = length(arg0.tensorsig)
         rank1 = length(arg1.tensorsig)
         arg1_str = EINSUM_ALPHABET[1:rank0]
-        arg2_str = EINSUM_ALPHABET[rank0+1:rank0+rank1]
+        arg2_str = EINSUM_ALPHABET[(rank0 + 1):(rank0 + rank1)]
         # Replace contracted indices with 'z'
         arg1_chars = collect(arg1_str)
         arg1_chars[checked_indices[1]] = 'z'
@@ -985,12 +1018,14 @@ mutable struct DotProduct <: Product
         einsum_str = arg1_str_mod * "...," * arg2_str_mod * "...->" * out_str * "..."
 
         args_list = Any[arg0, arg1]
-        new(args_list, copy(args_list), out, dist, domain, tensorsig, dtype,
+        return new(
+            args_list, copy(args_list), out, dist, domain, tensorsig, dtype,
             checked_indices, [checked_indices], einsum_str, arg0_gb, arg1_gb,
             "dot_product_ncc",
             nothing, false, nothing, nothing, nothing, nothing, 1,
             "Dot", nothing, nothing, STORE_LAST_DEFAULT,
-            dist.grid_layout, dist.coeff_layout)
+            dist.grid_layout, dist.coeff_layout
+        )
     end
 end
 
@@ -1036,20 +1071,20 @@ function Base.show(io::IO, op::DotProduct)
         end
     end
     str_args = [paren_str(arg) for arg in op.args]
-    print(io, join(str_args, "@"))
+    return print(io, join(str_args, "@"))
 end
 
 function new_operands(op::DotProduct, arg0, arg1; kw...)
     if arg0 == 0 || arg1 == 0
         return 0
     end
-    return DotProduct(arg0, arg1; indices=op.indices, kw...)
+    return DotProduct(arg0, arg1; indices = op.indices, kw...)
 end
 
 function GammaCoord(op::DotProduct, A_tensorsig, B_tensorsig, C_tensorsig)
-    A_dim = prod(cs_dim(cs) for cs in A_tensorsig; init=1)
-    B_dim = prod(cs_dim(cs) for cs in B_tensorsig; init=1)
-    C_dim = prod(cs_dim(cs) for cs in C_tensorsig; init=1)
+    A_dim = prod(cs_dim(cs) for cs in A_tensorsig; init = 1)
+    B_dim = prod(cs_dim(cs) for cs in B_tensorsig; init = 1)
+    C_dim = prod(cs_dim(cs) for cs in C_tensorsig; init = 1)
     G = zeros(Int, A_dim, B_dim, C_dim)
     for (ia, a) in enum_indices(A_tensorsig)
         a_other = collect(a)
@@ -1084,8 +1119,10 @@ function operate(op::DotProduct, out)::Nothing
     arg1_data = ghost_cast(op.arg1_ghost_broadcaster, arg1)
     # Perform contraction
     if length(out.data) > 0
-        _einsum_contract!(out.data, arg0_data, arg1_data, op.indices,
-                          length(arg0.tensorsig), length(arg1.tensorsig))
+        _einsum_contract!(
+            out.data, arg0_data, arg1_data, op.indices,
+            length(arg0.tensorsig), length(arg1.tensorsig)
+        )
     end
     return nothing
 end
@@ -1105,7 +1142,7 @@ function _einsum_contract!(out_data, arg0_data, arg1_data, indices, rank0, rank1
     out_data .= 0
     # Sum over the contracted index
     @assert size(arg1_data, idx1) == contract_size "DotProduct contracted dimension mismatch: size(arg0, $idx0)=$contract_size != size(arg1, $idx1)=$(size(arg1_data, idx1))"
-    @inbounds for k in 1:contract_size
+    return @inbounds for k in 1:contract_size
         # Build index tuples for arg0: all colons except idx0 = k
         a0_idx = ntuple(i -> i == idx0 ? k : Colon(), ndims(arg0_data))
         # Build index tuples for arg1: all colons except idx1+rank0-1 adjusted = k
@@ -1131,10 +1168,10 @@ function _einsum_contract!(out_data, arg0_data, arg1_data, indices, rank0, rank1
             spatial_dims = a0_ndim - (rank0 - 1)
             # Reshape arg0_slice: insert singleton dims for arg1's tensor positions
             a0_shape = size(a0_slice)
-            a0_exp_shape = (a0_shape[1:rank0-1]..., ntuple(_ -> 1, rank1 - 1)..., a0_shape[rank0:end]...)
+            a0_exp_shape = (a0_shape[1:(rank0 - 1)]..., ntuple(_ -> 1, rank1 - 1)..., a0_shape[rank0:end]...)
             # Reshape arg1_slice: insert singleton dims for arg0's tensor positions
             a1_shape = size(a1_slice)
-            a1_exp_shape = (ntuple(_ -> 1, rank0 - 1)..., a1_shape[1:rank1-1]..., a1_shape[rank1:end]...)
+            a1_exp_shape = (ntuple(_ -> 1, rank0 - 1)..., a1_shape[1:(rank1 - 1)]..., a1_shape[rank1:end]...)
             a0_exp = reshape(a0_slice, a0_exp_shape)
             a1_exp = reshape(a1_slice, a1_exp_shape)
             @. out_data += a0_exp * a1_exp
@@ -1180,7 +1217,7 @@ mutable struct CrossProduct <: Product
     _grid_layout::Any
     _coeff_layout::Any
 
-    function CrossProduct(arg0, arg1; out=nothing, kw...)
+    function CrossProduct(arg0, arg1; out = nothing, kw...)
         # Check that both fields are rank-1
         if length(arg0.tensorsig) != 1 || length(arg1.tensorsig) != 1
             throw(ErrorException("CrossProduct currently only implemented for vector fields."))
@@ -1210,11 +1247,13 @@ mutable struct CrossProduct <: Product
             _operate = _operate_left_handed
         end
         args_list = Any[arg0, arg1]
-        new(args_list, copy(args_list), out, dist, domain, tensorsig, dtype,
+        return new(
+            args_list, copy(args_list), out, dist, domain, tensorsig, dtype,
             arg0_gb, arg1_gb, _operate,
             nothing, false, nothing, nothing, nothing, nothing, 1,
             "Cross", nothing, nothing, STORE_LAST_DEFAULT,
-            dist.grid_layout, dist.coeff_layout)
+            dist.grid_layout, dist.coeff_layout
+        )
     end
 end
 
@@ -1243,7 +1282,7 @@ function _operate_right_handed(op::CrossProduct, out, arg0_data, arg1_data)
     out2 = selectdim(out.data, 1, 3)
     @. out0 = d01 * d12 - d02 * d11
     @. out1 = d02 * d10 - d00 * d12
-    @. out2 = d00 * d11 - d01 * d10
+    return @. out2 = d00 * d11 - d01 * d10
 end
 
 """
@@ -1263,7 +1302,7 @@ function _operate_left_handed(op::CrossProduct, out, arg0_data, arg1_data)
     out2 = selectdim(out.data, 1, 3)
     @. out0 = d02 * d11 - d01 * d12
     @. out1 = d00 * d12 - d02 * d10
-    @. out2 = d01 * d10 - d00 * d11
+    return @. out2 = d01 * d10 - d00 * d11
 end
 
 """
@@ -1322,7 +1361,7 @@ function Base.show(io::IO, op::Multiply)
         end
     end
     str_args = [paren_str(arg) for arg in op.args]
-    print(io, join(str_args, "*"))
+    return print(io, join(str_args, "*"))
 end
 
 function new_operands(op::Multiply, arg0, arg1; kw...)
@@ -1330,9 +1369,9 @@ function new_operands(op::Multiply, arg0, arg1; kw...)
 end
 
 function GammaCoord(op::Multiply, A_tensorsig, B_tensorsig, C_tensorsig)
-    A_dim = prod(cs_dim(cs) for cs in A_tensorsig; init=1)
-    B_dim = prod(cs_dim(cs) for cs in B_tensorsig; init=1)
-    C_dim = prod(cs_dim(cs) for cs in C_tensorsig; init=1)
+    A_dim = prod(cs_dim(cs) for cs in A_tensorsig; init = 1)
+    B_dim = prod(cs_dim(cs) for cs in B_tensorsig; init = 1)
+    C_dim = prod(cs_dim(cs) for cs in C_tensorsig; init = 1)
     G = zeros(Int, A_dim, B_dim, C_dim)
     for (ia, a) in enum_indices(A_tensorsig)
         for (ib, b) in enum_indices(B_tensorsig)
@@ -1385,7 +1424,7 @@ mutable struct MultiplyFields <: Multiply
     _grid_layout::Any
     _coeff_layout::Any
 
-    function MultiplyFields(arg0, arg1; out=nothing, kw...)
+    function MultiplyFields(arg0, arg1; out = nothing, kw...)
         dist = unify_attributes((arg0, arg1), :dist)
         bases = product_build_bases(arg0, arg1; kw...)
         domain = Domain(dist, bases)
@@ -1404,12 +1443,14 @@ mutable struct MultiplyFields <: Multiply
         arg1_exp_tshape = (ntuple(_ -> 1, arg0_order)..., arg1_tshape...)
 
         args_list = Any[arg0, arg1]
-        new(args_list, copy(args_list), out, dist, domain, tensorsig, dtype,
+        return new(
+            args_list, copy(args_list), out, dist, domain, tensorsig, dtype,
             Any[], arg0_gb, arg1_gb, arg0_exp_tshape, arg1_exp_tshape,
             "tensor_product_ncc",
             nothing, false, nothing, nothing, nothing, nothing, 1,
             "Mul", nothing, nothing, STORE_LAST_DEFAULT,
-            dist.grid_layout, dist.coeff_layout)
+            dist.grid_layout, dist.coeff_layout
+        )
     end
 end
 
@@ -1430,8 +1471,8 @@ function operate(op::MultiplyFields, out)::Nothing
     # Reshape arg data to broadcast properly for output tensorsig
     rank0 = length(arg0.tensorsig)
     rank1 = length(arg1.tensorsig)
-    spatial_shape0 = size(arg0_data)[rank0+1:end]
-    spatial_shape1 = size(arg1_data)[rank1+1:end]
+    spatial_shape0 = size(arg0_data)[(rank0 + 1):end]
+    spatial_shape1 = size(arg1_data)[(rank1 + 1):end]
     arg0_exp_data = reshape(arg0_data, op.arg0_exp_tshape..., spatial_shape0...)
     arg1_exp_data = reshape(arg1_data, op.arg1_exp_tshape..., spatial_shape1...)
     @. out.data = arg0_exp_data * arg1_exp_data
@@ -1472,7 +1513,7 @@ struct GhostBroadcaster
             subcomm = nothing
             try
                 remain_dims = Int.(deploy_dims)
-                subcomm = domain.dist.comm_cart.Sub(remain_dims=remain_dims)
+                subcomm = domain.dist.comm_cart.Sub(remain_dims = remain_dims)
             catch
                 # No MPI; fall through to skip
             end
@@ -1506,7 +1547,7 @@ function ghost_cast(gb::GhostBroadcaster, field)
     end
     # Broadcast data from rank 0 of subcomm
     if length(ghost_data) > 0
-        gb.subcomm.Bcast(ghost_data, root=0)
+        gb.subcomm.Bcast(ghost_data, root = 0)
     end
     return ghost_data
 end
@@ -1544,7 +1585,7 @@ mutable struct MultiplyNumberField <: Multiply
     _grid_layout::Any
     _coeff_layout::Any
 
-    function MultiplyNumberField(arg0, arg1; out=nothing, kw...)
+    function MultiplyNumberField(arg0, arg1; out = nothing, kw...)
         # Make number come first
         if arg1 isa Number
             arg0, arg1 = arg1, arg0
@@ -1555,10 +1596,12 @@ mutable struct MultiplyNumberField <: Multiply
         dtype = promote_type(typeof(arg0), arg1.dtype)
         dist = arg1.dist
         args_list = Any[arg0, arg1]
-        new(args_list, copy(args_list), out, dist, domain, tensorsig, dtype,
+        return new(
+            args_list, copy(args_list), out, dist, domain, tensorsig, dtype,
             nothing, false, nothing, nothing, nothing, nothing, 1,
             "Mul", nothing, nothing, STORE_LAST_DEFAULT,
-            dist.grid_layout, dist.coeff_layout)
+            dist.grid_layout, dist.coeff_layout
+        )
     end
 end
 
@@ -1635,7 +1678,7 @@ end
 Precompute NCC matrices for number-field multiplication.
 """
 function build_ncc_matrices(op::MultiplyNumberField, separability, vars; kw...)
-    build_ncc_matrices(op.args[2], separability, vars; kw...)
+    return build_ncc_matrices(op.args[2], separability, vars; kw...)
 end
 
 """
@@ -1687,9 +1730,9 @@ function dedalus_add(args...; kw...)
     end
     # Cast all args to Operands, if any present
     if any(arg isa AbstractOperand for arg in filtered)
-        dist = unify_attributes(filtered, :dist; require=false)
-        tensorsig = unify_attributes(filtered, :tensorsig; require=false)
-        dtype = unify_attributes(filtered, :dtype; require=false)
+        dist = unify_attributes(filtered, :dist; require = false)
+        tensorsig = unify_attributes(filtered, :tensorsig; require = false)
+        dtype = unify_attributes(filtered, :dtype; require = false)
         casted = [operand_cast(arg, dist, tensorsig, dtype) for arg in filtered]
         # Create AddFields (all should be field-like after casting)
         return AddFields(casted...; kw...)
@@ -1760,24 +1803,24 @@ end
 # ============================================================================
 
 export Add,
-       AddFields,
-       Product,
-       DotProduct,
-       CrossProduct,
-       Multiply,
-       MultiplyFields,
-       MultiplyNumberField,
-       GhostBroadcaster,
-       dedalus_add,
-       dedalus_multiply,
-       enum_indices,
-       ARITHMETIC_ALIASES,
-       register_alias!,
-       convert_operand,
-       operator_name,
-       is_future_field,
-       ghost_cast,
-       cs_dim,
-       operand_cast,
-       cartesian_mode_matrix,
-       build_cartesian_ncc_matrix
+    AddFields,
+    Product,
+    DotProduct,
+    CrossProduct,
+    Multiply,
+    MultiplyFields,
+    MultiplyNumberField,
+    GhostBroadcaster,
+    dedalus_add,
+    dedalus_multiply,
+    enum_indices,
+    ARITHMETIC_ALIASES,
+    register_alias!,
+    convert_operand,
+    operator_name,
+    is_future_field,
+    ghost_cast,
+    cs_dim,
+    operand_cast,
+    cartesian_mode_matrix,
+    build_cartesian_ncc_matrix

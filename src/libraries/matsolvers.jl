@@ -102,12 +102,12 @@ abstract type AbstractDenseSolver <: AbstractMatSolver end
 """Return `true` if the solver operates on sparse matrices."""
 is_sparse(::AbstractSparseSolver) = true
 is_sparse(::AbstractBandedSolver) = false
-is_sparse(::AbstractDenseSolver)  = false
+is_sparse(::AbstractDenseSolver) = false
 
 """Return `true` if the solver operates on banded matrices."""
 is_banded(::AbstractSparseSolver) = false
 is_banded(::AbstractBandedSolver) = true
-is_banded(::AbstractDenseSolver)  = false
+is_banded(::AbstractDenseSolver) = false
 
 # ---------------------------------------------------------------------------
 # Utility: sparse → banded conversion
@@ -123,7 +123,7 @@ omitted they are inferred from the sparsity pattern.
 
 Returns a tuple `((l, u), ab)` where `ab` has size `(l + u + 1, n)`.
 """
-function sparse_to_banded(matrix::AbstractSparseMatrix; u::Union{Nothing,Int}=nothing, l::Union{Nothing,Int}=nothing)
+function sparse_to_banded(matrix::AbstractSparseMatrix; u::Union{Nothing, Int} = nothing, l::Union{Nothing, Int} = nothing)
     n = size(matrix, 2)
     rows = rowvals(matrix)
     vals = nonzeros(matrix)
@@ -169,7 +169,7 @@ Dummy solver that returns zeros for testing purposes.
 """
 struct DummySolver <: AbstractMatSolver end
 
-DummySolver(matrix, solver=nothing) = DummySolver()
+DummySolver(matrix, solver = nothing) = DummySolver()
 
 function solve(s::DummySolver, vector::AbstractVecOrMat)
     return zero(vector)
@@ -191,8 +191,8 @@ struct UmfpackSpsolve{Tv, Ti} <: AbstractSparseSolver
     matrix::SparseMatrixCSC{Tv, Ti}
 end
 
-function UmfpackSpsolve(matrix::AbstractSparseMatrix, solver=nothing)
-    UmfpackSpsolve(convert(SparseMatrixCSC, copy(matrix)))
+function UmfpackSpsolve(matrix::AbstractSparseMatrix, solver = nothing)
+    return UmfpackSpsolve(convert(SparseMatrixCSC, copy(matrix)))
 end
 
 function solve(s::UmfpackSpsolve, vector::AbstractVecOrMat)
@@ -215,8 +215,8 @@ struct SuperluNaturalSpsolve{Tv, Ti} <: AbstractSparseSolver
     matrix::SparseMatrixCSC{Tv, Ti}
 end
 
-function SuperluNaturalSpsolve(matrix::AbstractSparseMatrix, solver=nothing)
-    SuperluNaturalSpsolve(convert(SparseMatrixCSC, copy(matrix)))
+function SuperluNaturalSpsolve(matrix::AbstractSparseMatrix, solver = nothing)
+    return SuperluNaturalSpsolve(convert(SparseMatrixCSC, copy(matrix)))
 end
 
 function solve(s::SuperluNaturalSpsolve, vector::AbstractVecOrMat)
@@ -239,8 +239,8 @@ struct SuperluColamdSpsolve{Tv, Ti} <: AbstractSparseSolver
     matrix::SparseMatrixCSC{Tv, Ti}
 end
 
-function SuperluColamdSpsolve(matrix::AbstractSparseMatrix, solver=nothing)
-    SuperluColamdSpsolve(convert(SparseMatrixCSC, copy(matrix)))
+function SuperluColamdSpsolve(matrix::AbstractSparseMatrix, solver = nothing)
+    return SuperluColamdSpsolve(convert(SparseMatrixCSC, copy(matrix)))
 end
 
 function solve(s::SuperluColamdSpsolve, vector::AbstractVecOrMat)
@@ -263,9 +263,9 @@ struct UmfpackFactorized{F} <: AbstractSparseSolver
     LU::F
 end
 
-function UmfpackFactorized(matrix::AbstractSparseMatrix, solver=nothing)
+function UmfpackFactorized(matrix::AbstractSparseMatrix, solver = nothing)
     F = lu(convert(SparseMatrixCSC, matrix))
-    UmfpackFactorized(F)
+    return UmfpackFactorized(F)
 end
 
 function solve(s::UmfpackFactorized, vector::AbstractVecOrMat)
@@ -304,7 +304,7 @@ struct FactorizedTransposeSolver{F} <: AbstractSparseSolver
     trans::Symbol   # :N, :T, or :H
 end
 
-function FactorizedTransposeSolver(matrix::AbstractSparseMatrix; trans::Symbol=:N, solver=nothing)
+function FactorizedTransposeSolver(matrix::AbstractSparseMatrix; trans::Symbol = :N, solver = nothing)
     M = convert(SparseMatrixCSC, matrix)
     if trans == :T
         M = copy(transpose(M))   # materialise transpose
@@ -312,7 +312,7 @@ function FactorizedTransposeSolver(matrix::AbstractSparseMatrix; trans::Symbol=:
         M = copy(adjoint(M))     # materialise conjugate-transpose
     end
     F = lu(M)
-    FactorizedTransposeSolver(F, trans)
+    return FactorizedTransposeSolver(F, trans)
 end
 
 function solve(s::FactorizedTransposeSolver, vector::AbstractVecOrMat)
@@ -372,9 +372,9 @@ struct SuperluNaturalFactorized{F} <: AbstractSparseSolver
     inner::FactorizedTransposeSolver{F}
 end
 
-function SuperluNaturalFactorized(matrix::AbstractSparseMatrix, solver=nothing)
-    inner = FactorizedTransposeSolver(matrix; trans=:N, solver=solver)
-    SuperluNaturalFactorized(inner)
+function SuperluNaturalFactorized(matrix::AbstractSparseMatrix, solver = nothing)
+    inner = FactorizedTransposeSolver(matrix; trans = :N, solver = solver)
+    return SuperluNaturalFactorized(inner)
 end
 
 function solve(s::SuperluNaturalFactorized, vector::AbstractVecOrMat)
@@ -405,9 +405,9 @@ struct SuperluNaturalFactorizedTranspose{F} <: AbstractSparseSolver
     inner::FactorizedTransposeSolver{F}
 end
 
-function SuperluNaturalFactorizedTranspose(matrix::AbstractSparseMatrix, solver=nothing)
-    inner = FactorizedTransposeSolver(matrix; trans=:T, solver=solver)
-    SuperluNaturalFactorizedTranspose(inner)
+function SuperluNaturalFactorizedTranspose(matrix::AbstractSparseMatrix, solver = nothing)
+    inner = FactorizedTransposeSolver(matrix; trans = :T, solver = solver)
+    return SuperluNaturalFactorizedTranspose(inner)
 end
 
 function solve(s::SuperluNaturalFactorizedTranspose, vector::AbstractVecOrMat)
@@ -438,9 +438,9 @@ struct SuperluColamdFactorized{F} <: AbstractSparseSolver
     inner::FactorizedTransposeSolver{F}
 end
 
-function SuperluColamdFactorized(matrix::AbstractSparseMatrix, solver=nothing)
-    inner = FactorizedTransposeSolver(matrix; trans=:N, solver=solver)
-    SuperluColamdFactorized(inner)
+function SuperluColamdFactorized(matrix::AbstractSparseMatrix, solver = nothing)
+    inner = FactorizedTransposeSolver(matrix; trans = :N, solver = solver)
+    return SuperluColamdFactorized(inner)
 end
 
 function solve(s::SuperluColamdFactorized, vector::AbstractVecOrMat)
@@ -471,9 +471,9 @@ struct SuperluColamdFactorizedTranspose{F} <: AbstractSparseSolver
     inner::FactorizedTransposeSolver{F}
 end
 
-function SuperluColamdFactorizedTranspose(matrix::AbstractSparseMatrix, solver=nothing)
-    inner = FactorizedTransposeSolver(matrix; trans=:T, solver=solver)
-    SuperluColamdFactorizedTranspose(inner)
+function SuperluColamdFactorizedTranspose(matrix::AbstractSparseMatrix, solver = nothing)
+    inner = FactorizedTransposeSolver(matrix; trans = :T, solver = solver)
+    return SuperluColamdFactorizedTranspose(inner)
 end
 
 function solve(s::SuperluColamdFactorizedTranspose, vector::AbstractVecOrMat)
@@ -504,9 +504,9 @@ struct UmfpackFactorizedTranspose{F} <: AbstractSparseSolver
     inner::FactorizedTransposeSolver{F}
 end
 
-function UmfpackFactorizedTranspose(matrix::AbstractSparseMatrix, solver=nothing)
-    inner = FactorizedTransposeSolver(matrix; trans=:T, solver=solver)
-    UmfpackFactorizedTranspose(inner)
+function UmfpackFactorizedTranspose(matrix::AbstractSparseMatrix, solver = nothing)
+    inner = FactorizedTransposeSolver(matrix; trans = :T, solver = solver)
+    return UmfpackFactorizedTranspose(inner)
 end
 
 function solve(s::UmfpackFactorizedTranspose, vector::AbstractVecOrMat)
@@ -543,18 +543,18 @@ mutable struct BandedLAPACK{T} <: AbstractBandedSolver
     ipiv::Vector{Int}        # pivot indices from gbtrf!
 end
 
-function BandedLAPACK(matrix::AbstractSparseMatrix, solver=nothing)
+function BandedLAPACK(matrix::AbstractSparseMatrix, solver = nothing)
     (kl, ku), ab_narrow = sparse_to_banded(matrix)
     n = size(ab_narrow, 2)
     T = eltype(ab_narrow)
 
     # LAPACK gbtrf! needs (2*kl + ku + 1) rows: kl extra rows at the top for
     # fill-in during factorisation.
-    AB = zeros(T, 2*kl + ku + 1, n)
-    AB[kl+1:end, :] .= ab_narrow   # place the band data after the fill-in rows
+    AB = zeros(T, 2 * kl + ku + 1, n)
+    AB[(kl + 1):end, :] .= ab_narrow   # place the band data after the fill-in rows
 
     AB, ipiv = LinearAlgebra.LAPACK.gbtrf!(kl, ku, n, AB)
-    BandedLAPACK{T}(kl, ku, AB, ipiv)
+    return BandedLAPACK{T}(kl, ku, AB, ipiv)
 end
 
 function solve(s::BandedLAPACK, vector::AbstractVecOrMat)
@@ -586,9 +586,9 @@ struct SPQRSolve{F} <: AbstractSparseSolver
     QR::F
 end
 
-function SPQRSolve(matrix::AbstractSparseMatrix, solver=nothing)
+function SPQRSolve(matrix::AbstractSparseMatrix, solver = nothing)
     F = qr(convert(SparseMatrixCSC, copy(matrix)))
-    SPQRSolve(F)
+    return SPQRSolve(F)
 end
 
 function solve(s::SPQRSolve, vector::AbstractVecOrMat)
@@ -617,17 +617,17 @@ struct SparseInverse{Tv, Ti} <: AbstractSparseSolver
     matrix_inverse::SparseMatrixCSC{Tv, Ti}
     # Private inner constructor to avoid ambiguity with the outer constructor
     function SparseInverse{Tv, Ti}(mi::SparseMatrixCSC{Tv, Ti}) where {Tv, Ti}
-        new{Tv, Ti}(mi)
+        return new{Tv, Ti}(mi)
     end
 end
 
-function SparseInverse(matrix::AbstractSparseMatrix, solver=nothing)
+function SparseInverse(matrix::AbstractSparseMatrix, solver = nothing)
     M = convert(SparseMatrixCSC, matrix)
     # Compute inverse via LU factorisation and identity solves
     n = size(M, 1)
     F = lu(M)
     Minv = sparse(F \ Matrix{eltype(M)}(I, n, n))
-    SparseInverse{eltype(Minv), eltype(rowvals(Minv))}(Minv)
+    return SparseInverse{eltype(Minv), eltype(rowvals(Minv))}(Minv)
 end
 
 function solve(s::SparseInverse, vector::AbstractVecOrMat)
@@ -655,9 +655,9 @@ struct DenseInverse{T} <: AbstractDenseSolver
     matrix_inverse::Matrix{T}
 end
 
-function DenseInverse(matrix::AbstractSparseMatrix, solver=nothing)
+function DenseInverse(matrix::AbstractSparseMatrix, solver = nothing)
     M = Matrix(matrix)
-    DenseInverse(inv(M))
+    return DenseInverse(inv(M))
 end
 
 function solve(s::DenseInverse, vector::AbstractVecOrMat)
@@ -693,10 +693,10 @@ end
 function BlockInverse(matrix::AbstractSparseMatrix, solver_obj)
     # Check separability
     if hasproperty(solver_obj, :domain) &&
-       hasproperty(solver_obj.domain, :bases) &&
-       length(solver_obj.domain.bases) > 0 &&
-       hasproperty(last(solver_obj.domain.bases), :coupled) &&
-       last(solver_obj.domain.bases).coupled
+            hasproperty(solver_obj.domain, :bases) &&
+            length(solver_obj.domain.bases) > 0 &&
+            hasproperty(last(solver_obj.domain.bases), :coupled) &&
+            last(solver_obj.domain.bases).coupled
         error("Block solver requires uncoupled problems.")
     end
 
@@ -719,7 +719,7 @@ function BlockInverse(matrix::AbstractSparseMatrix, solver_obj)
         b = block_size
         nblocks = div(n, b)
         M = Matrix(matrix)
-        inv_blocks = [inv(M[(i-1)*b+1:i*b, (i-1)*b+1:i*b]) for i in 1:nblocks]
+        inv_blocks = [inv(M[((i - 1) * b + 1):(i * b), ((i - 1) * b + 1):(i * b)]) for i in 1:nblocks]
         # Reassemble as sparse block-diagonal
         Minv = blockdiag([sparse(blk) for blk in inv_blocks]...)
         return BlockInverse{T}(Minv, nothing, false)
@@ -759,8 +759,8 @@ struct DenseLU{F} <: AbstractDenseSolver
     LU::F
 end
 
-function DenseLU(matrix::AbstractSparseMatrix, solver=nothing)
-    DenseLU(lu(Matrix(matrix)))
+function DenseLU(matrix::AbstractSparseMatrix, solver = nothing)
+    return DenseLU(lu(Matrix(matrix)))
 end
 
 function solve(s::DenseLU, vector::AbstractVecOrMat)
@@ -795,7 +795,7 @@ then applies the Woodbury formula:
 
 The config dict `bc_top = true` indicates the border structure.
 """
-struct Woodbury{MS<:AbstractMatSolver, T} <: AbstractSparseSolver
+struct Woodbury{MS <: AbstractMatSolver, T} <: AbstractSparseSolver
     A_matsolver::MS
     Ainv_U::Matrix{T}
     Sinv::Matrix{T}
@@ -808,32 +808,32 @@ function Woodbury(matrix::AbstractSparseMatrix, subproblem, matsolver_type)
     T = eltype(matrix)
 
     # Form Woodbury factors U and V
-    U = zeros(T, n, 2*R)
-    V = zeros(T, 2*R, n)
+    U = zeros(T, n, 2 * R)
+    V = zeros(T, 2 * R, n)
 
     # Remove top border, leaving upper left subblock
     U[1:R, 1:R] = Matrix{T}(I, R, R)
-    V[1:R, R+1:end] = Matrix(matrix[1:R, R+1:end])
+    V[1:R, (R + 1):end] = Matrix(matrix[1:R, (R + 1):end])
 
     # Remove right border, leaving upper right and lower right subblocks
-    U[R+1:end-R, R+1:2*R] = Matrix(matrix[R+1:end-R, end-R+1:end])
-    V[R+1:2*R, end-R+1:end] = Matrix{T}(I, R, R)
+    U[(R + 1):(end - R), (R + 1):(2 * R)] = Matrix(matrix[(R + 1):(end - R), (end - R + 1):end])
+    V[(R + 1):(2 * R), (end - R + 1):end] = Matrix{T}(I, R, R)
 
     # A₀ = matrix - U * V
     A = matrix - sparse(U) * sparse(V)
 
     # Solve A₀ using specified matsolver
     A_ms = matsolver_type(A)
-    Ainv_U = Matrix{T}(undef, n, 2*R)
-    for j in 1:2*R
+    Ainv_U = Matrix{T}(undef, n, 2 * R)
+    for j in 1:(2 * R)
         Ainv_U[:, j] = solve(A_ms, U[:, j])
     end
 
     # Schur complement:  S = I + V * A₀⁻¹ U
-    S = Matrix{T}(I, 2*R, 2*R) + V * Ainv_U
+    S = Matrix{T}(I, 2 * R, 2 * R) + V * Ainv_U
     Sinv = inv(S)
 
-    Woodbury(A_ms, Ainv_U, Sinv, V)
+    return Woodbury(A_ms, Ainv_U, Sinv, V)
 end
 
 function solve(s::Woodbury, vector::AbstractVecOrMat)
@@ -870,6 +870,7 @@ function build_woodbury_registry!()
             MATSOLVER_REGISTRY[woodbury_name] = (matrix, subproblem) -> Woodbury(matrix, subproblem, ms)
         end
     end
+    return
 end
 
 # Build the Woodbury variants now that all base solvers are registered
@@ -891,7 +892,7 @@ function get_solver(name::AbstractString)
 end
 
 export AbstractMatSolver,
-       MATSOLVER_REGISTRY,
-       get_solver,
-       solve!,
-       solve
+    MATSOLVER_REGISTRY,
+    get_solver,
+    solve!,
+    solve

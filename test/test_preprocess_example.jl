@@ -6,15 +6,15 @@ function preprocess_example(content::AbstractString)
     m_open = match(r"^(\s*)\"\"\"", content)
     m_open === nothing && return content
 
-    open_end   = m_open.offset + ncodeunits(m_open.match)
+    open_end = m_open.offset + ncodeunits(m_open.match)
 
     close_idx = findnext("\"\"\"", content, open_end)
     close_idx === nothing && return content
 
     close_start = first(close_idx)
-    close_end   = last(close_idx)
+    close_end = last(close_idx)
 
-    body = content[open_end:close_start - 1]
+    body = content[open_end:(close_start - 1)]
 
     if startswith(body, "\n")
         body = body[2:end]
@@ -31,7 +31,7 @@ function preprocess_example(content::AbstractString)
         end
     end
 
-    rest = content[close_end + 1:end]
+    rest = content[(close_end + 1):end]
     if startswith(rest, "\n")
         rest = rest[2:end]
     end
