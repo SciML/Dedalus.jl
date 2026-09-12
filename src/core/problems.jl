@@ -531,7 +531,7 @@ function _build_matrix_expressions(p::InitialValueProblem, eqn)
     ts = eqn["tensorsig"]
     dt = eqn["dtype"]
     # Extract matrix expressions: split LHS into M (with dt) and L (without dt)
-    M, L = split_operator(eqn["LHS"], TimeDerivative)
+    M, L = split(eqn["LHS"], TimeDerivative)
     F = eqn["RHS"]
     # Drop time derivatives from M
     if M !== nothing && M != 0
@@ -614,7 +614,7 @@ function build_EVP(ivp::InitialValueProblem;
     evp = EigenvalueProblem(perturbations, eigenvalue; kw...)
     # Convert equations from IVP
     for eqn in get_equations(ivp)
-        M, L = split_operator(eqn["LHS"], TimeDerivative)
+        M, L = split(eqn["LHS"], TimeDerivative)
         F = eqn["RHS"]
         # Convert M@dt(X) to lambda*M@Y
         if M !== nothing && M != 0
@@ -719,7 +719,7 @@ end
 function _build_matrix_expressions(p::EigenvalueProblem, eqn)
     vars = get_variables(p)
     # Extract matrix expressions: split LHS into M (with eigenvalue) and L (without)
-    M, L = split_operator(eqn["LHS"], p.eigenvalue)
+    M, L = split(eqn["LHS"], p.eigenvalue)
     # Drop eigenvalue from M
     if M !== nothing && M != 0
         M = replace_op(M, p.eigenvalue, 1)
