@@ -36,8 +36,8 @@ struct JacobiCodomain
     arrow::NTuple{4, Int}
     Output::Type
 
-    function JacobiCodomain(dn::Int=0, da::Int=0, db::Int=0, pi::Int=0; Output::Type=JacobiCodomain)
-        new((dn, da, db, pi), Output)
+    function JacobiCodomain(dn::Int = 0, da::Int = 0, db::Int = 0, pi::Int = 0; Output::Type = JacobiCodomain)
+        return new((dn, da, db, pi), Output)
     end
 end
 
@@ -57,15 +57,15 @@ function Base.show(io::IO, c::JacobiCodomain)
     end
     s = replace(s, "+0" => "")
     s = replace(s, "+-" => "-")
-    print(io, s)
+    return print(io, s)
 end
 
 function Base.:+(a::JacobiCodomain, b::JacobiCodomain)
-    n, alpha, beta = _jc_call(a, b[1], b[2], b[3]; evaluate=false)
-    return a.Output(n, alpha, beta, xor(a[4], b[4]); Output=a.Output)
+    n, alpha, beta = _jc_call(a, b[1], b[2], b[3]; evaluate = false)
+    return a.Output(n, alpha, beta, xor(a[4], b[4]); Output = a.Output)
 end
 
-function _jc_call(c::JacobiCodomain, n, a, b; evaluate::Bool=true)
+function _jc_call(c::JacobiCodomain, n, a, b; evaluate::Bool = true)
     if c[4] != 0
         a, b = b, a
     end
@@ -78,9 +78,9 @@ function _jc_call(c::JacobiCodomain, n, a, b; evaluate::Bool=true)
     return n_out, a_out, b_out
 end
 
-function (c::JacobiCodomain)(args...; evaluate::Bool=true)
+function (c::JacobiCodomain)(args...; evaluate::Bool = true)
     n, a, b = args[1], args[2], args[3]
-    return _jc_call(c, n, a, b; evaluate=evaluate)
+    return _jc_call(c, n, a, b; evaluate = evaluate)
 end
 
 function Base.:-(c::JacobiCodomain)
@@ -88,7 +88,7 @@ function Base.:-(c::JacobiCodomain)
     if c[4] != 0
         a, b = b, a
     end
-    return c.Output(-c[1], a, b, c[4]; Output=c.Output)
+    return c.Output(-c[1], a, b, c[4]; Output = c.Output)
 end
 
 function Base.:(==)(a::JacobiCodomain, b::JacobiCodomain)
@@ -109,7 +109,7 @@ end
 
 function Base.:*(c::JacobiCodomain, other::Int)
     if other == 0
-        return c.Output(0, 0, 0, 0; Output=c.Output)
+        return c.Output(0, 0, 0, 0; Output = c.Output)
     end
     if other < 0
         return -c + (other + 1) * c
@@ -124,7 +124,7 @@ end
 Base.:*(other::Int, c::JacobiCodomain) = c * other
 
 function Base.:-(a::JacobiCodomain, b::JacobiCodomain)
-    a + (-b)
+    return a + (-b)
 end
 
 # ============================================================================
@@ -132,7 +132,7 @@ end
 # ============================================================================
 
 function _to_codomain(jc::JacobiCodomain)
-    Codomain(jc.arrow...; Output=Codomain)
+    return Codomain(jc.arrow...; Output = Codomain)
 end
 
 # ============================================================================
@@ -163,7 +163,7 @@ function _spdiag(bands::Vector{Vector{T}}, offsets::Vector{Int}, rows::Int, cols
 end
 
 function _spdiag(band::Vector{T}, offset::Int, rows::Int, cols::Int) where {T}
-    _spdiag([band], [offset], rows, cols)
+    return _spdiag([band], [offset], rows, cols)
 end
 
 # ============================================================================
@@ -175,7 +175,7 @@ end
 
 Compute 2^(a+b+1) * Beta(a+1, b+1) = integral from -1 to 1 of (1-z)^a * (1+z)^b dz.
 """
-function jacobi_mass(a, b; log::Bool=false)
+function jacobi_mass(a, b; log::Bool = false)
     if !log
         return 2^(a + b + 1) * _beta(a + 1, b + 1)
     end
@@ -192,7 +192,7 @@ end
 Ratio of classical Jacobi normalisation:
     sqrt(N(n+dn, a+da, b+db) / N(n, a, b))
 """
-function jacobi_norm_ratio(dn::Int, da::Int, db::Int, n, a, b; squared::Bool=false)
+function jacobi_norm_ratio(dn::Int, da::Int, db::Int, n, a, b; squared::Bool = false)
     function tricky(n_val, a_val, b_val)
         if a_val + b_val != -1
             return (2 * n_val + a_val + b_val + 1) / (n_val + a_val + b_val + 1)
@@ -208,9 +208,11 @@ function jacobi_norm_ratio(dn::Int, da::Int, db::Int, n, a, b; squared::Bool=fal
             return 1.0 .+ 0 .* n_val
         end
         if d == 1
-            return ((n_val .+ a_val .+ 1) .* (n_val .+ b_val .+ 1) ./
-                    ((n_val .+ 1) .* (2 .* n_val .+ a_val .+ b_val .+ 3))) .*
-                   tricky.(n_val, a_val, b_val)
+            return (
+                (n_val .+ a_val .+ 1) .* (n_val .+ b_val .+ 1) ./
+                    ((n_val .+ 1) .* (2 .* n_val .+ a_val .+ b_val .+ 3))
+            ) .*
+                tricky.(n_val, a_val, b_val)
         end
         return n_ratio(1, n_val .+ d .- 1, a_val, b_val) .* n_ratio(d - 1, n_val, a_val, b_val)
     end
@@ -224,7 +226,7 @@ function jacobi_norm_ratio(dn::Int, da::Int, db::Int, n, a, b; squared::Bool=fal
         end
         if d == 1
             return (2 .* (n_val .+ a_val .+ 1) ./ (2 .* n_val .+ a_val .+ b_val .+ 2)) .*
-                   tricky.(n_val, a_val, b_val)
+                tricky.(n_val, a_val, b_val)
         end
         return ab_ratio(1, n_val, a_val .+ d .- 1, b_val) .* ab_ratio(d - 1, n_val, a_val, b_val)
     end
@@ -246,7 +248,7 @@ end
 
 Compute the Jacobi measure mu(a,b,z) = (1-z)^a * (1+z)^b.
 """
-function jacobi_measure(a, b, z; probability::Bool=true, log::Bool=false)
+function jacobi_measure(a, b, z; probability::Bool = true, log::Bool = false)
     if !log
         w = ones(eltype(z), size(z))
         if a != 0
@@ -269,7 +271,7 @@ function jacobi_measure(a, b, z; probability::Bool=true, log::Bool=false)
         S .+= b .* Base.log.(1 .+ z)
     end
     if probability
-        S .-= jacobi_mass(a, b; log=true)
+        S .-= jacobi_mass(a, b; log = true)
     end
     return S
 end
@@ -284,14 +286,14 @@ struct JacobiOperator
     dtype::Type
 end
 
-function JacobiOperator(name::String; normalised::Bool=true, dtype::Type=Float64)
+function JacobiOperator(name::String; normalised::Bool = true, dtype::Type = Float64)
     func = _get_jacobi_method(name, normalised, dtype)
-    JacobiOperator(func, normalised, dtype)
+    return JacobiOperator(func, normalised, dtype)
 end
 
 function (jo::JacobiOperator)(p::Int)
     func, cod = jo._func(p)
-    return Operator(func, _to_codomain(cod); Output=Operator)
+    return Operator(func, _to_codomain(cod); Output = Operator)
 end
 
 # ============================================================================
@@ -445,32 +447,32 @@ end
 # Static operator constructors: identity, parity, number
 # ============================================================================
 
-function _jacobi_identity(; dtype::Type=Float64)
+function _jacobi_identity(; dtype::Type = Float64)
     function I_func(n, a, b)
         N_vec = ones(dtype, max(n, 0))
         mat = _spdiag(N_vec, 0, max(n, 0), max(n, 0))
         return InfiniteCSC(mat)
     end
-    return Operator(I_func, _to_codomain(JacobiCodomain(0, 0, 0, 0)); Output=Operator)
+    return Operator(I_func, _to_codomain(JacobiCodomain(0, 0, 0, 0)); Output = Operator)
 end
 
-function _jacobi_parity(; dtype::Type=Float64)
+function _jacobi_parity(; dtype::Type = Float64)
     function P_func(n, a, b)
         N_arr = collect(dtype.(0:(n - 1)))
         N_vec = (-1.0) .^ N_arr
         mat = _spdiag(N_vec, 0, max(n, 0), max(n, 0))
         return InfiniteCSC(mat)
     end
-    return Operator(P_func, _to_codomain(JacobiCodomain(0, 0, 0, 1)); Output=Operator)
+    return Operator(P_func, _to_codomain(JacobiCodomain(0, 0, 0, 1)); Output = Operator)
 end
 
-function _jacobi_number(; dtype::Type=Float64)
+function _jacobi_number(; dtype::Type = Float64)
     function N_func(n, a, b)
         N_vec = collect(dtype.(0:(n - 1)))
         mat = _spdiag(N_vec, 0, max(n, 0), max(n, 0))
         return InfiniteCSC(mat)
     end
-    return Operator(N_func, _to_codomain(JacobiCodomain(0, 0, 0, 0)); Output=Operator)
+    return Operator(N_func, _to_codomain(JacobiCodomain(0, 0, 0, 0)); Output = Operator)
 end
 
 # ============================================================================
@@ -487,30 +489,30 @@ Parameters:
 - normalised: true -> unit-integral, false -> classical
 - dtype: output dtype
 """
-function jacobi_operator(name::String; normalised::Bool=true, dtype::Type=Float64)
+function jacobi_operator(name::String; normalised::Bool = true, dtype::Type = Float64)
     if name == "Id"
-        return _jacobi_identity(; dtype=dtype)
+        return _jacobi_identity(; dtype = dtype)
     end
     if name == "Pi"
-        return _jacobi_parity(; dtype=dtype)
+        return _jacobi_parity(; dtype = dtype)
     end
     if name == "N"
-        return _jacobi_number(; dtype=dtype)
+        return _jacobi_number(; dtype = dtype)
     end
     if name == "Z"
-        A_jo = JacobiOperator("A"; normalised=normalised, dtype=dtype)
-        B_jo = JacobiOperator("B"; normalised=normalised, dtype=dtype)
+        A_jo = JacobiOperator("A"; normalised = normalised, dtype = dtype)
+        B_jo = JacobiOperator("B"; normalised = normalised, dtype = dtype)
         return (compose(B_jo(-1), B_jo(1)) - compose(A_jo(-1), A_jo(1))) / 2
     end
-    return JacobiOperator(name; normalised=normalised, dtype=dtype)
+    return JacobiOperator(name; normalised = normalised, dtype = dtype)
 end
 
 # ============================================================================
 # _extract_z_bands: Extract dia_matrix band data from Z operator
 # ============================================================================
 
-function _extract_z_bands(n::Int, a, b; normalised::Bool=true, dtype::Type=Float64)
-    Z_op = jacobi_operator("Z"; normalised=normalised, dtype=dtype)
+function _extract_z_bands(n::Int, a, b; normalised::Bool = true, dtype::Type = Float64)
+    Z_op = jacobi_operator("Z"; normalised = normalised, dtype = dtype)
     Z_icsc = Z_op(n + 1, a, b)
     Z_orig = Matrix(sparse(Z_icsc))
     Z_t = collect(transpose(Z_orig))
@@ -533,7 +535,7 @@ function _extract_z_bands(n::Int, a, b; normalised::Bool=true, dtype::Type=Float
         end
     end
 
-    has_main = any(x -> abs(x) > 1e-15, band_main)
+    has_main = any(x -> abs(x) > 1.0e-15, band_main)
     return band_sub, band_main, band_sup, has_main
 end
 
@@ -550,11 +552,13 @@ Returns a matrix where row k contains P(k-1, a, b, z) evaluated at points z.
 
 Newton=true: cubic-converging update of P(n-1, a, b, z) = 0.
 """
-function jacobi_polynomials(n::Int, a, b, z;
-                            init=nothing,
-                            Newton::Bool=false,
-                            normalised::Bool=true,
-                            dtype::Type=Float64)
+function jacobi_polynomials(
+        n::Int, a, b, z;
+        init = nothing,
+        Newton::Bool = false,
+        normalised::Bool = true,
+        dtype::Type = Float64
+    )
 
     z_arr = z isa AbstractVector ? Float64.(z) : Float64.([z])
     nz = length(z_arr)
@@ -572,7 +576,7 @@ function jacobi_polynomials(n::Int, a, b, z;
         init_vec = init isa AbstractVector ? Float64.(init) : Float64.(init .+ 0 .* z_arr)
     end
 
-    band_sub, band_main, band_sup, has_main = _extract_z_bands(n, a, b; normalised=normalised, dtype=Float64)
+    band_sub, band_main, band_sup, has_main = _extract_z_bands(n, a, b; normalised = normalised, dtype = Float64)
 
     P = zeros(Float64, n + 1, nz)
     P[1, :] .= init_vec
@@ -592,8 +596,8 @@ function jacobi_polynomials(n::Int, a, b, z;
     if Newton
         L = n + (a + b) / 2
         z_new = z_arr .+ (1 .- z_arr .^ 2) .* P[n, :] ./
-                (L .* band_sup[n + 1] .* P[n + 1, :] .- (L - 1) .* band_sub[n - 1] .* P[n - 1, :])
-        return z_new, P[1:n-1, :]
+            (L .* band_sup[n + 1] .* P[n + 1, :] .- (L - 1) .* band_sub[n - 1] .* P[n - 1, :])
+        return z_new, P[1:(n - 1), :]
     end
 
     return dtype.(P[1:n, :])
@@ -608,7 +612,7 @@ end
 
 Approximate solution to P(n, a, b, z) = 0.
 """
-function jacobi_grid_guess(n::Int, a, b; dtype::Type=Float64, quick::Bool=false)
+function jacobi_grid_guess(n::Int, a, b; dtype::Type = Float64, quick::Bool = false)
     if a == b == -0.5
         quick = true
     end
@@ -620,7 +624,7 @@ function jacobi_grid_guess(n::Int, a, b; dtype::Type=Float64, quick::Bool=false)
     end
 
     if quick
-        indices = collect(range(4 * n - 1, stop=3, step=-4))
+        indices = collect(range(4 * n - 1, stop = 3, step = -4))
         return dtype.(cos.(Float64(pi) .* (indices .+ 2 * a) ./ (4 * n + 2 * (a + b + 1))))
     end
 
@@ -647,8 +651,8 @@ Returns (z, w) where z are the quadrature nodes and w are the weights.
 sum(w .* f.(z)) approximates integral from -1 to 1 of (1-z)^a (1+z)^b f(z) dz,
 exactly for degree(f) <= 2n - 1.
 """
-function jacobi_quadrature(n::Int, a, b; days::Int=3, probability::Bool=false, dtype::Type=Float64)
-    z = jacobi_grid_guess(n, a, b; dtype=Float64)
+function jacobi_quadrature(n::Int, a, b; days::Int = 3, probability::Bool = false, dtype::Type = Float64)
+    z = jacobi_grid_guess(n, a, b; dtype = Float64)
 
     if probability
         w_scale = 1.0
@@ -662,14 +666,14 @@ function jacobi_quadrature(n::Int, a, b; days::Int=3, probability::Bool=false, d
 
     local P
     if a == b == 0.5
-        P = jacobi_polynomials(n + 1, a, b, z; dtype=Float64)[1:n, :]
+        P = jacobi_polynomials(n + 1, a, b, z; dtype = Float64)[1:n, :]
     else
         for _ in 1:days
-            z, P = jacobi_polynomials(n + 1, a, b, z; Newton=true)
+            z, P = jacobi_polynomials(n + 1, a, b, z; Newton = true)
         end
     end
 
-    col_norms = sqrt.(sum(P .^ 2; dims=1))
+    col_norms = sqrt.(sum(P .^ 2; dims = 1))
     P[1, :] ./= vec(col_norms)
     w = w_scale .* P[1, :] .^ 2
 
@@ -688,7 +692,7 @@ The connection matrix between any bases coefficients:
 
 The output is always a dense matrix format.
 """
-function jacobi_coefficient_connection(N::Int, ab::Tuple, cd::Tuple; init_ab=1, init_cd=1)
+function jacobi_coefficient_connection(N::Int, ab::Tuple, cd::Tuple; init_ab = 1, init_cd = 1)
     a, b = ab
     c, d = cd
 
@@ -699,8 +703,8 @@ function jacobi_coefficient_connection(N::Int, ab::Tuple, cd::Tuple; init_ab=1, 
     init_ab_vec = init_ab .+ 0 .* zcd
     init_cd_vec = init_cd .+ 0 .* zcd
 
-    Pab = jacobi_polynomials(N, a, b, zcd; init=init_ab_vec)
-    Pcd = jacobi_polynomials(N, c, d, zcd; init=init_cd_vec)
+    Pab = jacobi_polynomials(N, a, b, zcd; init = init_ab_vec)
+    Pcd = jacobi_polynomials(N, c, d, zcd; init = init_cd_vec)
 
     return Pcd * (wcd .* Pab)'
 end

@@ -33,14 +33,14 @@ dtype = ComplexF64
 
 # Bases
 xcoord = Coordinate("x")
-dist = Distributor(xcoord; dtype=dtype)
-xbasis = Legendre(xcoord, Nx; bounds=(0, Lx))
+dist = Distributor(xcoord; dtype = dtype)
+xbasis = Legendre(xcoord, Nx; bounds = (0, Lx))
 
 # Fields
-u = Field(dist; name="u", bases=(xbasis,))
-tau_1 = Field(dist; name="tau_1")
-tau_2 = Field(dist; name="tau_2")
-s = Field(dist; name="s")
+u = Field(dist; name = "u", bases = (xbasis,))
+tau_1 = Field(dist; name = "tau_1")
+tau_2 = Field(dist; name = "tau_2")
+s = Field(dist; name = "s")
 
 # Substitutions
 dx = A -> Differentiate(A, xcoord)
@@ -50,7 +50,7 @@ ux = dx(u) + lift(tau_1)  # First-order reduction
 uxx = dx(ux) + lift(tau_2)
 
 # Problem
-problem = EVP([u, tau_1, tau_2]; eigenvalue=s, namespace=@locals)
+problem = EVP([u, tau_1, tau_2]; eigenvalue = s, namespace = @locals)
 add_equation!(problem, "s*u + uxx = 0")
 add_equation!(problem, "u(x=0) = 0")
 add_equation!(problem, "u(x=Lx) = 0")
@@ -58,9 +58,9 @@ add_equation!(problem, "u(x=Lx) = 0")
 # Solve
 solver = build_solver(problem)
 solve_dense!(solver, solver.subproblems[1])
-evals = sort(solver.eigenvalues; by=x -> (real(x), imag(x)))
+evals = sort(solver.eigenvalues; by = x -> (real(x), imag(x)))
 n = 1:length(evals)
-true_evals = (n .* pi ./ Lx).^2
+true_evals = (n .* pi ./ Lx) .^ 2
 relative_error = abs.(evals .- true_evals) ./ true_evals
 
 # Plot eigenvalue error

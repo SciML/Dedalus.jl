@@ -148,7 +148,7 @@ function operand_cast(arg, dist, tensorsig, dtype)
             return arg
         end
     elseif isa(arg, Number)
-        out = Field(dist; tensorsig=tensorsig, dtype=dtype)
+        out = Field(dist; tensorsig = tensorsig, dtype = dtype)
         out[Symbol("g")] = arg  # set in grid space
         out.name = string(arg)
         return out
@@ -235,10 +235,12 @@ function require_first_order end
 
 Require expression to be independent of specified operands/operators.
 """
-function require_independent(op::AbstractOperand, vars...;
-                             self_name=nothing, vars_name=nothing,
-                             error_type=AssertionError)
-    if has_operand(op, vars...)
+function require_independent(
+        op::AbstractOperand, vars...;
+        self_name = nothing, vars_name = nothing,
+        error_type = AssertionError
+    )
+    return if has_operand(op, vars...)
         if self_name === nothing
             self_name = string(op)
         end
@@ -278,16 +280,20 @@ perturbations : list of Field objects
 backgrounds : list of Field objects, optional
     Backgrounds for each variable. Default: variables.
 """
-function frechet_differential(op::AbstractOperand, variables, perturbations;
-                              backgrounds=nothing)
+function frechet_differential(
+        op::AbstractOperand, variables, perturbations;
+        backgrounds = nothing
+    )
     dist = op.dist
     tensorsig = op.tensorsig
     dtype = op.dtype
     # Compute differential
-    epsilon = Field(dist; dtype=dtype)
+    epsilon = Field(dist; dtype = dtype)
     # d/de F(X0 + e*X1)
-    subs = Dict(var => var + epsilon * pert
-                for (var, pert) in zip(variables, perturbations))
+    subs = Dict(
+        var => var + epsilon * pert
+            for (var, pert) in zip(variables, perturbations)
+    )
     diff = replace_dict(op, subs)
     diff = sym_diff(diff, epsilon)
     # e -> 0
@@ -338,7 +344,7 @@ end
 # ============================================================================
 
 function Base.show(io::IO, c::AbstractCurrent)
-    print(io, "<", typeof(c), " ", objectid(c), ">")
+    return print(io, "<", typeof(c), " ", objectid(c), ">")
 end
 
 function Base.string(c::AbstractCurrent)
@@ -402,11 +408,13 @@ end
 split(c::AbstractCurrent, vars...) = split_operand(c, vars...)
 expand(c::AbstractCurrent, vars...) = expand_operand(c, vars...)
 
-function require_linearity(c::AbstractCurrent, vars...;
-                           allow_affine::Bool=false,
-                           self_name=nothing, vars_name=nothing,
-                           error_type=AssertionError)
-    if !allow_affine && !(c in vars)
+function require_linearity(
+        c::AbstractCurrent, vars...;
+        allow_affine::Bool = false,
+        self_name = nothing, vars_name = nothing,
+        error_type = AssertionError
+    )
+    return if !allow_affine && !(c in vars)
         if self_name === nothing
             self_name = string(c)
         end
@@ -457,7 +465,7 @@ end
 
 Leaf operands are already evaluated; return self.
 """
-function attempt(c::AbstractCurrent; id=nothing)
+function attempt(c::AbstractCurrent; id = nothing)
     return c
 end
 
@@ -532,18 +540,18 @@ data = f[Symbol("c")]       # get coefficient-space data
 """
 mutable struct Field <: AbstractCurrent
     dist::Any
-    name::Union{Nothing,String}
+    name::Union{Nothing, String}
     tensorsig::Tuple
     dtype::DataType
     domain::Domain
-    scales::Union{Nothing,Tuple}
+    scales::Union{Nothing, Tuple}
     buffer::Vector{Float64}
     layout::Any
     data::Array
-    _cache::Dict{Symbol,Any}
+    _cache::Dict{Symbol, Any}
     buffer_size::Int
 
-    function Field(dist; bases=nothing, name=nothing, tensorsig=nothing, dtype=nothing)
+    function Field(dist; bases = nothing, name = nothing, tensorsig = nothing, dtype = nothing)
         if bases === nothing
             bases = ()
         end
@@ -566,13 +574,15 @@ mutable struct Field <: AbstractCurrent
         end
         domain = Domain(dist, bases)
         # Create a minimal instance; scales/buffer/layout/data will be set by preset_scales
-        f = new(dist, name, tensorsig, dtype, domain,
-                nothing,              # scales
-                zeros(Float64, 0),    # buffer placeholder
-                nothing,              # layout placeholder
-                Array{dtype}(undef, ntuple(_->0, get_dim(dist))...), # data placeholder
-                Dict{Symbol,Any}(),
-                -1)
+        f = new(
+            dist, name, tensorsig, dtype, domain,
+            nothing,              # scales
+            zeros(Float64, 0),    # buffer placeholder
+            nothing,              # layout placeholder
+            Array{dtype}(undef, ntuple(_ -> 0, get_dim(dist))...), # data placeholder
+            Dict{Symbol, Any}(),
+            -1
+        )
         # Set initial layout to coefficient space
         f.layout = get_layout_object(dist, Symbol("c"))
         # Set initial scales and build buffer/data
@@ -710,7 +720,7 @@ end
 Return a deep copy of the field with the same layout, scales, and data.
 """
 function copy_field(f::Field)
-    c = Field(f.dist; bases=f.domain.bases, tensorsig=f.tensorsig, dtype=f.dtype)
+    c = Field(f.dist; bases = f.domain.bases, tensorsig = f.tensorsig, dtype = f.dtype)
     preset_scales!(c, f.scales)
     c[_get_layout(f)] = f.data
     return c
@@ -757,7 +767,7 @@ Build and cache a buffer large enough for dealias-scale data.
 function _dealias_buffer(f::Field)
     return get!(f._cache, :dealias_buffer) do
         bs = _dealias_buffer_size(f)
-        ncomp = prod(get_dim(vs) for vs in f.tensorsig; init=1)
+        ncomp = prod(get_dim(vs) for vs in f.tensorsig; init = 1)
         create_buffer(ncomp * bs)
     end
 end
@@ -782,7 +792,7 @@ function preset_scales!(f::Field, scales)::Nothing
     if buf_size <= dbs
         f.buffer = _dealias_buffer(f)
     else
-        ncomp = prod(get_dim(vs) for vs in f.tensorsig; init=1)
+        ncomp = prod(get_dim(vs) for vs in f.tensorsig; init = 1)
         f.buffer = create_buffer(ncomp * buf_size)
     end
     # Reset layout to build new data view
@@ -804,10 +814,10 @@ function preset_layout!(f::Field, layout)::Nothing
     tens_shape = [get_dim(vs) for vs in f.tensorsig]
     loc_shape = local_shape(layout, f.domain, f.scales)
     total_shape = Tuple(vcat(tens_shape, collect(loc_shape)))
-    total_len = prod(total_shape; init=1)
+    total_len = prod(total_shape; init = 1)
     # Build a view into the buffer
     if total_len > 0 && length(f.buffer) >= total_len
-        data_flat = reinterpret(f.dtype, view(f.buffer, 1:total_len * sizeof(f.dtype) ÷ sizeof(Float64)))
+        data_flat = reinterpret(f.dtype, view(f.buffer, 1:(total_len * sizeof(f.dtype) ÷ sizeof(Float64))))
         f.data = reshape(data_flat, total_shape)
     else
         f.data = Array{f.dtype}(undef, total_shape...)
@@ -893,7 +903,7 @@ end
 
 Require one axis (default: all axes) to be in grid space.
 """
-function require_grid_space!(f::Field, axis=nothing)::Nothing
+function require_grid_space!(f::Field, axis = nothing)::Nothing
     if axis === nothing
         while !all(_get_layout(f).grid_space)
             towards_grid_space!(f)
@@ -911,7 +921,7 @@ end
 
 Require one axis (default: all axes) to be in coefficient space.
 """
-function require_coeff_space!(f::Field, axis=nothing)::Nothing
+function require_coeff_space!(f::Field, axis = nothing)::Nothing
     if axis === nothing
         while any(_get_layout(f).grid_space)
             towards_coeff_space!(f)
@@ -951,7 +961,7 @@ end
 
 Build global data on all processes using Allreduce.
 """
-function allgather_data(f::Field; layout=nothing)
+function allgather_data(f::Field; layout = nothing)
     if layout !== nothing
         change_layout!(f, layout)
     end
@@ -980,14 +990,14 @@ end
 
 Gather global data on a single root process.
 """
-function gather_data(f::Field; root::Int=0, layout=nothing)
+function gather_data(f::Field; root::Int = 0, layout = nothing)
     if layout !== nothing
         change_layout!(f, layout)
     end
     if f.dist.comm.size == 1
         return copy(f.data)
     end
-    pieces = f.dist.comm.gather(f.data; root=root)
+    pieces = f.dist.comm.gather(f.data; root = root)
     if f.dist.comm.rank == root
         ext_mesh = _get_layout(f).ext_mesh
         n = prod(ext_mesh)
@@ -1007,10 +1017,10 @@ Assemble array pieces into a single block array (helper for gather_data).
 function _block_assemble(pieces, mesh)
     # Simple case: just concatenate
     if length(mesh) == 1
-        return cat(pieces...; dims=1)
+        return cat(pieces...; dims = 1)
     end
     # General case: recursive block assembly
-    return cat(pieces...; dims=1)
+    return cat(pieces...; dims = 1)
 end
 
 """
@@ -1018,7 +1028,7 @@ end
 
 Compute a global data norm via MPI Allreduce.
 """
-function allreduce_data_norm(f::Field; layout=nothing, order=2)
+function allreduce_data_norm(f::Field; layout = nothing, order = 2)
     if layout !== nothing
         change_layout!(f, layout)
     end
@@ -1039,7 +1049,7 @@ function allreduce_data_norm(f::Field; layout=nothing, order=2)
         if f.dist.comm.size > 1
             norm_val = f.dist.comm.allreduce(norm_val, MPI.SUM)
         end
-        norm_val = norm_val ^ (1 / order)
+        norm_val = norm_val^(1 / order)
     end
     return norm_val
 end
@@ -1049,8 +1059,8 @@ end
 
 Compute the global maximum absolute value via MPI Allreduce.
 """
-function allreduce_data_max(f::Field; layout=nothing)
-    return allreduce_data_norm(f; layout=layout, order=Inf)
+function allreduce_data_max(f::Field; layout = nothing)
+    return allreduce_data_norm(f; layout = layout, order = Inf)
 end
 
 """
@@ -1073,9 +1083,11 @@ chunk_size : Int
 distribution : String
     Distribution name. Default: "standard_normal".
 """
-function fill_random!(f::Field; layout=nothing, scales=nothing, seed=nothing,
-                      chunk_size::Int=2^20, distribution::String="standard_normal",
-                      kw...)
+function fill_random!(
+        f::Field; layout = nothing, scales = nothing, seed = nothing,
+        chunk_size::Int = 2^20, distribution::String = "standard_normal",
+        kw...
+    )
     init_layout = f.layout
     # Set scales if requested
     if scales !== nothing
@@ -1113,7 +1125,7 @@ end
 
 Apply a spectral low-pass filter by zeroing modes above specified relative scales.
 """
-function low_pass_filter!(f::Field; shape=nothing, scales=nothing)
+function low_pass_filter!(f::Field; shape = nothing, scales = nothing)
     original_scales = f.scales
     if shape !== nothing
         if scales !== nothing
@@ -1133,9 +1145,9 @@ end
 
 Apply a spectral high-pass filter by zeroing modes below specified relative scales.
 """
-function high_pass_filter!(f::Field; shape=nothing, scales=nothing)
+function high_pass_filter!(f::Field; shape = nothing, scales = nothing)
     data_orig = copy(f[Symbol("c")])
-    low_pass_filter!(f; shape=shape, scales=scales)
+    low_pass_filter!(f; shape = shape, scales = scales)
     data_filt = copy(f[Symbol("c")])
     f[Symbol("c")] = data_orig .- data_filt
     return nothing
@@ -1146,16 +1158,16 @@ end
 
 Load grid data from an HDF5 file. Task corresponds to field name by default.
 """
-function load_from_hdf5(f::Field, file, index; task=nothing, func=nothing)
+function load_from_hdf5(f::Field, file, index; task = nothing, func = nothing)
     if task === nothing
         task = f.name
     end
     dset = file["tasks"][task]
     grid_space_flags = dset.attrs["grid_space"]
     if all(grid_space_flags)
-        load_from_global_grid_data!(f, dset; pre_slices=(index,), func=func)
+        load_from_global_grid_data!(f, dset; pre_slices = (index,), func = func)
     elseif all(.!grid_space_flags)
-        load_from_global_coeff_data!(f, dset; pre_slices=(index,), func=func)
+        load_from_global_coeff_data!(f, dset; pre_slices = (index,), func = func)
     else
         throw(ArgumentError("Can only load global data from pure grid or coeff space"))
     end
@@ -1167,12 +1179,14 @@ end
 
 Load local coeff data from array-like global coeff data.
 """
-function load_from_global_coeff_data!(f::Field, global_data;
-                                      pre_slices::Tuple=(), func=nothing)
+function load_from_global_coeff_data!(
+        f::Field, global_data;
+        pre_slices::Tuple = (), func = nothing
+    )
     dim = get_dim(f.dist)
     layout = f.dist.coeff_layout
     # Check shapes
-    data_shape = size(global_data)[(end-dim+1):end]
+    data_shape = size(global_data)[(end - dim + 1):end]
     self_shape = global_shape(layout, f.domain, 1)
     if data_shape != self_shape
         throw(ArgumentError("Cannot change global shape when loading coeff data."))
@@ -1194,12 +1208,14 @@ end
 
 Load local grid data from array-like global grid data.
 """
-function load_from_global_grid_data!(f::Field, global_data;
-                                     pre_slices::Tuple=(), func=nothing)
+function load_from_global_grid_data!(
+        f::Field, global_data;
+        pre_slices::Tuple = (), func = nothing
+    )
     dim = get_dim(f.dist)
     layout = f.dist.grid_layout
     # Set scales to match saved data
-    saved_shape = size(global_data)[(end-dim+1):end]
+    saved_shape = size(global_data)[(end - dim + 1):end]
     base_shape = global_shape(layout, f.domain, 1)
     sc = Tuple(saved_shape[i] / base_shape[i] for i in 1:dim)
     preset_scales!(f, sc)
@@ -1255,7 +1271,7 @@ function broadcast_ghosts(f::Field, output_nonconst_dims)
         return f.data
     end
     # Broadcast on subgrid communicator
-    comm_sub = f.domain.dist.comm_cart.Sub(remain_dims=Int.(deploy_dims))
+    comm_sub = f.domain.dist.comm_cart.Sub(remain_dims = Int.(deploy_dims))
     if comm_sub.rank == 0
         data = f.data
     else
@@ -1263,7 +1279,7 @@ function broadcast_ghosts(f::Field, output_nonconst_dims)
         shape[shape .== 0] .= 1
         data = similar(f.data, Tuple(shape))
     end
-    comm_sub.Bcast(data; root=0)
+    comm_sub.Bcast(data; root = 0)
     return data
 end
 
@@ -1288,7 +1304,7 @@ const ScalarField = Field
 Convenience function to create a vector `Field` with `tensorsig = (coordsys,)`.
 """
 function VectorField(dist, coordsys, args...; kw...)
-    return Field(dist, args...; tensorsig=(coordsys,), kw...)
+    return Field(dist, args...; tensorsig = (coordsys,), kw...)
 end
 
 # ============================================================================
@@ -1303,13 +1319,13 @@ Convenience function to create a tensor `Field`.
 If `coordsys` is a tuple or vector, it is used directly as the `tensorsig`.
 Otherwise, it is repeated `order` times to form the `tensorsig`.
 """
-function TensorField(dist, coordsys, args...; order::Int=2, kw...)
+function TensorField(dist, coordsys, args...; order::Int = 2, kw...)
     if isa(coordsys, Tuple) || isa(coordsys, AbstractVector)
         tensorsig = Tuple(coordsys)
     else
         tensorsig = ntuple(_ -> coordsys, order)
     end
-    return Field(dist, args...; tensorsig=tensorsig, kw...)
+    return Field(dist, args...; tensorsig = tensorsig, kw...)
 end
 
 # ============================================================================
@@ -1328,24 +1344,28 @@ and `towards_coeff_space!` to enforce layout restrictions.
 mutable struct LockedField <: AbstractCurrent
     # Delegate all field storage to the inner Field
     dist::Any
-    name::Union{Nothing,String}
+    name::Union{Nothing, String}
     tensorsig::Tuple
     dtype::DataType
     domain::Domain
-    scales::Union{Nothing,Tuple}
+    scales::Union{Nothing, Tuple}
     buffer::Vector{Float64}
     layout::Any
     data::Array
-    _cache::Dict{Symbol,Any}
+    _cache::Dict{Symbol, Any}
     buffer_size::Int
     allowed_layouts::Tuple
 
-    function LockedField(dist; bases=nothing, name=nothing, tensorsig=nothing,
-                         dtype=nothing)
-        f = Field(dist; bases=bases, name=name, tensorsig=tensorsig, dtype=dtype)
-        return new(f.dist, f.name, f.tensorsig, f.dtype, f.domain,
-                   f.scales, f.buffer, f.layout, f.data, f._cache, f.buffer_size,
-                   ())  # no allowed layouts initially
+    function LockedField(
+            dist; bases = nothing, name = nothing, tensorsig = nothing,
+            dtype = nothing
+        )
+        f = Field(dist; bases = bases, name = name, tensorsig = tensorsig, dtype = dtype)
+        return new(
+            f.dist, f.name, f.tensorsig, f.dtype, f.domain,
+            f.scales, f.buffer, f.layout, f.data, f._cache, f.buffer_size,
+            ()
+        )  # no allowed layouts initially
     end
 end
 
@@ -1421,8 +1441,10 @@ end
 Return a regular Field object with the same data and no layout locking.
 """
 function unlock(f::LockedField)
-    field = Field(f.dist; bases=f.domain.bases, name=f.name,
-                  tensorsig=f.tensorsig, dtype=f.dtype)
+    field = Field(
+        f.dist; bases = f.domain.bases, name = f.name,
+        tensorsig = f.tensorsig, dtype = f.dtype
+    )
     preset_scales!(field, f.scales)
     field[_get_layout(f)] = f.data
     return field
@@ -1500,7 +1522,7 @@ function preset_scales!(f::LockedField, scales)::Nothing
     if buf_size <= dbs
         f.buffer = _dealias_buffer(f)
     else
-        ncomp = prod(get_dim(vs) for vs in f.tensorsig; init=1)
+        ncomp = prod(get_dim(vs) for vs in f.tensorsig; init = 1)
         f.buffer = create_buffer(ncomp * buf_size)
     end
     f.scales = new_scales
@@ -1516,9 +1538,9 @@ function preset_layout!(f::LockedField, layout)::Nothing
     tens_shape = [get_dim(vs) for vs in f.tensorsig]
     loc_shape = local_shape(layout, f.domain, f.scales)
     total_shape = Tuple(vcat(tens_shape, collect(loc_shape)))
-    total_len = prod(total_shape; init=1)
+    total_len = prod(total_shape; init = 1)
     if total_len > 0 && length(f.buffer) >= total_len
-        data_flat = reinterpret(f.dtype, view(f.buffer, 1:total_len * sizeof(f.dtype) ÷ sizeof(Float64)))
+        data_flat = reinterpret(f.dtype, view(f.buffer, 1:(total_len * sizeof(f.dtype) ÷ sizeof(Float64))))
         f.data = reshape(data_flat, total_shape)
     else
         f.data = Array{f.dtype}(undef, total_shape...)
@@ -1541,7 +1563,7 @@ function change_layout!(f::LockedField, layout)::Nothing
     return nothing
 end
 
-function require_grid_space!(f::LockedField, axis=nothing)
+function require_grid_space!(f::LockedField, axis = nothing)
     if axis === nothing
         while !all(_get_layout(f).grid_space)
             towards_grid_space!(f)
@@ -1554,7 +1576,7 @@ function require_grid_space!(f::LockedField, axis=nothing)
     return nothing
 end
 
-function require_coeff_space!(f::LockedField, axis=nothing)
+function require_coeff_space!(f::LockedField, axis = nothing)
     if axis === nothing
         while any(_get_layout(f).grid_space)
             towards_coeff_space!(f)
@@ -1591,66 +1613,66 @@ Base.showerror(io::IO, e::AssertionError) =
 # ============================================================================
 
 export AbstractOperand,
-       AbstractCurrent,
-       AbstractFuture,
-       Field,
-       ScalarField,
-       VectorField,
-       TensorField,
-       LockedField,
-       dedalus_add,
-       dedalus_multiply,
-       dedalus_power,
-       operand_cast,
-       atoms,
-       has_operand,
-       split_operand,
-       replace_operand,
-       replace_dict,
-       sym_diff,
-       expand_operand,
-       require_linearity,
-       require_first_order,
-       require_independent,
-       build_ncc_matrices,
-       expression_matrices,
-       frechet_differential,
-       is_complex_operand,
-       is_real_operand,
-       valid_modes,
-       get_basis,
-       global_shape,
-       copy_field,
-       is_scalar_field,
-       local_elements,
-       change_scales!,
-       change_layout!,
-       towards_grid_space!,
-       towards_coeff_space!,
-       require_grid_space!,
-       require_coeff_space!,
-       require_local!,
-       preset_scales!,
-       preset_layout!,
-       allgather_data,
-       gather_data,
-       allreduce_data_norm,
-       allreduce_data_max,
-       fill_random!,
-       low_pass_filter!,
-       high_pass_filter!,
-       load_from_hdf5,
-       load_from_global_coeff_data!,
-       load_from_global_grid_data!,
-       set_global_data!,
-       set_local_data!,
-       broadcast_ghosts,
-       create_buffer,
-       attempt,
-       evaluate_operand,
-       reinitialize,
-       matrix_dependence,
-       matrix_coupling,
-       lock_to_layouts!,
-       lock_axis_to_grid!,
-       unlock
+    AbstractCurrent,
+    AbstractFuture,
+    Field,
+    ScalarField,
+    VectorField,
+    TensorField,
+    LockedField,
+    dedalus_add,
+    dedalus_multiply,
+    dedalus_power,
+    operand_cast,
+    atoms,
+    has_operand,
+    split_operand,
+    replace_operand,
+    replace_dict,
+    sym_diff,
+    expand_operand,
+    require_linearity,
+    require_first_order,
+    require_independent,
+    build_ncc_matrices,
+    expression_matrices,
+    frechet_differential,
+    is_complex_operand,
+    is_real_operand,
+    valid_modes,
+    get_basis,
+    global_shape,
+    copy_field,
+    is_scalar_field,
+    local_elements,
+    change_scales!,
+    change_layout!,
+    towards_grid_space!,
+    towards_coeff_space!,
+    require_grid_space!,
+    require_coeff_space!,
+    require_local!,
+    preset_scales!,
+    preset_layout!,
+    allgather_data,
+    gather_data,
+    allreduce_data_norm,
+    allreduce_data_max,
+    fill_random!,
+    low_pass_filter!,
+    high_pass_filter!,
+    load_from_hdf5,
+    load_from_global_coeff_data!,
+    load_from_global_grid_data!,
+    set_global_data!,
+    set_local_data!,
+    broadcast_ghosts,
+    create_buffer,
+    attempt,
+    evaluate_operand,
+    reinitialize,
+    matrix_dependence,
+    matrix_coupling,
+    lock_to_layouts!,
+    lock_axis_to_grid!,
+    unlock

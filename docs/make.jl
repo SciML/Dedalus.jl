@@ -22,17 +22,17 @@ function preprocess_example(content::AbstractString)
     m_open = match(r"^(\s*)\"\"\"", content)
     m_open === nothing && return content
 
-    open_end   = m_open.offset + ncodeunits(m_open.match)  # position right after opening """
+    open_end = m_open.offset + ncodeunits(m_open.match)  # position right after opening """
 
     # Locate the closing """ that ends the docstring
     close_idx = findnext("\"\"\"", content, open_end)
     close_idx === nothing && return content
 
     close_start = first(close_idx)
-    close_end   = last(close_idx)
+    close_end = last(close_idx)
 
     # Extract the docstring body (between the two """)
-    body = content[open_end:close_start - 1]
+    body = content[open_end:(close_start - 1)]
 
     # Strip a single leading newline if present (triple-quote convention)
     if startswith(body, "\n")
@@ -53,7 +53,7 @@ function preprocess_example(content::AbstractString)
     end
 
     # Remainder of the file after the closing """ (skip trailing newline if any)
-    rest = content[close_end + 1:end]
+    rest = content[(close_end + 1):end]
     if startswith(rest, "\n")
         rest = rest[2:end]
     end
@@ -71,25 +71,25 @@ mkpath(EXAMPLES_OUT)
 
 # (directory_name, script_file) pairs for every example
 const EXAMPLE_SCRIPTS = [
-    ("evp_1d_mathieu",                         "mathieu_evp.jl"),
-    ("evp_1d_rayleigh_benard",                 "rayleigh_benard_evp.jl"),
-    ("evp_1d_waves_on_a_string",               "waves_on_a_string.jl"),
-    ("evp_disk_pipe_flow",                      "pipe_flow.jl"),
-    ("evp_shell_rotating_convection",           "rotating_convection.jl"),
-    ("ivp_1d_kdv_burgers",                      "kdv_burgers.jl"),
-    ("ivp_2d_rayleigh_benard",                  "rayleigh_benard.jl"),
-    ("ivp_2d_shear_flow",                       "shear_flow.jl"),
-    ("ivp_2d_ensemble_rbc",                     "ensemble_rbc.jl"),
-    ("ivp_disk_libration",                      "libration.jl"),
-    ("ivp_annulus_centrifugal_convection",       "centrifugal_convection.jl"),
-    ("ivp_sphere_shallow_water",                "shallow_water.jl"),
-    ("ivp_shell_convection",                    "shell_convection.jl"),
-    ("ivp_ball_internally_heated_convection",   "internally_heated_convection.jl"),
-    ("lbvp_2d_poisson",                         "poisson.jl"),
-    ("nlbvp_ball_lane_emden",                   "lane_emden.jl"),
+    ("evp_1d_mathieu", "mathieu_evp.jl"),
+    ("evp_1d_rayleigh_benard", "rayleigh_benard_evp.jl"),
+    ("evp_1d_waves_on_a_string", "waves_on_a_string.jl"),
+    ("evp_disk_pipe_flow", "pipe_flow.jl"),
+    ("evp_shell_rotating_convection", "rotating_convection.jl"),
+    ("ivp_1d_kdv_burgers", "kdv_burgers.jl"),
+    ("ivp_2d_rayleigh_benard", "rayleigh_benard.jl"),
+    ("ivp_2d_shear_flow", "shear_flow.jl"),
+    ("ivp_2d_ensemble_rbc", "ensemble_rbc.jl"),
+    ("ivp_disk_libration", "libration.jl"),
+    ("ivp_annulus_centrifugal_convection", "centrifugal_convection.jl"),
+    ("ivp_sphere_shallow_water", "shallow_water.jl"),
+    ("ivp_shell_convection", "shell_convection.jl"),
+    ("ivp_ball_internally_heated_convection", "internally_heated_convection.jl"),
+    ("lbvp_2d_poisson", "poisson.jl"),
+    ("nlbvp_ball_lane_emden", "lane_emden.jl"),
 ]
 
-example_pages = Pair{String,String}[]
+example_pages = Pair{String, String}[]
 
 for (dirname, scriptfile) in EXAMPLE_SCRIPTS
     script = joinpath(EXAMPLES_SRC, dirname, scriptfile)
@@ -101,10 +101,10 @@ for (dirname, scriptfile) in EXAMPLE_SCRIPTS
     Literate.markdown(
         script,
         EXAMPLES_OUT;
-        name       = dirname,
+        name = dirname,
         preprocess = preprocess_example,
         documenter = false,
-        execute    = false,
+        execute = false,
     )
     push!(example_pages, dirname => "examples/$(dirname).md")
 end
@@ -117,26 +117,26 @@ end
 
 makedocs(;
     sitename = "Dedalus.jl",
-    format   = Documenter.HTML(;
+    format = Documenter.HTML(;
         mathengine = MathJax3(),
         prettyurls = false,
         size_threshold = 500_000,
         size_threshold_warn = 200_000,
     ),
-    remotes  = nothing,
-    modules  = [Dedalus],
-    pages    = [
-        "Home"        => "index.md",
+    remotes = nothing,
+    modules = [Dedalus],
+    pages = [
+        "Home" => "index.md",
         "Installation" => "installation.md",
-        "Methodology"  => "methodology.md",
-        "Tutorials"   => [
+        "Methodology" => "methodology.md",
+        "Tutorials" => [
             "Overview" => "tutorials/index.md",
             "Coordinates & Bases" => "tutorials/tutorial_1_coords_bases.md",
             "Fields & Operators" => "tutorials/tutorial_2_fields_operators.md",
             "Problems & Solvers" => "tutorials/tutorial_3_problems_solvers.md",
             "Analysis" => "tutorials/tutorial_4_analysis.md",
         ],
-        "User Guide"  => [
+        "User Guide" => [
             "Overview" => "guide/index.md",
             "Problem Formulations" => "guide/problem_formulations.md",
             "Tau Method" => "guide/tau_method.md",
@@ -148,7 +148,7 @@ makedocs(;
             "Troubleshooting" => "guide/troubleshooting.md",
             "Python Differences" => "guide/python_differences.md",
         ],
-        "Examples"    => [
+        "Examples" => [
             "Overview" => "examples/index.md",
             example_pages...,
         ],
@@ -164,7 +164,7 @@ makedocs(;
             "Internals" => "api/internals.md",
         ],
     ],
-    doctest  = false,
+    doctest = false,
     warnonly = [:missing_docs, :parse_error],
 )
 

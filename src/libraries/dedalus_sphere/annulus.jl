@@ -65,7 +65,7 @@ end
 
 Compute Jacobi quadrature for the annulus domain.
 """
-function annulus_quadrature(Nmax; alpha=annulus_alpha, kwargs...)
+function annulus_quadrature(Nmax; alpha = annulus_alpha, kwargs...)
     return jacobi_quadrature(Nmax, alpha[1], alpha[2]; kwargs...)
 end
 
@@ -78,9 +78,9 @@ end
 
 Evaluate trial functions for the annulus via Jacobi polynomial recursion.
 """
-function annulus_trial_functions(Nmax, z; alpha=annulus_alpha)
+function annulus_trial_functions(Nmax, z; alpha = annulus_alpha)
     init = 1.0 / sqrt(jacobi_mass(alpha[1], alpha[2])) .+ 0.0 .* z
-    return jacobi_polynomials(Nmax, alpha[1], alpha[2], z; init=init)
+    return jacobi_polynomials(Nmax, alpha[1], alpha[2], z; init = init)
 end
 
 # ============================================================================
@@ -104,7 +104,7 @@ Parameters:
 - pad: extra padding for matrix size
 - alpha: base Jacobi parameters
 """
-function annulus_operator(dimension, op::String, Nmax, k, ell, radii; pad::Int=0, alpha=annulus_alpha)
+function annulus_operator(dimension, op::String, Nmax, k, ell, radii; pad::Int = 0, alpha = annulus_alpha)
     if radii[2] <= radii[1]
         throw(ArgumentError("Inner radius must be greater than outer radius."))
     end
@@ -130,14 +130,14 @@ function annulus_operator(dimension, op::String, Nmax, k, ell, radii; pad::Int=0
 
     # r multiplication
     if op == "R"
-        return (gapwidth / 2) * Z[1:(N+1), 1:(N+1)]
+        return (gapwidth / 2) * Z[1:(N + 1), 1:(N + 1)]
     end
 
     E_mat = _annulus_jacobi_op("A+", N + 2, a, b + 1) * _annulus_jacobi_op("B+", N + 2, a, b)
 
     # conversion
     if op == "E"
-        return 0.5 * (E_mat * Z)[1:(N+1), 1:(N+1)]
+        return 0.5 * (E_mat * Z)[1:(N + 1), 1:(N + 1)]
     end
 
     D_mat = _annulus_jacobi_op("D+", N + 2, a, b) * Z
@@ -146,10 +146,10 @@ function annulus_operator(dimension, op::String, Nmax, k, ell, radii; pad::Int=0
     # Use + with negated scalar for InfiniteCSC row-padding compatibility (no - defined).
     # Use (1/gapwidth) * instead of / gapwidth (no / defined for InfiniteCSC).
     if op == "D+"
-        return (1.0 / gapwidth) * (D_mat + (-(ell + k + 1)) * E_mat)[1:(N+1), 1:(N+1)]
+        return (1.0 / gapwidth) * (D_mat + (-(ell + k + 1)) * E_mat)[1:(N + 1), 1:(N + 1)]
     end
     if op == "D-"
-        return (1.0 / gapwidth) * (D_mat + (ell - k + dimension - 3) * E_mat)[1:(N+1), 1:(N+1)]
+        return (1.0 / gapwidth) * (D_mat + (ell - k + dimension - 3) * E_mat)[1:(N + 1), 1:(N + 1)]
     end
 
     # restriction

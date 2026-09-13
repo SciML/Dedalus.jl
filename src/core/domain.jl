@@ -112,11 +112,13 @@ mutable struct Domain
     _grid_shape_cache::Dict{Tuple, Tuple}
 
     function Domain(dist::AbstractDistributor, bases::Tuple)
-        dim_val = sum(get_dim(b) for b in bases; init=0)
-        return new(dist, bases, dim_val,
-                   Dict{Symbol, Any}(),
-                   Dict{UInt, Tuple}(),
-                   Dict{Tuple, Tuple}())
+        dim_val = sum(get_dim(b) for b in bases; init = 0)
+        return new(
+            dist, bases, dim_val,
+            Dict{Symbol, Any}(),
+            Dict{UInt, Tuple}(),
+            Dict{Tuple, Tuple}()
+        )
     end
 end
 
@@ -230,9 +232,11 @@ end
 Return the product of the volumes of all bases in the domain.
 """
 function domain_volume(dom::Domain)
-    return _get_cached!(dom, :volume, () -> begin
-        prod(volume(b) for b in dom.bases)
-    end)
+    return _get_cached!(
+        dom, :volume, () -> begin
+            prod(volume(b) for b in dom.bases)
+        end
+    )
 end
 
 # ============================================================================
@@ -246,17 +250,19 @@ Return an ordered mapping from axis index (1-based) to the basis that
 covers that axis.
 """
 function bases_by_axis(dom::Domain)
-    return _get_cached!(dom, :bases_by_axis, () -> begin
-        result = OrderedDict{Int, Any}()
-        for basis in dom.bases
-            first_ax = get_basis_axis(dom.dist, basis)
-            d = get_dim(basis)
-            for ax in first_ax:(first_ax + d - 1)
-                result[ax] = basis
+    return _get_cached!(
+        dom, :bases_by_axis, () -> begin
+            result = OrderedDict{Int, Any}()
+            for basis in dom.bases
+                first_ax = get_basis_axis(dom.dist, basis)
+                d = get_dim(basis)
+                for ax in first_ax:(first_ax + d - 1)
+                    result[ax] = basis
+                end
             end
+            result
         end
-        result
-    end)
+    )
 end
 
 # ============================================================================
@@ -270,18 +276,20 @@ Return a tuple of length `dist.dim` where each slot is the basis covering
 that axis, or `nothing` if no basis covers it.
 """
 function full_bases(dom::Domain)
-    return _get_cached!(dom, :full_bases, () -> begin
-        dist_dim = get_dim(dom.dist)
-        fb = Vector{Any}(nothing, dist_dim)
-        for basis in dom.bases
-            first_ax = get_basis_axis(dom.dist, basis)
-            d = get_dim(basis)
-            for ax in first_ax:(first_ax + d - 1)
-                fb[ax] = basis
+    return _get_cached!(
+        dom, :full_bases, () -> begin
+            dist_dim = get_dim(dom.dist)
+            fb = Vector{Any}(nothing, dist_dim)
+            for basis in dom.bases
+                first_ax = get_basis_axis(dom.dist, basis)
+                d = get_dim(basis)
+                for ax in first_ax:(first_ax + d - 1)
+                    fb[ax] = basis
+                end
             end
+            Tuple(fb)
         end
-        Tuple(fb)
-    end)
+    )
 end
 
 # ============================================================================
@@ -295,25 +303,27 @@ Return an ordered mapping from coordinate (or coordinate system) to the
 basis that covers it, or `nothing`.
 """
 function bases_by_coord(dom::Domain)
-    return _get_cached!(dom, :bases_by_coord, () -> begin
-        result = OrderedDict{Any, Any}()
-        # Initialise with all coords from the distributor
-        for coord in get_coords(dom.dist)
-            cs = coord.cs
-            if cs === nothing || cs isa CartesianCoordinates
-                result[coord] = nothing
-            else
-                result[cs] = nothing
+    return _get_cached!(
+        dom, :bases_by_coord, () -> begin
+            result = OrderedDict{Any, Any}()
+            # Initialise with all coords from the distributor
+            for coord in get_coords(dom.dist)
+                cs = coord.cs
+                if cs === nothing || cs isa CartesianCoordinates
+                    result[coord] = nothing
+                else
+                    result[cs] = nothing
+                end
             end
+            # Fill in with bases — keyed by the basis's `coords` attribute,
+            # which is the coordinate or coordinate system the basis spans
+            # (matches Python: `bases_by_coord[basis.coords] = basis`).
+            for basis in dom.bases
+                result[basis.coords] = basis
+            end
+            result
         end
-        # Fill in with bases — keyed by the basis's `coords` attribute,
-        # which is the coordinate or coordinate system the basis spans
-        # (matches Python: `bases_by_coord[basis.coords] = basis`).
-        for basis in dom.bases
-            result[basis.coords] = basis
-        end
-        result
-    end)
+    )
 end
 
 # ============================================================================
@@ -327,19 +337,21 @@ Return a tuple of dealias factors of length `dist.dim`.  Axes not covered
 by any basis get a factor of `1`.
 """
 function domain_dealias(dom::Domain)
-    return _get_cached!(dom, :dealias, () -> begin
-        dist_dim = get_dim(dom.dist)
-        da = ones(dist_dim)
-        for basis in dom.bases
-            first_ax = get_basis_axis(dom.dist, basis)
-            dt = dealias_tuple(basis)
-            d = get_dim(basis)
-            for sub in 1:d
-                da[first_ax + sub - 1] = dt[sub]
+    return _get_cached!(
+        dom, :dealias, () -> begin
+            dist_dim = get_dim(dom.dist)
+            da = ones(dist_dim)
+            for basis in dom.bases
+                first_ax = get_basis_axis(dom.dist, basis)
+                dt = dealias_tuple(basis)
+                d = get_dim(basis)
+                for sub in 1:d
+                    da[first_ax + sub - 1] = dt[sub]
+                end
             end
+            Tuple(da)
         end
-        Tuple(da)
-    end)
+    )
 end
 
 # ============================================================================
@@ -467,19 +479,21 @@ Return a tuple of boolean flags indicating whether each axis is constant
 (i.e. has no basis variation).  Axes not covered by a basis are constant.
 """
 function domain_constant(dom::Domain)
-    return _get_cached!(dom, :constant, () -> begin
-        dist_dim = get_dim(dom.dist)
-        c = trues(dist_dim)
-        for basis in dom.bases
-            first_ax = get_basis_axis(dom.dist, basis)
-            cf = constant_flags(basis)
-            d = get_dim(basis)
-            for sub in 1:d
-                c[first_ax + sub - 1] = cf[sub]
+    return _get_cached!(
+        dom, :constant, () -> begin
+            dist_dim = get_dim(dom.dist)
+            c = trues(dist_dim)
+            for basis in dom.bases
+                first_ax = get_basis_axis(dom.dist, basis)
+                cf = constant_flags(basis)
+                d = get_dim(basis)
+                for sub in 1:d
+                    c[first_ax + sub - 1] = cf[sub]
+                end
             end
+            Tuple(c)
         end
-        Tuple(c)
-    end)
+    )
 end
 
 """
@@ -489,9 +503,11 @@ Return a tuple of boolean flags — the logical negation of
 [`domain_constant`](@ref).
 """
 function domain_nonconstant(dom::Domain)
-    return _get_cached!(dom, :nonconstant, () -> begin
-        Tuple(.!collect(domain_constant(dom)))
-    end)
+    return _get_cached!(
+        dom, :nonconstant, () -> begin
+            Tuple(.!collect(domain_constant(dom)))
+        end
+    )
 end
 
 # ============================================================================
@@ -505,19 +521,21 @@ Return a tuple of dependence flags indicating whether each axis carries
 mode dependence.
 """
 function mode_dependence(dom::Domain)
-    return _get_cached!(dom, :mode_dependence, () -> begin
-        dist_dim = get_dim(dom.dist)
-        dep = falses(dist_dim)
-        for basis in dom.bases
-            first_ax = get_basis_axis(dom.dist, basis)
-            sd = subaxis_dependence_flags(basis)
-            d = get_dim(basis)
-            for sub in 1:d
-                dep[first_ax + sub - 1] = sd[sub]
+    return _get_cached!(
+        dom, :mode_dependence, () -> begin
+            dist_dim = get_dim(dom.dist)
+            dep = falses(dist_dim)
+            for basis in dom.bases
+                first_ax = get_basis_axis(dom.dist, basis)
+                sd = subaxis_dependence_flags(basis)
+                d = get_dim(basis)
+                for sub in 1:d
+                    dep[first_ax + sub - 1] = sd[sub]
+                end
             end
+            Tuple(dep)
         end
-        Tuple(dep)
-    end)
+    )
 end
 
 # ============================================================================
@@ -530,11 +548,13 @@ end
 Compute the coefficient-space shape of the domain.
 """
 function coeff_shape(dom::Domain)
-    return _get_cached!(dom, :coeff_shape, () -> begin
-        dist_dim = get_dim(dom.dist)
-        scales = ntuple(_ -> 1, dist_dim)
-        global_shape(dom, coeff_layout(dom.dist), scales)
-    end)
+    return _get_cached!(
+        dom, :coeff_shape, () -> begin
+            dist_dim = get_dim(dom.dist)
+            scales = ntuple(_ -> 1, dist_dim)
+            global_shape(dom, coeff_layout(dom.dist), scales)
+        end
+    )
 end
 
 """
@@ -564,9 +584,9 @@ function _grid_shape_cached(dom::Domain, scales)
     for basis in dom.bases
         ax = axis(basis)
         d = get_dim(basis)
-        subscales = scales[ax:ax+d-1]
+        subscales = scales[ax:(ax + d - 1)]
         subshape = grid_shape(basis, subscales)
-        shape[ax:ax+d-1] .= subshape
+        shape[ax:(ax + d - 1)] .= subshape
     end
     result = Tuple(shape)
     dom._grid_shape_cache[key] = result
@@ -739,38 +759,38 @@ function remedy_scales end
 # ============================================================================
 
 export AbstractBasis,
-       AbstractDistributor,
-       Domain,
-       make_domain,
-       preprocess_domain_args,
-       domain_dist,
-       domain_bases,
-       domain_volume,
-       bases_by_axis,
-       full_bases,
-       bases_by_coord,
-       domain_dealias,
-       substitute_basis,
-       get_basis,
-       get_basis_subaxis,
-       get_coord,
-       enumerate_unique_bases,
-       domain_constant,
-       domain_nonconstant,
-       mode_dependence,
-       coeff_shape,
-       grid_shape,
-       global_shape,
-       chunk_shape,
-       group_shape,
-       coordsys,
-       dealias_tuple,
-       volume,
-       constant_flags,
-       subaxis_dependence_flags,
-       group_shape_val,
-       axis,
-       get_basis_axis,
-       get_axis,
-       coeff_layout,
-       remedy_scales
+    AbstractDistributor,
+    Domain,
+    make_domain,
+    preprocess_domain_args,
+    domain_dist,
+    domain_bases,
+    domain_volume,
+    bases_by_axis,
+    full_bases,
+    bases_by_coord,
+    domain_dealias,
+    substitute_basis,
+    get_basis,
+    get_basis_subaxis,
+    get_coord,
+    enumerate_unique_bases,
+    domain_constant,
+    domain_nonconstant,
+    mode_dependence,
+    coeff_shape,
+    grid_shape,
+    global_shape,
+    chunk_shape,
+    group_shape,
+    coordsys,
+    dealias_tuple,
+    volume,
+    constant_flags,
+    subaxis_dependence_flags,
+    group_shape_val,
+    axis,
+    get_basis_axis,
+    get_axis,
+    coeff_layout,
+    remedy_scales

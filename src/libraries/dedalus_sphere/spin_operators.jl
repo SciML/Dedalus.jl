@@ -3,7 +3,7 @@
 # ============================================================================
 
 const SPIN_INDEXING = (-1, 0, 1)
-const SPIN_THRESHOLD = 1e-12
+const SPIN_THRESHOLD = 1.0e-12
 
 # ============================================================================
 # Helper: int2tuple for getindex
@@ -36,11 +36,11 @@ struct TensorCodomain
     _codomain::Codomain
 
     function TensorCodomain(rank_change::Int)
-        new(Codomain(rank_change; Output=Codomain))
+        return new(Codomain(rank_change; Output = Codomain))
     end
 
     function TensorCodomain(cod::Codomain)
-        new(cod)
+        return new(cod)
     end
 end
 
@@ -54,37 +54,37 @@ function Base.show(io::IO, tc::TensorCodomain)
     s = "(rank->rank+$(tc[1]))"
     s = replace(s, "+0" => "")
     s = replace(s, "+-" => "-")
-    print(io, s)
+    return print(io, s)
 end
 
 function Base.:+(a::TensorCodomain, b::TensorCodomain)
-    TensorCodomain(a._codomain + b._codomain)
+    return TensorCodomain(a._codomain + b._codomain)
 end
 
 function Base.:-(tc::TensorCodomain)
-    TensorCodomain(-tc._codomain)
+    return TensorCodomain(-tc._codomain)
 end
 
 function Base.:-(a::TensorCodomain, b::TensorCodomain)
-    a + (-b)
+    return a + (-b)
 end
 
 function Base.:(==)(a::TensorCodomain, b::TensorCodomain)
-    a._codomain == b._codomain
+    return a._codomain == b._codomain
 end
 
 Base.hash(tc::TensorCodomain, h::UInt) = hash(tc._codomain, h)
 
 function Base.:|(a::TensorCodomain, b::TensorCodomain)
-    TensorCodomain(a._codomain | b._codomain)
+    return TensorCodomain(a._codomain | b._codomain)
 end
 
 function (tc::TensorCodomain)(args...)
-    tc._codomain(args...)
+    return tc._codomain(args...)
 end
 
 function Base.:*(tc::TensorCodomain, other::Int)
-    TensorCodomain(tc._codomain * other)
+    return TensorCodomain(tc._codomain * other)
 end
 
 Base.:*(other::Int, tc::TensorCodomain) = tc * other
@@ -139,7 +139,7 @@ function tensor_array(op::AbstractTensorOperator, ranks)
     T = zeros(Float64, dims)
     idx = get_indexing(op)
     out_tuples = tensor_range(op, ranks[1])
-    in_tuples  = tensor_range(op, ranks[2])
+    in_tuples = tensor_range(op, ranks[2])
     for sigma in out_tuples
         for tau in in_tuples
             i = tuple2index(sigma, idx) + 1  # 1-based
@@ -198,13 +198,13 @@ get_indexing(op::TensorOperatorGeneric) = op._indexing
 get_threshold(op::TensorOperatorGeneric) = op._threshold
 
 function _tensor_eval(op::TensorOperatorGeneric, rank::Int)
-    op._function(rank)
+    return op._function(rank)
 end
 
 function tensor_getindex(op::TensorOperatorGeneric, sigma::Tuple, tau::Tuple)
     i = tuple2index(sigma, op._indexing)  # 0-based
     j = tuple2index(tau, op._indexing)    # 0-based
-    return _tensor_eval(op, length(tau))[i+1, j+1]  # Julia 1-based array indexing
+    return _tensor_eval(op, length(tau))[i + 1, j + 1]  # Julia 1-based array indexing
 end
 
 # ============================================================================
@@ -223,8 +223,8 @@ struct TensorIdentity <: AbstractTensorOperator
     _indexing::Tuple
     _threshold::Float64
 
-    function TensorIdentity(; indexing=SPIN_INDEXING, threshold=SPIN_THRESHOLD)
-        new(TensorCodomain(0), indexing, threshold)
+    function TensorIdentity(; indexing = SPIN_INDEXING, threshold = SPIN_THRESHOLD)
+        return new(TensorCodomain(0), indexing, threshold)
     end
 end
 
@@ -237,7 +237,7 @@ function tensor_getindex(op::TensorIdentity, sigma::Tuple, tau::Tuple)
 end
 
 function _tensor_eval(op::TensorIdentity, rank::Int)
-    tensor_array(op, (rank, rank))
+    return tensor_array(op, (rank, rank))
 end
 
 # ============================================================================
@@ -258,8 +258,8 @@ struct Metric <: AbstractTensorOperator
     _indexing::Tuple
     _threshold::Float64
 
-    function Metric(; indexing=SPIN_INDEXING, threshold=SPIN_THRESHOLD)
-        new(TensorCodomain(0), indexing, threshold)
+    function Metric(; indexing = SPIN_INDEXING, threshold = SPIN_THRESHOLD)
+        return new(TensorCodomain(0), indexing, threshold)
     end
 end
 
@@ -272,7 +272,7 @@ function tensor_getindex(op::Metric, sigma::Tuple, tau::Tuple)
 end
 
 function _tensor_eval(op::Metric, rank::Int)
-    tensor_array(op, (rank, rank))
+    return tensor_array(op, (rank, rank))
 end
 
 # ============================================================================
@@ -297,9 +297,11 @@ struct TensorTranspose <: AbstractTensorOperator
     _indexing::Tuple
     _threshold::Float64
 
-    function TensorTranspose(permutation::Tuple=(1, 0);
-                             indexing=SPIN_INDEXING, threshold=SPIN_THRESHOLD)
-        new(TensorCodomain(0), permutation, indexing, threshold)
+    function TensorTranspose(
+            permutation::Tuple = (1, 0);
+            indexing = SPIN_INDEXING, threshold = SPIN_THRESHOLD
+        )
+        return new(TensorCodomain(0), permutation, indexing, threshold)
     end
 end
 
@@ -319,7 +321,7 @@ function tensor_getindex(op::TensorTranspose, sigma::Tuple, tau::Tuple)
 end
 
 function _tensor_eval(op::TensorTranspose, rank::Int)
-    tensor_array(op, (rank, rank))
+    return tensor_array(op, (rank, rank))
 end
 
 # ============================================================================
@@ -341,11 +343,11 @@ struct TensorTrace <: AbstractTensorOperator
     _indexing::Tuple
     _threshold::Float64
 
-    function TensorTrace(indices; indexing=SPIN_INDEXING, threshold=SPIN_THRESHOLD)
+    function TensorTrace(indices; indexing = SPIN_INDEXING, threshold = SPIN_THRESHOLD)
         if isa(indices, Int)
             indices = (indices,)
         end
-        new(TensorCodomain(-length(indices)), indices, indexing, threshold)
+        return new(TensorCodomain(-length(indices)), indices, indexing, threshold)
     end
 end
 
@@ -367,7 +369,7 @@ function tensor_getindex(op::TensorTrace, sigma::Tuple, tau::Tuple)
 end
 
 function _tensor_eval(op::TensorTrace, rank::Int)
-    tensor_array(op, (rank - length(op._indices), rank))
+    return tensor_array(op, (rank - length(op._indices), rank))
 end
 
 # ============================================================================
@@ -391,12 +393,14 @@ struct TensorProduct <: AbstractTensorOperator
     _indexing::Tuple
     _threshold::Float64
 
-    function TensorProduct(element, action::String="left";
-                           indexing=SPIN_INDEXING, threshold=SPIN_THRESHOLD)
+    function TensorProduct(
+            element, action::String = "left";
+            indexing = SPIN_INDEXING, threshold = SPIN_THRESHOLD
+        )
         if isa(element, Int)
             element = (element,)
         end
-        new(TensorCodomain(length(element)), element, action, indexing, threshold)
+        return new(TensorCodomain(length(element)), element, action, indexing, threshold)
     end
 end
 
@@ -429,7 +433,7 @@ function tensor_getindex(op::TensorProduct, sigma::Tuple, tau::Tuple)
 end
 
 function _tensor_eval(op::TensorProduct, rank::Int)
-    tensor_array(op, (rank + length(op._element), rank))
+    return tensor_array(op, (rank + length(op._element), rank))
 end
 
 # ============================================================================
@@ -475,8 +479,8 @@ struct Intertwiner <: AbstractTensorOperator
     _indexing::Tuple
     _threshold::Float64
 
-    function Intertwiner(L::Int; indexing=SPIN_INDEXING, threshold=SPIN_THRESHOLD)
-        new(TensorCodomain(0), L, indexing, threshold)
+    function Intertwiner(L::Int; indexing = SPIN_INDEXING, threshold = SPIN_THRESHOLD)
+        return new(TensorCodomain(0), L, indexing, threshold)
     end
 end
 
@@ -500,7 +504,7 @@ Returns `true` if the spin component is forbidden (does not exist for this L).
 """
 function forbidden_spin(op::Intertwiner, spin)
     sp = _ensure_tuple(spin)
-    return op.L < abs(sum(sp; init=0))
+    return op.L < abs(sum(sp; init = 0))
 end
 
 """
@@ -518,7 +522,7 @@ function forbidden_regularity(op::Intertwiner, regularity)
     walk = [op.L]
     for r in reverse(reg)
         push!(walk, walk[end] + r)
-        if walk[end] < 0 || (length(walk) >= 2 && walk[end-1] == 0 && walk[end] == 0)
+        if walk[end] < 0 || (length(walk) >= 2 && walk[end - 1] == 0 && walk[end] == 0)
             return true
         end
     end
@@ -557,8 +561,8 @@ function tensor_getindex(op::Intertwiner, sigma::Tuple, tau::Tuple)
     end
 
     Q = Float64(tensor_getindex(op, tau_rest, b))
-    R -= intertwiner_k(op, s, sum(tau_rest; init=0)) * Q
-    J = op.L + sum(b; init=0)
+    R -= intertwiner_k(op, s, sum(tau_rest; init = 0)) * Q
+    J = op.L + sum(b; init = 0)
 
     if s != 0
         Q = 0.0
@@ -576,7 +580,7 @@ function tensor_getindex(op::Intertwiner, sigma::Tuple, tau::Tuple)
 end
 
 function _tensor_eval(op::Intertwiner, rank::Int)
-    tensor_array(op, (rank, rank))
+    return tensor_array(op, (rank, rank))
 end
 
 # ============================================================================
@@ -633,7 +637,7 @@ Base.:-(op::AbstractTensorOperator) = (-1) * op
 
 # Subtraction
 function Base.:-(a::AbstractTensorOperator, b::AbstractTensorOperator)
-    a + (-b)
+    return a + (-b)
 end
 
 # Add with zero
@@ -664,7 +668,7 @@ function Base.:^(op::AbstractTensorOperator, exponent::Int)
         error("exponent must be a non-negative integer.")
     end
     if exponent == 0
-        return TensorIdentity(indexing=get_indexing(op), threshold=get_threshold(op))
+        return TensorIdentity(indexing = get_indexing(op), threshold = get_threshold(op))
     end
     result = op
     for _ in 2:exponent

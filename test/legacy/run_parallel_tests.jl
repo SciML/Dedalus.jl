@@ -54,8 +54,8 @@ const TEST_DIR = @__DIR__
 
 # Define parallel test files and their required process counts
 const PARALLEL_TESTS = [
-    (file="test_output_parallel.jl",                nprocs=NPROCS, label="Output Parallel"),
-    (file="test_spherical3d_arithmetic_parallel.jl", nprocs=NPROCS, label="Spherical 3D Arithmetic Parallel"),
+    (file = "test_output_parallel.jl", nprocs = NPROCS, label = "Output Parallel"),
+    (file = "test_spherical3d_arithmetic_parallel.jl", nprocs = NPROCS, label = "Spherical 3D Arithmetic Parallel"),
 ]
 
 # Parse command-line filter
@@ -64,7 +64,7 @@ filter_arg = length(ARGS) >= 1 ? lowercase(ARGS[1]) : ""
 function should_run(test_entry)
     isempty(filter_arg) && return true
     return occursin(filter_arg, lowercase(test_entry.label)) ||
-           occursin(filter_arg, lowercase(test_entry.file))
+        occursin(filter_arg, lowercase(test_entry.file))
 end
 
 # Build the wrapper script that each MPI worker will execute.
@@ -87,13 +87,13 @@ function make_wrapper_script(test_file::String)
 end
 
 # Run tests
-println("=" ^ 70)
+println("="^70)
 println("Dedalus.jl Parallel Test Runner")
-println("=" ^ 70)
+println("="^70)
 println("  mpiexec:   $(mpiexec_path)")
 println("  processes: $(NPROCS)")
 println("  test dir:  $(TEST_DIR)")
-println("=" ^ 70)
+println("="^70)
 
 results = Tuple{String, Bool, Float64}[]  # (label, passed, elapsed)
 
@@ -124,27 +124,27 @@ for test in PARALLEL_TESTS
         run(cmd)
         success = true
     catch e
-        @error "Test failed" test=test.label exception=e
+        @error "Test failed" test = test.label exception = e
         success = false
     finally
         elapsed = time() - t0
         push!(results, (test.label, success, elapsed))
         # Clean up wrapper
-        rm(wrapper_path; force=true)
+        rm(wrapper_path; force = true)
     end
 end
 
 # Summary
-println("\n" * "=" ^ 70)
+println("\n" * "="^70)
 println("RESULTS SUMMARY")
-println("=" ^ 70)
+println("="^70)
 all_passed = true
 for (label, passed, elapsed) in results
     status = passed ? "PASS" : "FAIL"
     all_passed = all_passed && passed
-    println("  [$(status)] $(label)  ($(round(elapsed, digits=1))s)")
+    println("  [$(status)] $(label)  ($(round(elapsed, digits = 1))s)")
 end
-println("=" ^ 70)
+println("="^70)
 n_pass = count(r -> r[2], results)
 n_total = length(results)
 println("  $(n_pass)/$(n_total) test suites passed.")

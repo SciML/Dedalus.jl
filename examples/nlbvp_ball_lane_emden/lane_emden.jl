@@ -49,43 +49,43 @@ logger = Logging.current_logger()
 # Parameters
 Nr = 64
 n = 3.0
-ncc_cutoff = 1e-3
-tolerance = 1e-10
+ncc_cutoff = 1.0e-3
+tolerance = 1.0e-10
 dealias = 2
 dtype = Float64
 
 # Bases
 coords = SphericalCoordinates("phi", "theta", "r")
-dist = Distributor(coords; dtype=dtype)
-ball = BallBasis(coords; shape=(1, 1, Nr), radius=1, dtype=dtype, dealias=dealias)
+dist = Distributor(coords; dtype = dtype)
+ball = BallBasis(coords; shape = (1, 1, Nr), radius = 1, dtype = dtype, dealias = dealias)
 
 # Fields
-f = Field(dist; name="f", bases=(ball,))
-tau = Field(dist; name="tau", bases=(surface(ball),))
+f = Field(dist; name = "f", bases = (ball,))
+tau = Field(dist; name = "tau", bases = (surface(ball),))
 
 # Substitutions
 lift = A -> Lift(A, ball, -1)
 
 # Problem
-problem = NLBVP([f, tau]; namespace=@locals)
+problem = NLBVP([f, tau]; namespace = @locals)
 add_equation!(problem, "lap(f) + lift(tau) = - f^n")
 add_equation!(problem, "f(r=1) = 0")
 
 # Initial guess
 phi, theta, r = local_grids(dist, ball)
 R0 = 5
-f["g"] = @. R0^(2/(n-1)) * (1 - r^2)^2
+f["g"] = @. R0^(2 / (n - 1)) * (1 - r^2)^2
 
 # Solver
-solver = build_solver(problem; ncc_cutoff=ncc_cutoff)
+solver = build_solver(problem; ncc_cutoff = ncc_cutoff)
 pert_norm = Inf
 steps = [copy(vec(f["g", 1]))]  # Julia 1-based indexing
 while pert_norm > tolerance
     newton_iteration!(solver)
     pert_norm = sum(allreduce_data_norm(pert, "c", 2) for pert in solver.perturbations)
     @info "Perturbation norm: $(pert_norm)"
-    f0 = allgather_data(f(r=0) |> evaluate, "g")[1, 1, 1]  # Julia 1-based indexing
-    Ri = f0^((n-1)/2)
+    f0 = allgather_data(f(r = 0) |> evaluate, "g")[1, 1, 1]  # Julia 1-based indexing
+    Ri = f0^((n - 1) / 2)
     @info "R iterate: $Ri"
     push!(steps, copy(vec(f["g", 1])))
 end
@@ -96,7 +96,7 @@ R_ref = Dict(
     0.5 => 2.752698054065,
     1.0 => pi,
     1.5 => 3.65375373621912608,
-    2.0 => 4.3528745959461246769735700,
+    2.0 => 4.35287459594612467697357,
     2.5 => 5.355275459010779,
     3.0 => 6.896848619376960375454528,
     3.25 => 8.018937527,

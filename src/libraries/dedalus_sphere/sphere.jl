@@ -42,8 +42,8 @@ with the same interface.
 struct SphereCodomain
     arrow::NTuple{4, Int}
 
-    function SphereCodomain(dL::Int=0, dm::Int=0, ds::Int=0, pi::Int=0)
-        new((dL, dm, ds, pi))
+    function SphereCodomain(dL::Int = 0, dm::Int = 0, ds::Int = 0, pi::Int = 0)
+        return new((dL, dm, ds, pi))
     end
 end
 
@@ -61,10 +61,10 @@ function Base.show(io::IO, c::SphereCodomain)
     end
     s = replace(s, "+0" => "")
     s = replace(s, "+-" => "-")
-    print(io, s)
+    return print(io, s)
 end
 
-function (c::SphereCodomain)(args...; evaluate::Bool=true)
+function (c::SphereCodomain)(args...; evaluate::Bool = true)
     L, m, s = args[1], args[2], args[3]
     if c[4] != 0
         s *= -1
@@ -82,7 +82,7 @@ end
 
 function Base.:+(a::SphereCodomain, b::SphereCodomain)
     # Compose: apply a to b's (L,m,s) shifts
-    L, m, s = a(b[1], b[2], b[3]; evaluate=false)
+    L, m, s = a(b[1], b[2], b[3]; evaluate = false)
     return SphereCodomain(L, m, s, xor(a[4], b[4]))
 end
 
@@ -119,12 +119,12 @@ end
 Base.:*(other::Int, c::SphereCodomain) = c * other
 
 function Base.:-(a::SphereCodomain, b::SphereCodomain)
-    a + (-b)
+    return a + (-b)
 end
 
 """Convert a SphereCodomain to a base Codomain for use with Operator."""
 function _sphere_to_codomain(sc::SphereCodomain)
-    Codomain(sc.arrow...; Output=Codomain)
+    return Codomain(sc.arrow...; Output = Codomain)
 end
 
 # ============================================================================
@@ -146,7 +146,7 @@ Parameters
 - ds   : spin shift (optional)
 - dm   : azimuthal shift (optional)
 """
-function spin2Jacobi(Lmax::Int, m::Int, s::Int; ds=nothing, dm=nothing)
+function spin2Jacobi(Lmax::Int, m::Int, s::Int; ds = nothing, dm = nothing)
     n = Lmax + 1 - max(abs(m), abs(s))
     a, b = abs(m + s), abs(m - s)
 
@@ -189,11 +189,11 @@ function sphere_harmonics(Lmax::Int, m::Int, s::Int, cos_theta; kwargs...)
     n, a, b = spin2Jacobi(Lmax, m, s)
 
     # Compute envelope: exp(0.5 * log_measure) * (-1)^max(m,-s)
-    log_mu = jacobi_measure(a, b, cos_theta; log=true)
+    log_mu = jacobi_measure(a, b, cos_theta; log = true)
     init = exp.(0.5 .* log_mu)
     init .*= (-1.0)^max(m, -s)
 
-    return jacobi_polynomials(n, a, b, cos_theta; init=init, kwargs...)
+    return jacobi_polynomials(n, a, b, cos_theta; init = init, kwargs...)
 end
 
 # ============================================================================
@@ -212,8 +212,8 @@ Parameters
 ----------
 - Lmax : int >= 0, spherical-harmonic degree
 """
-function sphere_quadrature(Lmax::Int; dtype::Type=Float64)
-    return jacobi_quadrature(Lmax + 1, 0, 0; dtype=dtype)
+function sphere_quadrature(Lmax::Int; dtype::Type = Float64)
+    return jacobi_quadrature(Lmax + 1, 0, 0; dtype = dtype)
 end
 
 # ============================================================================
@@ -237,8 +237,8 @@ struct SphereOperator
     radius::Float64
     dtype::Type
 
-    function SphereOperator(name::String; radius::Real=1, dtype::Type=Float64)
-        new(name, Float64(radius), dtype)
+    function SphereOperator(name::String; radius::Real = 1, dtype::Type = Float64)
+        return new(name, Float64(radius), dtype)
     end
 end
 
@@ -260,26 +260,26 @@ end
 
 function _sphere_D(so::SphereOperator, ds::Int)
     function D(Lmax, m, s)
-        n, a, b, dn, da, db = spin2Jacobi(Lmax, m, s; ds=ds)
+        n, a, b, dn, da, db = spin2Jacobi(Lmax, m, s; ds = ds)
 
         op_name = (da + db == 0) ? "C" : "D"
-        D_op = jacobi_operator(op_name; dtype=so.dtype)(da)
+        D_op = jacobi_operator(op_name; dtype = so.dtype)(da)
 
         return (-ds * sqrt(0.5) / so.radius) * D_op(n, a, b)
     end
-    return Operator(D, _sphere_to_codomain(SphereCodomain(0, 0, ds, 0)); Output=Operator)
+    return Operator(D, _sphere_to_codomain(SphereCodomain(0, 0, ds, 0)); Output = Operator)
 end
 
 function _sphere_Sin(so::SphereOperator, ds::Int)
     function Sin(Lmax, m, s)
-        n, a, b, dn, da, db = spin2Jacobi(Lmax, m, s; ds=ds)
+        n, a, b, dn, da, db = spin2Jacobi(Lmax, m, s; ds = ds)
 
-        S = jacobi_operator("A"; dtype=so.dtype)(da)
-        S = compose(S, jacobi_operator("B"; dtype=so.dtype)(db))
+        S = jacobi_operator("A"; dtype = so.dtype)(da)
+        S = compose(S, jacobi_operator("B"; dtype = so.dtype)(db))
 
         return (da * ds) * S(n, a, b)
     end
-    return Operator(Sin, _sphere_to_codomain(SphereCodomain(1, 0, ds, 0)); Output=Operator)
+    return Operator(Sin, _sphere_to_codomain(SphereCodomain(1, 0, ds, 0)); Output = Operator)
 end
 
 # ============================================================================
@@ -301,87 +301,87 @@ Supported names:
 - "D"   : returns SphereOperator factory for derivative
 - "Sin" : returns SphereOperator factory for sine
 """
-function sphere_operator(name::String; dtype::Type=Float64)
+function sphere_operator(name::String; dtype::Type = Float64)
     if name == "Id"
-        return _sphere_identity(; dtype=dtype)
+        return _sphere_identity(; dtype = dtype)
     end
 
     if name == "Pi"
-        return _sphere_parity(; dtype=dtype)
+        return _sphere_parity(; dtype = dtype)
     end
 
     if name == "L"
-        return _sphere_L(; dtype=dtype)
+        return _sphere_L(; dtype = dtype)
     end
 
     if name == "M"
-        return _sphere_M(; dtype=dtype)
+        return _sphere_M(; dtype = dtype)
     end
 
     if name == "S"
-        return _sphere_S(; dtype=dtype)
+        return _sphere_S(; dtype = dtype)
     end
 
     if name == "Cos"
         function Cos(Lmax, m, s)
-            return jacobi_operator("Z"; dtype=dtype)(spin2Jacobi(Lmax, m, s)...)
+            return jacobi_operator("Z"; dtype = dtype)(spin2Jacobi(Lmax, m, s)...)
         end
-        return Operator(Cos, _sphere_to_codomain(SphereCodomain(1, 0, 0, 0)); Output=Operator)
+        return Operator(Cos, _sphere_to_codomain(SphereCodomain(1, 0, 0, 0)); Output = Operator)
     end
 
-    return SphereOperator(name; dtype=dtype)
+    return SphereOperator(name; dtype = dtype)
 end
 
 # ============================================================================
 # Static sphere operators
 # ============================================================================
 
-function _sphere_identity(; dtype::Type=Float64)
+function _sphere_identity(; dtype::Type = Float64)
     function I(Lmax, m, s)
         n = spin2Jacobi(Lmax, m, s)[1]
         N_vec = ones(dtype, max(n, 0))
         mat = _spdiag(N_vec, 0, max(n, 0), max(n, 0))
         return InfiniteCSC(mat)
     end
-    return Operator(I, _sphere_to_codomain(SphereCodomain(0, 0, 0, 0)); Output=Operator)
+    return Operator(I, _sphere_to_codomain(SphereCodomain(0, 0, 0, 0)); Output = Operator)
 end
 
-function _sphere_parity(; dtype::Type=Float64)
+function _sphere_parity(; dtype::Type = Float64)
     function Pi(Lmax, m, s)
-        return jacobi_operator("Pi"; dtype=dtype)(spin2Jacobi(Lmax, m, s)...)
+        return jacobi_operator("Pi"; dtype = dtype)(spin2Jacobi(Lmax, m, s)...)
     end
-    return Operator(Pi, _sphere_to_codomain(SphereCodomain(0, 0, 0, 1)); Output=Operator)
+    return Operator(Pi, _sphere_to_codomain(SphereCodomain(0, 0, 0, 1)); Output = Operator)
 end
 
-function _sphere_L(; dtype::Type=Float64)
+function _sphere_L(; dtype::Type = Float64)
     function L(Lmax, m, s)
         n = spin2Jacobi(Lmax, m, s)[1]
         # Eigenvalues: L values from L_min to Lmax
-        N_vec = collect(dtype.(Lmax + 1 - n : Lmax))
+        N_vec = collect(dtype.((Lmax + 1 - n):Lmax))
         mat = _spdiag(N_vec, 0, max(n, 0), max(n, 0))
         return InfiniteCSC(mat)
     end
-    return Operator(L, _sphere_to_codomain(SphereCodomain(0, 0, 0, 0)); Output=Operator)
+    return Operator(L, _sphere_to_codomain(SphereCodomain(0, 0, 0, 0)); Output = Operator)
 end
 
-function _sphere_M(; dtype::Type=Float64)
+function _sphere_M(; dtype::Type = Float64)
     function M(Lmax, m, s)
         n = spin2Jacobi(Lmax, m, s)[1]
         N_vec = fill(dtype(m), max(n, 0))
         mat = _spdiag(N_vec, 0, max(n, 0), max(n, 0))
         return InfiniteCSC(mat)
     end
-    return Operator(M, _sphere_to_codomain(SphereCodomain(0, 0, 0, 0)); Output=Operator)
+    return Operator(M, _sphere_to_codomain(SphereCodomain(0, 0, 0, 0)); Output = Operator)
 end
 
-function _sphere_S(; dtype::Type=Float64)
+function _sphere_S(; dtype::Type = Float64)
     function S(Lmax, m, s)
         n = spin2Jacobi(Lmax, m, s)[1]
         N_vec = fill(dtype(abs(s)), max(n, 0))
         mat = _spdiag(N_vec, 0, max(n, 0), max(n, 0))
         return InfiniteCSC(mat)
     end
-    return Operator(S, _sphere_to_codomain(SphereCodomain(0, 0, 0, 0)); Output=Operator)
+    return Operator(S, _sphere_to_codomain(SphereCodomain(0, 0, 0, 0)); Output = Operator)
 end
 
 # ============================================================================
@@ -406,15 +406,15 @@ For simple operators (Id, Pi, L, M, S, Cos), returns the matrix directly.
 For compound operators like "k+" and "k-" (spin raising/lowering),
 constructs the appropriate combination.
 """
-function sphere_op(name::String, Lmax::Int, m::Int, s::Int; dtype::Type=Float64)
+function sphere_op(name::String, Lmax::Int, m::Int, s::Int; dtype::Type = Float64)
     if name == "k+" || name == "k-"
         ds = name == "k+" ? +1 : -1
         # k+/k- = D(ds) + Sin(ds), spin raising/lowering
         # Evaluate each operator separately and add the resulting InfiniteCSC matrices.
         # Cannot use Operator algebra (+) because D and Sin have different codomains
         # (different dL), but their matrices can be added via InfiniteCSC.
-        D_op = sphere_operator("D"; dtype=dtype)(ds)
-        Sin_op = sphere_operator("Sin"; dtype=dtype)(ds)
+        D_op = sphere_operator("D"; dtype = dtype)(ds)
+        Sin_op = sphere_operator("Sin"; dtype = dtype)(ds)
         D_mat = D_op(Lmax, m, s)
         Sin_mat = Sin_op(Lmax, m, s)
         result = D_mat + Sin_mat
@@ -433,7 +433,7 @@ function sphere_op(name::String, Lmax::Int, m::Int, s::Int; dtype::Type=Float64)
         end
         return resize_matrix(result_sp, n_out, n_in)
     else
-        op_obj = sphere_operator(name; dtype=dtype)
+        op_obj = sphere_operator(name; dtype = dtype)
         if op_obj isa Operator
             return sparse(Float64.(op_obj(Lmax, m, s)))
         else
@@ -466,7 +466,7 @@ basis to spin (-1,+1) basis.
 
 If adjoint=true, returns the conjugate transpose.
 """
-function sphere_unitary(; rank::Int=1, adjoint::Bool=false)
+function sphere_unitary(; rank::Int = 1, adjoint::Bool = false)
     # For rank 0, it's just [1]
     if rank == 0
         return ones(Float64, 1, 1)

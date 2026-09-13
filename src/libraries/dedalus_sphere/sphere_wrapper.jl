@@ -50,14 +50,16 @@ mutable struct SphereWrapper
     weights::Vector{Float64}
     grid::Vector{Float64}
     sin_grid::Vector{Float64}
-    pushY::Dict{Tuple{Int,Int}, Matrix{Float64}}
-    pullY::Dict{Tuple{Int,Int}, Matrix{Float64}}
-    _op_cache::Dict{Tuple{String,Int,Int}, Any}
-    _tidx_cache::Dict{Tuple{Int,Int}, Any}
-    _unitary_cache::Dict{Tuple{Int,Bool}, Any}
+    pushY::Dict{Tuple{Int, Int}, Matrix{Float64}}
+    pullY::Dict{Tuple{Int, Int}, Matrix{Float64}}
+    _op_cache::Dict{Tuple{String, Int, Int}, Any}
+    _tidx_cache::Dict{Tuple{Int, Int}, Any}
+    _unitary_cache::Dict{Tuple{Int, Bool}, Any}
 
-    function SphereWrapper(L_max::Int; S_max::Int=0, N_theta::Union{Nothing,Int}=nothing,
-                           m_min::Union{Nothing,Int}=nothing, m_max::Union{Nothing,Int}=nothing)
+    function SphereWrapper(
+            L_max::Int; S_max::Int = 0, N_theta::Union{Nothing, Int} = nothing,
+            m_min::Union{Nothing, Int} = nothing, m_max::Union{Nothing, Int} = nothing
+        )
         if N_theta === nothing
             N_theta = L_max + 1
         end
@@ -73,8 +75,8 @@ mutable struct SphereWrapper
         grid_theta = acos.(cos_grid)
         sin_grid_vals = sqrt.(1.0 .- cos_grid .^ 2)
 
-        pushY = Dict{Tuple{Int,Int}, Matrix{Float64}}()
-        pullY = Dict{Tuple{Int,Int}, Matrix{Float64}}()
+        pushY = Dict{Tuple{Int, Int}, Matrix{Float64}}()
+        pullY = Dict{Tuple{Int, Int}, Matrix{Float64}}()
 
         for s in -S_max:S_max
             for m in m_min:m_max
@@ -97,11 +99,13 @@ mutable struct SphereWrapper
         grid_theta = Float64.(grid_theta)
         sin_grid_vals = Float64.(sin_grid_vals)
 
-        new(L_max, S_max, N_theta, cos_grid, weights, grid_theta, sin_grid_vals,
+        return new(
+            L_max, S_max, N_theta, cos_grid, weights, grid_theta, sin_grid_vals,
             pushY, pullY,
-            Dict{Tuple{String,Int,Int}, Any}(),
-            Dict{Tuple{Int,Int}, Any}(),
-            Dict{Tuple{Int,Bool}, Any}())
+            Dict{Tuple{String, Int, Int}, Any}(),
+            Dict{Tuple{Int, Int}, Any}(),
+            Dict{Tuple{Int, Bool}, Any}()
+        )
     end
 end
 
@@ -199,7 +203,7 @@ function tensor_index(wrapper::SphereWrapper, m::Int, rank::Int)
     num = collect(0:(2^rank - 1))
     spin = (-1) .^ num
     for k in 2:rank
-        spin .+= (-1) .^ (num .÷ 2^(k-1))
+        spin .+= (-1) .^ (num .÷ 2^(k - 1))
     end
 
     if rank == 0
@@ -231,12 +235,12 @@ end
 Get the unitary transformation matrix between spin and regularity bases.
 Results are cached.
 """
-function unitary(wrapper::SphereWrapper; rank::Int=1, adjoint::Bool=false)
+function unitary(wrapper::SphereWrapper; rank::Int = 1, adjoint::Bool = false)
     key = (rank, adjoint)
     if haskey(wrapper._unitary_cache, key)
         return wrapper._unitary_cache[key]
     end
-    result = sphere_unitary(; rank=rank, adjoint=adjoint)
+    result = sphere_unitary(; rank = rank, adjoint = adjoint)
     wrapper._unitary_cache[key] = result
     return result
 end
@@ -254,7 +258,7 @@ For rank 0, this is just forward_spin with spin=0.
 For rank > 0, applies the unitary transformation to rotate from Cartesian
 to spin basis, then transforms each spin component separately.
 """
-function forward(wrapper::SphereWrapper, m::Int, rank::Int, data; unitary_mat=nothing)
+function forward(wrapper::SphereWrapper, m::Int, rank::Int, data; unitary_mat = nothing)
     if rank == 0
         return forward_spin(wrapper, m, 0, data)
     end
@@ -262,7 +266,7 @@ function forward(wrapper::SphereWrapper, m::Int, rank::Int, data; unitary_mat=no
     (si, ei, sp) = tensor_index(wrapper, m, rank)
 
     if unitary_mat === nothing
-        unitary_mat = unitary(wrapper; rank=rank, adjoint=true)
+        unitary_mat = unitary(wrapper; rank = rank, adjoint = true)
     end
 
     # Apply unitary transformation: data_rot[i,:] = sum_j unitary[i,j] * data[j,:]
@@ -297,10 +301,12 @@ function forward(wrapper::SphereWrapper, m::Int, rank::Int, data; unitary_mat=no
         if ndims(data) == 1
             data_c[si[i]:ei[i]] = forward_spin(wrapper, m, sp[i], data_rot[i, :])
         elseif ndims(data) == 2
-            data_c[si[i]:ei[i], :] = forward_spin(wrapper, m, sp[i],
+            data_c[si[i]:ei[i], :] = forward_spin(
+                wrapper, m, sp[i],
                 selectdim(data_rot, 1, i) isa AbstractVector ?
-                reshape(selectdim(data_rot, 1, i), 1, :) :
-                selectdim(data_rot, 1, i))
+                    reshape(selectdim(data_rot, 1, i), 1, :) :
+                    selectdim(data_rot, 1, i)
+            )
             # Simpler: treat each component as its row
             # forward_spin returns (n_modes, ...) from (n_theta, ...)
         else
@@ -327,7 +333,7 @@ For rank 0, this is just backward_spin with spin=0.
 For rank > 0, transforms each spin component separately, then applies the
 unitary transformation to rotate from spin back to Cartesian basis.
 """
-function backward(wrapper::SphereWrapper, m::Int, rank::Int, data; unitary_mat=nothing)
+function backward(wrapper::SphereWrapper, m::Int, rank::Int, data; unitary_mat = nothing)
     if rank == 0
         return backward_spin(wrapper, m, 0, data)
     end
@@ -335,7 +341,7 @@ function backward(wrapper::SphereWrapper, m::Int, rank::Int, data; unitary_mat=n
     (si, ei, sp) = tensor_index(wrapper, m, rank)
 
     if unitary_mat === nothing
-        unitary_mat = unitary(wrapper; rank=rank, adjoint=false)
+        unitary_mat = unitary(wrapper; rank = rank, adjoint = false)
     end
 
     # Allocate grid-space array with shape (2^rank, N_theta, ...)
@@ -350,8 +356,10 @@ function backward(wrapper::SphereWrapper, m::Int, rank::Int, data; unitary_mat=n
         if ndims(data) == 1
             data_g[i, :] = backward_spin(wrapper, m, sp[i], data[si[i]:ei[i]])
         else
-            selectdim(data_g, 1, i) .= backward_spin(wrapper, m, sp[i],
-                data[si[i]:ei[i], ntuple(_ -> Colon(), ndims(data) - 1)...])
+            selectdim(data_g, 1, i) .= backward_spin(
+                wrapper, m, sp[i],
+                data[si[i]:ei[i], ntuple(_ -> Colon(), ndims(data) - 1)...]
+            )
         end
     end
 
@@ -408,4 +416,5 @@ function grad(wrapper::SphereWrapper, m::Int, rank_in::Int, data, data_out)
         dst_range = si_out[i]:ei_out[i]
         data_out[dst_range] .= operator_mat * src
     end
+    return
 end

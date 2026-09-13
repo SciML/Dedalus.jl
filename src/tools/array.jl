@@ -26,7 +26,7 @@ const SPLIT_CSR_MATVECS = get_config_bool("linear_algebra", "SPLIT_CSR_MATVECS")
 
 """Whether to use the legacy CSC matvec kernels
 (`[linear_algebra] OLD_CSR_MATVECS` in `dedalus.toml`)."""
-const OLD_CSR_MATVECS   = get_config_bool("linear_algebra", "OLD_CSR_MATVECS")
+const OLD_CSR_MATVECS = get_config_bool("linear_algebra", "OLD_CSR_MATVECS")
 
 # ---------------------------------------------------------------------------
 # interleaved_view
@@ -74,7 +74,7 @@ v = [1.0, 2.0, 3.0]
 reshape_vector(v, 3, 2)  # size (1, 3, 1)
 ```
 """
-@inline function reshape_vector(data::AbstractVector, dim::Int=2, axis::Int=dim)
+@inline function reshape_vector(data::AbstractVector, dim::Int = 2, axis::Int = dim)
     shape = ones(Int, dim)
     shape[axis] = length(data)
     return reshape(data, Tuple(shape))
@@ -116,7 +116,7 @@ A = rand(10, 10)
 A[axslice(1, 2, 5)...]  # rows 2:5, all columns
 ```
 """
-@inline function axslice(axis::Int, start, stop, step=nothing)
+@inline function axslice(axis::Int, start, stop, step = nothing)
     if step === nothing
         return axindex(axis, start:stop)
     else
@@ -156,7 +156,7 @@ new entries).
 """
 function expand_pattern(input::AbstractSparseMatrix, pattern::AbstractSparseMatrix)
     Ai, Aj, Av = findnz(input)
-    Pi, Pj, _  = findnz(pattern)
+    Pi, Pj, _ = findnz(pattern)
     rows = vcat(Ai, Pi)
     cols = vcat(Aj, Pj)
     data = vcat(Av, zeros(eltype(Av), length(Pi)))
@@ -212,8 +212,10 @@ Apply a dense matrix along dimension `axis` (1-based) of `array`.
 If `out` is provided, the result is written into `out` and returned;
 otherwise a new array is allocated.
 """
-function apply_dense(matrix::AbstractMatrix, array::AbstractArray, axis::Int;
-                     out::Union{AbstractArray,Nothing}=nothing)
+function apply_dense(
+        matrix::AbstractMatrix, array::AbstractArray, axis::Int;
+        out::Union{AbstractArray, Nothing} = nothing
+    )
     dim = ndims(array)
     # Normalise negative-style axis (though Julia conventionally uses positive)
     axis = mod1(axis, dim)
@@ -262,9 +264,11 @@ optimised multidimensional sparse matvec. The fallback uses dense slicing.
 - `out`: Pre-allocated output array (optional).
 - `check_shapes`: If `true`, validate dimension compatibility.
 """
-function apply_sparse(matrix::SparseMatrixCSC, array::AbstractArray, axis::Int;
-                      out::Union{AbstractArray,Nothing}=nothing,
-                      check_shapes::Bool=false)
+function apply_sparse(
+        matrix::SparseMatrixCSC, array::AbstractArray, axis::Int;
+        out::Union{AbstractArray, Nothing} = nothing,
+        check_shapes::Bool = false
+    )
     if out === nothing
         out_shape = collect(size(array))
         out_shape[axis] = size(matrix, 1)
@@ -318,9 +322,11 @@ of `rhs`).
 When the `linalg` module is available, this calls `solve_upper_csc!`.
 The fallback uses Julia's built-in upper-triangular solver.
 """
-function solve_upper_sparse(matrix::SparseMatrixCSC, rhs::AbstractArray, axis::Int;
-                            out::Union{AbstractArray,Nothing}=nothing,
-                            check_shapes::Bool=false)
+function solve_upper_sparse(
+        matrix::SparseMatrixCSC, rhs::AbstractArray, axis::Int;
+        out::Union{AbstractArray, Nothing} = nothing,
+        check_shapes::Bool = false
+    )
     if out === nothing
         out = copy(rhs)
     elseif out !== rhs
@@ -416,7 +422,7 @@ Unlike `blockdiag` from SparseArrays, this correctly handles blocks of size 0.
 - `blocks`: Iterable of sparse matrices.
 - `shape`: Optional overall shape `(m, n)`. Defaults to the sum of block sizes.
 """
-function sparse_block_diag(blocks; shape::Union{Tuple{Int,Int},Nothing}=nothing)
+function sparse_block_diag(blocks; shape::Union{Tuple{Int, Int}, Nothing} = nothing)
     all_rows = Int[]
     all_cols = Int[]
     all_data = eltype(first(blocks))[]
@@ -502,8 +508,10 @@ A = [10 20 30; 40 50 60]
 permute_axis(A, 2, [3, 1, 2])  # columns reordered to [30 10 20; 60 40 50]
 ```
 """
-function permute_axis(array::AbstractArray, axis::Int, permutation;
-                      out::Union{AbstractArray,Nothing}=nothing)
+function permute_axis(
+        array::AbstractArray, axis::Int, permutation;
+        out::Union{AbstractArray, Nothing} = nothing
+    )
     idx = [Colon() for _ in 1:ndims(array)]
     idx[axis] = permutation
     perm = array[idx...]
@@ -557,10 +565,12 @@ Build a permutation matrix from a permutation vector (1-based indexing).
 perm_matrix([2, 3, 1])  # 3x3 sparse permutation matrix
 ```
 """
-function perm_matrix(perm::AbstractVector{<:Integer};
-                     M::Union{Int,Nothing}=nothing,
-                     source_index::Bool=false,
-                     make_sparse::Bool=true)
+function perm_matrix(
+        perm::AbstractVector{<:Integer};
+        M::Union{Int, Nothing} = nothing,
+        source_index::Bool = false,
+        make_sparse::Bool = true
+    )
     N = length(perm)
     if M === nothing
         M = N
@@ -639,8 +649,10 @@ function scipy_sparse_eigs(A, B, left::Bool, N::Int, target, matsolver; kw...)
         try
             @eval Main using Arpack
         catch
-            error("Arpack.jl is required for scipy_sparse_eigs. " *
-                  "Install it with: ] add Arpack")
+            error(
+                "Arpack.jl is required for scipy_sparse_eigs. " *
+                    "Install it with: ] add Arpack"
+            )
         end
     end
     arpack_eigs = Main.Arpack.eigs
@@ -654,14 +666,18 @@ function scipy_sparse_eigs(A, B, left::Bool, N::Int, target, matsolver; kw...)
 
     # Use Arpack.eigs with the shift-invert linear operator
     # We construct a wrapper matrix type to use with Arpack
-    evals, evecs = _arpack_eigs_via_matvec(arpack_eigs, matvec, n, N,
-                                            eltype(A); kw...)
+    evals, evecs = _arpack_eigs_via_matvec(
+        arpack_eigs, matvec, n, N,
+        eltype(A); kw...
+    )
     evals .= 1 ./ evals .+ target
 
     if left
         matvec_left(x) = solver.solve_H(conj(B)' * x)
-        left_evals, left_evecs = _arpack_eigs_via_matvec(arpack_eigs, matvec_left, n, N,
-                                                          eltype(A); kw...)
+        left_evals, left_evecs = _arpack_eigs_via_matvec(
+            arpack_eigs, matvec_left, n, N,
+            eltype(A); kw...
+        )
         left_evals .= 1 ./ left_evals .+ conj(target)
         return evals, evecs, left_evals, left_evecs
     else
@@ -674,11 +690,11 @@ end
 
 Internal helper that calls Arpack.eigs using a `LinearMap`-style wrapper.
 """
-function _arpack_eigs_via_matvec(eigs_fn, matvec, n::Int, nev::Int, ::Type{T}; kw...) where T
+function _arpack_eigs_via_matvec(eigs_fn, matvec, n::Int, nev::Int, ::Type{T}; kw...) where {T}
     # Build an operator wrapper that Arpack can use
     # Arpack.eigs accepts any object that supports mul!
     op = _MatvecOperator(matvec, n, T)
-    return eigs_fn(op; nev=nev, which=:LM, kw...)
+    return eigs_fn(op; nev = nev, which = :LM, kw...)
 end
 
 """
@@ -687,18 +703,18 @@ end
 Lightweight wrapper that presents a `matvec` function as a matrix-like
 object for Arpack.eigs (supports `size`, `eltype`, and `*`).
 """
-struct _MatvecOperator{F,T}
+struct _MatvecOperator{F, T}
     matvec::F
     n::Int
 end
 
-function _MatvecOperator(matvec::F, n::Int, ::Type{T}) where {F,T}
-    return _MatvecOperator{F,T}(matvec, n)
+function _MatvecOperator(matvec::F, n::Int, ::Type{T}) where {F, T}
+    return _MatvecOperator{F, T}(matvec, n)
 end
 
 Base.size(op::_MatvecOperator) = (op.n, op.n)
 Base.size(op::_MatvecOperator, d::Int) = op.n
-Base.eltype(::_MatvecOperator{F,T}) where {F,T} = T
+Base.eltype(::_MatvecOperator{F, T}) where {F, T} = T
 
 function Base.:*(op::_MatvecOperator, x::AbstractVector)
     return op.matvec(x)
@@ -763,13 +779,17 @@ Test whether two sparse matrices are element-wise approximately equal.
 Compares the CSC internal arrays (`colptr`, `rowval`, `nzval`) directly for
 speed when both matrices have the same sparsity structure.
 """
-function sparse_allclose(A::AbstractSparseMatrix, B::AbstractSparseMatrix;
-                         atol::Real=0, rtol::Real=sqrt(eps()))
+function sparse_allclose(
+        A::AbstractSparseMatrix, B::AbstractSparseMatrix;
+        atol::Real = 0, rtol::Real = sqrt(eps())
+    )
     Ac = sparse(A)
     Bc = sparse(B)
-    return (isapprox(nonzeros(Ac), nonzeros(Bc); atol=atol, rtol=rtol) &&
+    return (
+        isapprox(nonzeros(Ac), nonzeros(Bc); atol = atol, rtol = rtol) &&
             rowvals(Ac) == rowvals(Bc) &&
-            Ac.colptr == Bc.colptr)
+            Ac.colptr == Bc.colptr
+    )
 end
 
 # ---------------------------------------------------------------------------
@@ -810,27 +830,27 @@ end
 # ---------------------------------------------------------------------------
 
 export interleaved_view,
-       reshape_vector,
-       axindex,
-       axslice,
-       zeros_with_pattern,
-       expand_pattern,
-       apply_matrix,
-       move_single_axis,
-       apply_dense,
-       apply_sparse,
-       solve_upper_sparse,
-       add_sparse,
-       sparse_block_diag,
-       kronecker,
-       nkron,
-       permute_axis,
-       dedalus_copyto!,
-       perm_matrix,
-       drop_empty_rows,
-       scipy_sparse_eigs,
-       interleave_matrices,
-       sparse_allclose,
-       assert_sparse_pinv,
-       SPLIT_CSR_MATVECS,
-       OLD_CSR_MATVECS
+    reshape_vector,
+    axindex,
+    axslice,
+    zeros_with_pattern,
+    expand_pattern,
+    apply_matrix,
+    move_single_axis,
+    apply_dense,
+    apply_sparse,
+    solve_upper_sparse,
+    add_sparse,
+    sparse_block_diag,
+    kronecker,
+    nkron,
+    permute_axis,
+    dedalus_copyto!,
+    perm_matrix,
+    drop_empty_rows,
+    scipy_sparse_eigs,
+    interleave_matrices,
+    sparse_allclose,
+    assert_sparse_pinv,
+    SPLIT_CSR_MATVECS,
+    OLD_CSR_MATVECS

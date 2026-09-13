@@ -41,16 +41,20 @@ output handlers (dictionary, system, HDF5 file).
 # ============================================================================
 
 const FILEHANDLER_MODE_DEFAULT = get(
-    get(config, "analysis", Dict{String,Any}()),
-    "FILEHANDLER_MODE_DEFAULT", "overwrite")
+    get(config, "analysis", Dict{String, Any}()),
+    "FILEHANDLER_MODE_DEFAULT", "overwrite"
+)
 
 const FILEHANDLER_PARALLEL_DEFAULT = get(
-    get(config, "analysis", Dict{String,Any}()),
-    "FILEHANDLER_PARALLEL_DEFAULT", "gather")
+    get(config, "analysis", Dict{String, Any}()),
+    "FILEHANDLER_PARALLEL_DEFAULT", "gather"
+)
 
 const FILEHANDLER_TOUCH_TMPFILE = let
-    val = get(get(config, "analysis", Dict{String,Any}()),
-              "FILEHANDLER_TOUCH_TMPFILE", false)
+    val = get(
+        get(config, "analysis", Dict{String, Any}()),
+        "FILEHANDLER_TOUCH_TMPFILE", false
+    )
     if val isa Bool
         val
     elseif val isa AbstractString
@@ -79,15 +83,17 @@ mutable struct Evaluator
     dist::Any
     vars::Dict{String, Any}
     handlers::Vector{Any}
-    groups::Dict{Any,Vector{Any}}
+    groups::Dict{Any, Vector{Any}}
     # Pre-allocated buffers to avoid per-evaluation allocations
     _scheduled_buf::Vector{Any}      # reused by evaluate_scheduled
-    _tasks_buf::Vector{Dict{String,Any}}  # reused by evaluate_handlers
-    _unfinished_buf::Vector{Dict{String,Any}}  # reused by attempt_tasks
+    _tasks_buf::Vector{Dict{String, Any}}  # reused by evaluate_handlers
+    _unfinished_buf::Vector{Dict{String, Any}}  # reused by attempt_tasks
 
     function Evaluator(dist, vars::Dict)
-        return new(dist, vars, Any[], Dict{String,Vector{Any}}(),
-                   Any[], Dict{String,Any}[], Dict{String,Any}[])
+        return new(
+            dist, vars, Any[], Dict{String, Vector{Any}}(),
+            Any[], Dict{String, Any}[], Dict{String, Any}[]
+        )
     end
 end
 
@@ -121,7 +127,7 @@ Create a file handler and register it with the evaluator.
 - `"virtual"` -- virtual datasets (H5VirtualFileHandler)
 - `"mpio"` -- parallel HDF5 (H5ParallelFileHandler)
 """
-function add_file_handler(ev::Evaluator, filename; parallel=nothing, kw...)
+function add_file_handler(ev::Evaluator, filename; parallel = nothing, kw...)
     if parallel === nothing
         if _handler_comm_size(ev.dist.comm_cart) == 1
             parallel = "gather"
@@ -200,7 +206,7 @@ through layouts until every task is resolved, then process outputs.
 Reuses pre-allocated buffers on the Evaluator (`_tasks_buf`, `_unfinished_buf`)
 to avoid creating temporary vectors on every evaluation cycle.
 """
-function evaluate_handlers(ev::Evaluator, handlers; id=nothing, kw...)
+function evaluate_handlers(ev::Evaluator, handlers; id = nothing, kw...)
     # Default to uuid to cache within evaluation but not across evaluations
     if id === nothing
         id = uuid4()
@@ -219,17 +225,17 @@ function evaluate_handlers(ev::Evaluator, handlers; id=nothing, kw...)
     end
 
     # Attempt initial evaluation (attempt_tasks! filters in-place)
-    attempt_tasks!(ev, tasks_buf; id=id)
+    attempt_tasks!(ev, tasks_buf; id = id)
 
     # Move all fields to coefficient layout
     fields = get_task_fields(tasks_buf)
     require_coeff_space(ev, fields)
-    attempt_tasks!(ev, tasks_buf; id=id)
+    attempt_tasks!(ev, tasks_buf; id = id)
 
     # Oscillate through layouts until all tasks are evaluated
     # Limit to 10 passes to break on potential infinite loops
     n_layouts = length(ev.dist.layouts)
-    osc = oscillate(0:(n_layouts - 1); max_passes=10)
+    osc = oscillate(0:(n_layouts - 1); max_passes = 10)
     osc_state = iterate(osc)
     if osc_state === nothing
         return
@@ -253,7 +259,7 @@ function evaluate_handlers(ev::Evaluator, handlers; id=nothing, kw...)
         end
         current_index = next_index
         # Attempt evaluation
-        attempt_tasks!(ev, tasks_buf; id=id)
+        attempt_tasks!(ev, tasks_buf; id = id)
     end
 
     # Transform all outputs to coefficient layout to dealias
@@ -284,6 +290,7 @@ function evaluate_handlers(ev::Evaluator, handlers; id=nothing, kw...)
     for handler in handlers
         process(handler; kw...)
     end
+    return
 end
 
 """
@@ -298,7 +305,7 @@ function require_coeff_space(ev::Evaluator, fields)::Nothing
         return
     end
     # Build dictionary of starting layout indices
-    layouts = Dict{Int,Vector{Any}}()
+    layouts = Dict{Int, Vector{Any}}()
     for f in fields
         if f.layout !== coeff_layout
             idx = f.layout.index
@@ -308,12 +315,13 @@ function require_coeff_space(ev::Evaluator, fields)::Nothing
     isempty(layouts) && return
     # Decrement all fields down to coeff layout
     current_fields = Any[]
-    for index in sort(collect(keys(layouts)); rev=true)
+    for index in sort(collect(keys(layouts)); rev = true)
         index <= coeff_layout.index && continue
         append!(current_fields, layouts[index])
         path = ev.dist.paths[index]  # path at index connects index-1 <-> index
         decrement(path, current_fields)
     end
+    return
 end
 
 """
@@ -328,7 +336,7 @@ function require_grid_space(ev::Evaluator, fields)
         return
     end
     # Build dictionary of starting layout indices
-    layouts = Dict{Int,Vector{Any}}()
+    layouts = Dict{Int, Vector{Any}}()
     for f in fields
         if f.layout !== grid_layout
             idx = f.layout.index
@@ -344,6 +352,7 @@ function require_grid_space(ev::Evaluator, fields)
         path = ev.dist.paths[index + 1]  # path at index+1 connects index <-> index+1
         increment(path, current_fields)
     end
+    return
 end
 
 """
@@ -371,7 +380,7 @@ In-place variant of `attempt_tasks`: evaluates each task and removes
 finished entries from `tasks`, reusing the Evaluator's `_unfinished_buf`
 to avoid allocating a new vector per call.
 """
-function attempt_tasks!(ev::Evaluator, tasks::Vector{Dict{String,Any}}; kw...)
+function attempt_tasks!(ev::Evaluator, tasks::Vector{Dict{String, Any}}; kw...)
     buf = ev._unfinished_buf
     empty!(buf)
     for task in tasks
@@ -426,20 +435,24 @@ mutable struct Handler <: AbstractHandler
     dist::Any
     vars::Dict
     group::Any
-    wall_dt::Union{Nothing,Real}
-    sim_dt::Union{Nothing,Real}
-    iter::Union{Nothing,Integer}
+    wall_dt::Union{Nothing, Real}
+    sim_dt::Union{Nothing, Real}
+    iter::Union{Nothing, Integer}
     custom_schedule::Any
-    tasks::Vector{Dict{String,Any}}
+    tasks::Vector{Dict{String, Any}}
     last_wall_div::Int
     last_sim_div::Int
     last_iter_div::Int
 
-    function Handler(dist, vars::Dict;
-                     group=nothing, wall_dt=nothing, sim_dt=nothing,
-                     iter=nothing, custom_schedule=nothing)
-        return new(dist, vars, group, wall_dt, sim_dt, iter, custom_schedule,
-                   Dict{String,Any}[], -1, -1, -1)
+    function Handler(
+            dist, vars::Dict;
+            group = nothing, wall_dt = nothing, sim_dt = nothing,
+            iter = nothing, custom_schedule = nothing
+        )
+        return new(
+            dist, vars, group, wall_dt, sim_dt, iter, custom_schedule,
+            Dict{String, Any}[], -1, -1, -1
+        )
     end
 end
 
@@ -499,7 +512,7 @@ Register an output task with the handler.
 `task` may be a string (parsed to an operator), a `Field` (wrapped in a
 copy operator), or an already-built operator.
 """
-function add_task!(h::AbstractHandler, task; layout="g", name=nothing, scales=nothing)
+function add_task!(h::AbstractHandler, task; layout = "g", name = nothing, scales = nothing)
     # Default name
     if name === nothing
         name = string(task)
@@ -527,7 +540,7 @@ function add_task!(h::AbstractHandler, task; layout="g", name=nothing, scales=no
         scales = remedy_scales(h.dist, scales)
     end
     # Build task dictionary
-    td = Dict{String,Any}()
+    td = Dict{String, Any}()
     td["operator"] = op
     td["layout"] = get_layout_object(h.dist, layout)
     td["name"] = name
@@ -542,11 +555,12 @@ end
 
 Register multiple output tasks.
 """
-function add_tasks!(h::AbstractHandler, tasks; name::AbstractString="", kw...)
+function add_tasks!(h::AbstractHandler, tasks; name::AbstractString = "", kw...)
     for task in tasks
         tname = name * string(task)
-        add_task!(h, task; name=tname, kw...)
+        add_task!(h, task; name = tname, kw...)
     end
+    return
 end
 
 """
@@ -555,7 +569,7 @@ end
 Add fields from a FieldSystem.
 """
 function add_system!(h::AbstractHandler, system; kw...)
-    add_tasks!(h, system.fields; kw...)
+    return add_tasks!(h, system.fields; kw...)
 end
 
 """
@@ -584,15 +598,15 @@ mutable struct DictionaryHandler <: AbstractHandler
     dist::Any
     vars::Dict
     group::Any
-    wall_dt::Union{Nothing,Real}
-    sim_dt::Union{Nothing,Real}
-    iter::Union{Nothing,Integer}
+    wall_dt::Union{Nothing, Real}
+    sim_dt::Union{Nothing, Real}
+    iter::Union{Nothing, Integer}
     custom_schedule::Any
-    tasks::Vector{Dict{String,Any}}
+    tasks::Vector{Dict{String, Any}}
     last_wall_div::Int
     last_sim_div::Int
     last_iter_div::Int
-    fields::Dict{String,Any}
+    fields::Dict{String, Any}
 
     function DictionaryHandler(dist, vars::Dict; kw...)
         h = new()
@@ -608,7 +622,7 @@ mutable struct DictionaryHandler <: AbstractHandler
         h.last_wall_div = base.last_wall_div
         h.last_sim_div = base.last_sim_div
         h.last_iter_div = base.last_iter_div
-        h.fields = Dict{String,Any}()
+        h.fields = Dict{String, Any}()
         return h
     end
 end
@@ -632,6 +646,7 @@ function process(dh::DictionaryHandler; kw...)
         change_layout!(out, task["layout"])
         dh.fields[task["name"]] = out
     end
+    return
 end
 
 # ============================================================================
@@ -647,11 +662,11 @@ mutable struct SystemHandler <: AbstractHandler
     dist::Any
     vars::Dict
     group::Any
-    wall_dt::Union{Nothing,Real}
-    sim_dt::Union{Nothing,Real}
-    iter::Union{Nothing,Integer}
+    wall_dt::Union{Nothing, Real}
+    sim_dt::Union{Nothing, Real}
+    iter::Union{Nothing, Integer}
     custom_schedule::Any
-    tasks::Vector{Dict{String,Any}}
+    tasks::Vector{Dict{String, Any}}
     last_wall_div::Int
     last_sim_div::Int
     last_iter_div::Int
@@ -692,6 +707,7 @@ function build_system!(sh::SystemHandler)
             push!(sh.fields, op)
         end
     end
+    return
 end
 
 """
@@ -762,7 +778,7 @@ No-ops for SerialCommCart or serial mode.
 """
 function _handler_sync(f::Function, comm)
     _handler_barrier(comm)
-    try
+    return try
         f()
     finally
         _handler_barrier(comm)
@@ -790,18 +806,18 @@ mutable struct H5FileHandlerBase <: AbstractHandler
     dist::Any
     vars::Dict
     group::Any
-    wall_dt::Union{Nothing,Real}
-    sim_dt::Union{Nothing,Real}
-    iter::Union{Nothing,Integer}
+    wall_dt::Union{Nothing, Real}
+    sim_dt::Union{Nothing, Real}
+    iter::Union{Nothing, Integer}
     custom_schedule::Any
-    tasks::Vector{Dict{String,Any}}
+    tasks::Vector{Dict{String, Any}}
     last_wall_div::Int
     last_sim_div::Int
     last_iter_div::Int
     # File handler specific fields
     base_path::String
     name::String
-    max_writes::Union{Nothing,Int}
+    max_writes::Union{Nothing, Int}
     comm::Any           # Cartesian communicator (MPI or SerialCommCart)
     set_num::Int
     total_write_num::Int
@@ -809,9 +825,11 @@ mutable struct H5FileHandlerBase <: AbstractHandler
     _parallel_mode::Symbol  # :gather, :virtual, or :mpio
     _empty::Bool            # true if all tasks have zero local size (used by virtual mode)
 
-    function H5FileHandlerBase(base_path::AbstractString, dist, vars::Dict;
-                               max_writes=nothing, mode=nothing,
-                               _parallel_mode::Symbol=:gather, kw...)
+    function H5FileHandlerBase(
+            base_path::AbstractString, dist, vars::Dict;
+            max_writes = nothing, mode = nothing,
+            _parallel_mode::Symbol = :gather, kw...
+        )
         h = new()
         base = Handler(dist, vars; kw...)
         h.dist = base.dist
@@ -873,7 +891,7 @@ mutable struct H5FileHandlerBase <: AbstractHandler
 
         # Create output folder (rank 0 creates, barrier ensures visibility)
         if _sz > 1
-            sync(; comm=h.comm) do
+            sync(; comm = h.comm) do
                 if _rank == 0
                     mkpath(bp)
                 end
@@ -906,7 +924,7 @@ function _resolve_file_mode(bp::String, name::String, mode::String)
             if m !== nothing
                 full = joinpath(bp, entry)
                 if isdir(full)
-                    rm(full; recursive=true)
+                    rm(full; recursive = true)
                 elseif isfile(full)
                     rm(full)
                 end
@@ -993,7 +1011,7 @@ function add_task!(h::H5FileHandlerBase, task; kw...)
     td["local_start"] = local_start
     td["local_shape"] = local_shape
     td["local_size"] = prod(local_shape)
-    td["local_slices"] = Tuple(s:s+sz-1 for (s, sz) in zip(local_start, local_shape))
+    td["local_slices"] = Tuple(s:(s + sz - 1) for (s, sz) in zip(local_start, local_shape))
     return nothing
 end
 
@@ -1003,7 +1021,7 @@ end
 Internal: the base add_task! logic, callable from H5FileHandlerBase without
 dispatch ambiguity.
 """
-function _handler_add_task!(h::AbstractHandler, task; layout="g", name=nothing, scales=nothing)
+function _handler_add_task!(h::AbstractHandler, task; layout = "g", name = nothing, scales = nothing)
     # Default name
     if name === nothing
         name = string(task)
@@ -1031,7 +1049,7 @@ function _handler_add_task!(h::AbstractHandler, task; layout="g", name=nothing, 
         scales = remedy_scales(h.dist, scales)
     end
     # Build task dictionary
-    td = Dict{String,Any}()
+    td = Dict{String, Any}()
     td["operator"] = op
     td["layout"] = get_layout_object(h.dist, layout)
     td["name"] = name
@@ -1046,16 +1064,16 @@ end
 
 Determine write parameters (global_shape, local_start, local_shape) for a task.
 """
-function get_data_distribution(h::H5FileHandlerBase, task; rank=nothing)
+function get_data_distribution(h::H5FileHandlerBase, task; rank = nothing)
     layout = task["layout"]
     scales = task["scales"]
     domain = task["operator"].domain
     tensorsig = task["operator"].tensorsig
     # Domain shapes
     gs = global_shape(layout, domain, scales)
-    ls = local_shape(layout, domain, scales; rank=rank)
+    ls = local_shape(layout, domain, scales; rank = rank)
     # Local start
-    le = local_elements(layout, domain, scales; rank=rank)
+    le = local_elements(layout, domain, scales; rank = rank)
     local_start_vec = Int[]
     for (axis, lei) in enumerate(le)
         if length(lei) == 0
@@ -1093,21 +1111,29 @@ function setup_file(h::H5FileHandlerBase, file)
     # Time scales (Float64, resizable)
     for sn in ("sim_time", "timestep", "wall_time")
         if h.max_writes !== nothing
-            d = create_dataset(g_scales, sn, Float64, ((0,), (h.max_writes,));
-                               chunk=(1,))
+            d = create_dataset(
+                g_scales, sn, Float64, ((0,), (h.max_writes,));
+                chunk = (1,)
+            )
         else
-            d = create_dataset(g_scales, sn, Float64, ((0,), (-1,));
-                               chunk=(1,))
+            d = create_dataset(
+                g_scales, sn, Float64, ((0,), (-1,));
+                chunk = (1,)
+            )
         end
     end
     # Integer time scales
     for sn in ("iteration", "write_number")
         if h.max_writes !== nothing
-            d = create_dataset(g_scales, sn, Int64, ((0,), (h.max_writes,));
-                               chunk=(1,))
+            d = create_dataset(
+                g_scales, sn, Int64, ((0,), (h.max_writes,));
+                chunk = (1,)
+            )
         else
-            d = create_dataset(g_scales, sn, Int64, ((0,), (-1,));
-                               chunk=(1,))
+            d = create_dataset(
+                g_scales, sn, Int64, ((0,), (-1,));
+                chunk = (1,)
+            )
         end
     end
 
@@ -1138,6 +1164,7 @@ function setup_file(h::H5FileHandlerBase, file)
             end
         end
     end
+    return
 end
 
 """
@@ -1159,8 +1186,10 @@ function create_task_dataset(h::H5FileHandlerBase, file, task)
     end
     jl_dtype = task["dtype"]
     chunk_dims = (1, g_shape...)
-    dset = create_dataset(file["tasks"], task["name"], jl_dtype,
-                          (shape, maxshape); chunk=chunk_dims)
+    dset = create_dataset(
+        file["tasks"], task["name"], jl_dtype,
+        (shape, maxshape); chunk = chunk_dims
+    )
     return dset
 end
 
@@ -1169,8 +1198,10 @@ end
 
 Save task outputs to HDF5 file.
 """
-function process(h::H5FileHandlerBase;
-                 iteration=0, wall_time=0.0, sim_time=0.0, timestep=0.0, kw...)
+function process(
+        h::H5FileHandlerBase;
+        iteration = 0, wall_time = 0.0, sim_time = 0.0, timestep = 0.0, kw...
+    )
     # Update write counts
     h.total_write_num += 1
     h.file_write_num += 1
@@ -1183,12 +1214,14 @@ function process(h::H5FileHandlerBase;
     end
     # Write file metadata
     file = get_file(h)
-    write_file_metadata(h, file;
-                        write_number=h.total_write_num,
-                        iteration=iteration,
-                        wall_time=wall_time,
-                        sim_time=sim_time,
-                        timestep=timestep)
+    write_file_metadata(
+        h, file;
+        write_number = h.total_write_num,
+        iteration = iteration,
+        wall_time = wall_time,
+        sim_time = sim_time,
+        timestep = timestep
+    )
     # Write tasks
     for task in h.tasks
         out = task["out"]
@@ -1197,7 +1230,7 @@ function process(h::H5FileHandlerBase;
         write_task(h, file, task)
     end
     # Finalize
-    close_h5file(h, file)
+    return close_h5file(h, file)
 end
 
 """
@@ -1207,7 +1240,7 @@ Write file metadata and time scale data.
 Dispatches based on `_parallel_mode` to handle MPI-aware writing.
 """
 function write_file_metadata(h::H5FileHandlerBase, file; kw...)
-    if h._parallel_mode == :gather
+    return if h._parallel_mode == :gather
         _write_file_metadata_gather(h, file; kw...)
     elseif h._parallel_mode == :virtual
         _write_file_metadata_virtual(h, file; kw...)
@@ -1230,6 +1263,7 @@ function _write_file_metadata_base(h::H5FileHandlerBase, file; kw...)
         HDF5.set_extent_dims(dset, (h.file_write_num,))
         dset[h.file_write_num] = kw[Symbol(sn)]
     end
+    return
 end
 
 """
@@ -1260,7 +1294,7 @@ struct H5GatherFileHandler end
 Construct an H5FileHandlerBase configured for gather-mode writing.
 """
 function H5GatherFileHandler(filename::AbstractString, dist, vars::Dict; kw...)
-    return H5FileHandlerBase(filename, dist, vars; _parallel_mode=:gather, kw...)
+    return H5FileHandlerBase(filename, dist, vars; _parallel_mode = :gather, kw...)
 end
 
 """
@@ -1271,7 +1305,7 @@ all others wait via barrier.
 """
 function _gather_create_current_file(h::H5FileHandlerBase)
     fp = current_file(h)
-    _handler_sync(h.comm) do
+    return _handler_sync(h.comm) do
         if _handler_comm_rank(h.comm) == 0
             h5open(fp, "w") do file
                 setup_file(h, file)
@@ -1286,7 +1320,7 @@ end
 Open the current HDF5 file for gather-mode processing.
 Only root process opens the file; other processes receive `nothing`.
 """
-function _gather_open_file(h::H5FileHandlerBase; mode="r+")
+function _gather_open_file(h::H5FileHandlerBase; mode = "r+")
     if _handler_comm_rank(h.comm) == 0
         return h5open(current_file(h), mode)
     end
@@ -1299,7 +1333,7 @@ end
 Close the HDF5 file on root process. No-op on other processes.
 """
 function _gather_close_file(h::H5FileHandlerBase, file)
-    if _handler_comm_rank(h.comm) == 0
+    return if _handler_comm_rank(h.comm) == 0
         close(file)
     end
 end
@@ -1310,7 +1344,7 @@ end
 Write file metadata from root process only.
 """
 function _write_file_metadata_gather(h::H5FileHandlerBase, file; kw...)
-    if _handler_comm_rank(h.comm) == 0
+    return if _handler_comm_rank(h.comm) == 0
         _write_file_metadata_base(h, file; kw...)
     end
 end
@@ -1326,7 +1360,7 @@ function _gather_write_task(h::H5FileHandlerBase, file, task)
     # gather_data collects all data to root (returns full array on root, nothing elsewhere)
     data = gather_data(out)
     # Write global data from root process
-    if _handler_comm_rank(h.comm) == 0
+    return if _handler_comm_rank(h.comm) == 0
         dset = file["tasks"][task["name"]]
         HDF5.set_extent_dims(dset, (h.file_write_num, size(data)...))
         _write_data_to_dset(dset, data, h.file_write_num)
@@ -1339,7 +1373,7 @@ end
 Write data into an HDF5 dataset at the given write index (time slice).
 """
 function _write_data_to_dset(dset, data, write_num)
-    if ndims(data) == 0
+    return if ndims(data) == 0
         dset[write_num] = data[]
     elseif ndims(data) == 1
         dset[write_num, :] = data
@@ -1375,10 +1409,12 @@ Throws an error if parallel HDF5 is not available.
 function H5ParallelFileHandler(filename::AbstractString, dist, vars::Dict; kw...)
     # Check that HDF5 has MPI-IO support
     if !_hdf5_has_parallel()
-        error("H5ParallelFileHandler requires HDF5.jl built with MPI/parallel support. " *
-              "Use parallel=\"gather\" or parallel=\"virtual\" instead.")
+        error(
+            "H5ParallelFileHandler requires HDF5.jl built with MPI/parallel support. " *
+                "Use parallel=\"gather\" or parallel=\"virtual\" instead."
+        )
     end
-    return H5FileHandlerBase(filename, dist, vars; _parallel_mode=:mpio, kw...)
+    return H5FileHandlerBase(filename, dist, vars; _parallel_mode = :mpio, kw...)
 end
 
 """
@@ -1408,7 +1444,7 @@ and set up the file using the MPI-IO driver.
 """
 function _mpio_create_current_file(h::H5FileHandlerBase)
     fp = current_file(h)
-    if _handler_comm_size(h.comm) > 1 && MPI_ENABLED[]
+    return if _handler_comm_size(h.comm) > 1 && MPI_ENABLED[]
         mpi = get_mpi()
         h5open(fp, "w", h.comm, mpi.Info()) do file
             setup_file(h, file)
@@ -1446,8 +1482,10 @@ function _mpio_create_task_dataset(h::H5FileHandlerBase, file, task)
     chunk_dims = (1, l_shape...)
     # Ensure chunk dims are valid (all > 0)
     chunk_dims = Tuple(max(c, 1) for c in chunk_dims)
-    dset = create_dataset(file["tasks"], task["name"], jl_dtype,
-                          (shape, maxshape); chunk=chunk_dims)
+    dset = create_dataset(
+        file["tasks"], task["name"], jl_dtype,
+        (shape, maxshape); chunk = chunk_dims
+    )
     return dset
 end
 
@@ -1456,7 +1494,7 @@ end
 
 Open the current HDF5 file with the MPI-IO driver.
 """
-function _mpio_open_file(h::H5FileHandlerBase; mode="r+")
+function _mpio_open_file(h::H5FileHandlerBase; mode = "r+")
     if _handler_comm_size(h.comm) > 1 && MPI_ENABLED[]
         mpi = get_mpi()
         return h5open(current_file(h), mode, h.comm, mpi.Info())
@@ -1471,7 +1509,7 @@ end
 Close the MPI-IO HDF5 file (all processes).
 """
 function _mpio_close_file(h::H5FileHandlerBase, file)
-    close(file)
+    return close(file)
 end
 
 """
@@ -1491,7 +1529,7 @@ function _mpio_write_task(h::H5FileHandlerBase, file, task)
     local_shape = task["local_shape"]
     local_start = task["local_start"]
 
-    if prod(local_shape) > 0
+    return if prod(local_shape) > 0
         # Construct index ranges: time dimension + spatial dimensions
         # The time dimension is a single index; spatial dims use ranges
         idx = Any[index]
@@ -1527,7 +1565,7 @@ struct H5VirtualFileHandler end
 Construct an H5FileHandlerBase configured for virtual-dataset mode.
 """
 function H5VirtualFileHandler(filename::AbstractString, dist, vars::Dict; kw...)
-    return H5FileHandlerBase(filename, dist, vars; _parallel_mode=:virtual, kw...)
+    return H5FileHandlerBase(filename, dist, vars; _parallel_mode = :virtual, kw...)
 end
 
 """
@@ -1579,7 +1617,7 @@ function _virtual_create_current_file(h::H5FileHandlerBase)
     end
 
     # Create process files on nonempty processes
-    if !is_empty
+    return if !is_empty
         # Touch temp files to update filesystem cache (if configured)
         tmpfile = nothing
         if FILEHANDLER_TOUCH_TMPFILE
@@ -1593,7 +1631,7 @@ function _virtual_create_current_file(h::H5FileHandlerBase)
         end
         # Remove temp file
         if FILEHANDLER_TOUCH_TMPFILE && tmpfile !== nothing
-            rm(tmpfile; force=true)
+            rm(tmpfile; force = true)
         end
     end
 end
@@ -1616,16 +1654,16 @@ function _virtual_setup_joint_file(h::H5FileHandlerBase, file)
 
     for sn in ("sim_time", "timestep", "wall_time")
         if h.max_writes !== nothing
-            create_dataset(g_scales, sn, Float64, ((0,), (h.max_writes,)); chunk=(1,))
+            create_dataset(g_scales, sn, Float64, ((0,), (h.max_writes,)); chunk = (1,))
         else
-            create_dataset(g_scales, sn, Float64, ((0,), (-1,)); chunk=(1,))
+            create_dataset(g_scales, sn, Float64, ((0,), (-1,)); chunk = (1,))
         end
     end
     for sn in ("iteration", "write_number")
         if h.max_writes !== nothing
-            create_dataset(g_scales, sn, Int64, ((0,), (h.max_writes,)); chunk=(1,))
+            create_dataset(g_scales, sn, Int64, ((0,), (h.max_writes,)); chunk = (1,))
         else
-            create_dataset(g_scales, sn, Int64, ((0,), (-1,)); chunk=(1,))
+            create_dataset(g_scales, sn, Int64, ((0,), (-1,)); chunk = (1,))
         end
     end
 
@@ -1655,6 +1693,7 @@ function _virtual_setup_joint_file(h::H5FileHandlerBase, file)
             end
         end
     end
+    return
 end
 
 """
@@ -1686,8 +1725,10 @@ function _virtual_create_task_dataset(h::H5FileHandlerBase, file, task)
         # In serial mode this is exactly what we want.
         # In parallel mode without VDS, data will be in separate process files.
         chunk_dims = (1, g_shape...)
-        dset = create_dataset(file["tasks"], task["name"], jl_dtype,
-                              (shape, maxshape); chunk=chunk_dims)
+        dset = create_dataset(
+            file["tasks"], task["name"], jl_dtype,
+            (shape, maxshape); chunk = chunk_dims
+        )
     end
     return dset
 end
@@ -1700,7 +1741,7 @@ Check if HDF5.jl supports the Virtual Dataset (VDS) API.
 function _hdf5_has_vds_support()
     # Check for the necessary low-level API functions
     return isdefined(HDF5, :VirtualLayout) ||
-           isdefined(HDF5.API, :h5p_set_virtual)
+        isdefined(HDF5.API, :h5p_set_virtual)
 end
 
 """
@@ -1719,7 +1760,7 @@ function _create_vds_dataset(h::H5FileHandlerBase, file, task, shape, maxshape, 
     try
         # Set up virtual mappings for each nonempty process
         for rank in 0:(comm_sz - 1)
-            rank_global_shape, rank_local_start, rank_local_shape = get_data_distribution(h, task; rank=rank)
+            rank_global_shape, rank_local_start, rank_local_shape = get_data_distribution(h, task; rank = rank)
             if prod(rank_local_shape) == 0
                 continue
             end
@@ -1742,21 +1783,25 @@ function _create_vds_dataset(h::H5FileHandlerBase, file, task, shape, maxshape, 
             file_start = (0, rank_local_start...)
             file_count = (1, rank_local_shape...)
             # HDF5 C API uses reversed dimensions (row-major <-> column-major)
-            HDF5.API.h5s_select_hyperslab(vspace, HDF5.API.H5S_SELECT_SET,
+            HDF5.API.h5s_select_hyperslab(
+                vspace, HDF5.API.H5S_SELECT_SET,
                 collect(UInt64, reverse(file_start)),
                 C_NULL,
                 collect(UInt64, reverse(file_count)),
-                C_NULL)
+                C_NULL
+            )
 
             # Source space
             src_space = HDF5.API.h5s_create_simple(collect(Int, reverse(src_shape)), collect(Int, reverse(src_maxshape)))
             src_start = ntuple(_ -> UInt64(0), length(src_shape))
             src_count = Tuple(UInt64(s) for s in src_shape)
-            HDF5.API.h5s_select_hyperslab(src_space, HDF5.API.H5S_SELECT_SET,
+            HDF5.API.h5s_select_hyperslab(
+                src_space, HDF5.API.H5S_SELECT_SET,
                 collect(UInt64, reverse(src_start)),
                 C_NULL,
                 collect(UInt64, reverse(src_count)),
-                C_NULL)
+                C_NULL
+            )
 
             # Add virtual mapping
             HDF5.API.h5p_set_virtual(dcpl, vspace, src_path, src_dset_name, src_space)
@@ -1768,9 +1813,11 @@ function _create_vds_dataset(h::H5FileHandlerBase, file, task, shape, maxshape, 
         # Create the virtual dataset
         hdf5_dtype = HDF5.datatype(dtype)
         total_space = HDF5.API.h5s_create_simple(collect(Int, reverse(shape)), collect(Int, reverse(maxshape)))
-        dset_id = HDF5.API.h5d_create(file["tasks"], dset_name,
-                                       hdf5_dtype, total_space, HDF5.API.H5P_DEFAULT,
-                                       dcpl, HDF5.API.H5P_DEFAULT)
+        dset_id = HDF5.API.h5d_create(
+            file["tasks"], dset_name,
+            hdf5_dtype, total_space, HDF5.API.H5P_DEFAULT,
+            dcpl, HDF5.API.H5P_DEFAULT
+        )
         HDF5.API.h5s_close(total_space)
         return HDF5.Dataset(dset_id, file["tasks"])
     catch e
@@ -1778,8 +1825,10 @@ function _create_vds_dataset(h::H5FileHandlerBase, file, task, shape, maxshape, 
         @warn "Virtual dataset creation failed: $e. Falling back to regular dataset."
         g_shape = task["global_shape"]
         chunk_dims = (1, g_shape...)
-        dset = create_dataset(file["tasks"], task["name"], dtype,
-                              (shape, maxshape); chunk=chunk_dims)
+        dset = create_dataset(
+            file["tasks"], task["name"], dtype,
+            (shape, maxshape); chunk = chunk_dims
+        )
         return dset
     finally
         HDF5.API.h5p_close(dcpl)
@@ -1804,8 +1853,10 @@ function _virtual_setup_process_file(h::H5FileHandlerBase, file)
             end
             jl_dtype = task["dtype"]
             chunk_dims = (1, l_shape...)
-            dset = create_dataset(g_tasks, task["name"], jl_dtype,
-                                  (shape, maxshape); chunk=chunk_dims)
+            dset = create_dataset(
+                g_tasks, task["name"], jl_dtype,
+                (shape, maxshape); chunk = chunk_dims
+            )
             # Save write attributes for merging
             layout = task["layout"]
             attrs(dset)["ext_mesh"] = collect(Int, layout.ext_mesh)
@@ -1815,6 +1866,7 @@ function _virtual_setup_process_file(h::H5FileHandlerBase, file)
             attrs(dset)["local_shape"] = collect(Int, task["local_shape"])
         end
     end
+    return
 end
 
 """
@@ -1823,7 +1875,7 @@ end
 Open files for virtual mode. Returns a tuple (joint_file, proc_file).
 Joint file opened on root only; process file opened on nonempty processes.
 """
-function _virtual_open_file(h::H5FileHandlerBase; mode="r+")
+function _virtual_open_file(h::H5FileHandlerBase; mode = "r+")
     is_empty = _is_handler_empty(h)
     _rank = _handler_comm_rank(h.comm)
 
@@ -1854,7 +1906,7 @@ function _virtual_close_file(h::H5FileHandlerBase, file)
     if _handler_comm_rank(h.comm) == 0 && joint_file !== nothing
         close(joint_file)
     end
-    if proc_file !== nothing
+    return if proc_file !== nothing
         close(proc_file)
     end
 end
@@ -1866,7 +1918,7 @@ Write file metadata for virtual mode. Only root writes to the joint file.
 """
 function _write_file_metadata_virtual(h::H5FileHandlerBase, file; kw...)
     joint_file, proc_file = file
-    if _handler_comm_rank(h.comm) == 0 && joint_file !== nothing
+    return if _handler_comm_rank(h.comm) == 0 && joint_file !== nothing
         _write_file_metadata_base(h, joint_file; kw...)
     end
 end
@@ -1881,7 +1933,7 @@ function _virtual_write_task(h::H5FileHandlerBase, file, task)
     joint_file, proc_file = file
     out = task["out"]
     # Write local data to process file from nonempty processes
-    if task["local_size"] > 0 && proc_file !== nothing
+    return if task["local_size"] > 0 && proc_file !== nothing
         dset = proc_file["tasks"][task["name"]]
         HDF5.set_extent_dims(dset, (h.file_write_num, task["local_shape"]...))
         _write_data_to_dset(dset, out.data, h.file_write_num)
@@ -1899,7 +1951,7 @@ dataset and copies all data into a new contiguous dataset.
 - `task_name`: name of the task dataset under "tasks/"
 - `overwrite`: if true, replace the virtual dataset with the merged one
 """
-function merge_virtual_task(file, task_name::AbstractString; overwrite::Bool=false)
+function merge_virtual_task(file, task_name::AbstractString; overwrite::Bool = false)
     old_dset = file["tasks"][task_name]
     old_shape = size(old_dset)
     old_dtype = eltype(old_dset)
@@ -1908,8 +1960,10 @@ function merge_virtual_task(file, task_name::AbstractString; overwrite::Bool=fal
     # Create new dataset with shape[1]=1 for initial chunking, then resize
     new_shape = (1, old_shape[2:end]...)
     maxshape = (-1, old_shape[2:end]...)
-    new_dset = create_dataset(file["tasks"], new_name, old_dtype,
-                              (new_shape, maxshape); chunk=new_shape)
+    new_dset = create_dataset(
+        file["tasks"], new_name, old_dtype,
+        (new_shape, maxshape); chunk = new_shape
+    )
     HDF5.set_extent_dims(new_dset, old_shape)
 
     # Copy data chunk by chunk (one time slice at a time)
@@ -1927,13 +1981,15 @@ function merge_virtual_task(file, task_name::AbstractString; overwrite::Bool=fal
     end
 
     # Overwrite old dataset if requested
-    if overwrite
+    return if overwrite
         HDF5.delete_object(file["tasks"], task_name)
         # HDF5 doesn't support rename directly; we'd need low-level API
         # For now, the merged dataset is available as task_name_merged
         try
-            HDF5.API.h5l_move(file["tasks"], new_name, file["tasks"], task_name,
-                              HDF5.API.H5P_DEFAULT, HDF5.API.H5P_DEFAULT)
+            HDF5.API.h5l_move(
+                file["tasks"], new_name, file["tasks"], task_name,
+                HDF5.API.H5P_DEFAULT, HDF5.API.H5P_DEFAULT
+            )
         catch
             @warn "Could not rename merged dataset. Available as '$(new_name)'."
         end
@@ -2007,13 +2063,13 @@ end
 
 Open the current HDF5 file. Dispatches based on _parallel_mode.
 """
-function open_h5file(h::H5FileHandlerBase; mode="r+")
+function open_h5file(h::H5FileHandlerBase; mode = "r+")
     if h._parallel_mode == :gather
-        return _gather_open_file(h; mode=mode)
+        return _gather_open_file(h; mode = mode)
     elseif h._parallel_mode == :virtual
-        return _virtual_open_file(h; mode=mode)
+        return _virtual_open_file(h; mode = mode)
     elseif h._parallel_mode == :mpio
-        return _mpio_open_file(h; mode=mode)
+        return _mpio_open_file(h; mode = mode)
     else
         error("Unrecognized _parallel_mode: $(h._parallel_mode)")
     end
@@ -2025,7 +2081,7 @@ end
 Close the current HDF5 file. Dispatches based on _parallel_mode.
 """
 function close_h5file(h::H5FileHandlerBase, file)
-    if h._parallel_mode == :gather
+    return if h._parallel_mode == :gather
         _gather_close_file(h, file)
     elseif h._parallel_mode == :virtual
         _virtual_close_file(h, file)
@@ -2042,7 +2098,7 @@ end
 Write task data. Dispatches based on _parallel_mode.
 """
 function write_task(h::H5FileHandlerBase, file, task)
-    if h._parallel_mode == :gather
+    return if h._parallel_mode == :gather
         _gather_write_task(h, file, task)
     elseif h._parallel_mode == :virtual
         _virtual_write_task(h, file, task)
@@ -2059,7 +2115,7 @@ end
 Generate and set up a new HDF5 file. Dispatches based on _parallel_mode.
 """
 function create_current_file(h::H5FileHandlerBase)
-    if h._parallel_mode == :gather
+    return if h._parallel_mode == :gather
         _gather_create_current_file(h)
     elseif h._parallel_mode == :virtual
         _virtual_create_current_file(h)
@@ -2154,13 +2210,13 @@ Alias for [`H5FileHandlerBase`](@ref), the default file-output handler.
 const FileHandler = H5FileHandlerBase
 
 export Evaluator,
-       FileHandler,
-       H5FileHandlerBase,
-       H5GatherFileHandler,
-       H5ParallelFileHandler,
-       H5VirtualFileHandler,
-       AbstractHandler,
-       merge_virtual_task
+    FileHandler,
+    H5FileHandlerBase,
+    H5GatherFileHandler,
+    H5ParallelFileHandler,
+    H5VirtualFileHandler,
+    AbstractHandler,
+    merge_virtual_task
 
 
 # Evaluator-specific dispatches for require_coeff/grid_space!

@@ -16,23 +16,23 @@ const REFDIR = joinpath(@__DIR__, "reference_values")
         q_val = ref["parameters"]["q"]
 
         coord = Coordinate("x")
-        dist = Distributor(coord; dtype=ComplexF64)
-        basis = ComplexFourier(coord, N; bounds=(0, 2*pi))
+        dist = Distributor(coord; dtype = ComplexF64)
+        basis = ComplexFourier(coord, N; bounds = (0, 2 * pi))
 
-        y = Field(dist; bases=(basis,))
+        y = Field(dist; bases = (basis,))
         a = Field(dist)
         q = Field(dist)
-        cos_2x = Field(dist; bases=(basis,))
+        cos_2x = Field(dist; bases = (basis,))
         x = local_grid(dist, basis)
         cos_2x["g"] = cos.(2 .* x)
         dx = A -> Differentiate(A, coord)
 
-        problem = EVP([y]; eigenvalue=a, namespace=@locals)
+        problem = EVP([y]; eigenvalue = a, namespace = @locals)
         add_equation!(problem, "dx(dx(y)) + (a - 2*q*cos_2x)*y = 0")
 
         solver = build_solver(problem)
         q["g"] .= q_val
-        solve_dense!(solver, solver.subproblems[1]; rebuild_matrices=true)
+        solve_dense!(solver, solver.subproblems[1]; rebuild_matrices = true)
         sorted_evals = sort(real.(solver.eigenvalues))
         computed = sorted_evals[1:length(expected)]
 
@@ -41,7 +41,7 @@ const REFDIR = joinpath(@__DIR__, "reference_values")
                 atol_zero = ref["metadata"]["tolerance_atol_zero"]
                 @test abs(computed[i]) < atol_zero
             else
-                @test isapprox(computed[i], expected[i]; rtol=rtol)
+                @test isapprox(computed[i], expected[i]; rtol = rtol)
             end
         end
     end
@@ -57,20 +57,20 @@ const REFDIR = joinpath(@__DIR__, "reference_values")
         seed = ref["parameters"]["seed"]
 
         coords = CartesianCoordinates("x", "y")
-        dist = Distributor(coords; dtype=Float64)
-        xbasis = RealFourier(coords["x"], Nx; bounds=(0, Lx))
-        ybasis = ChebyshevT(coords["y"], Ny; bounds=(0, Ly))
+        dist = Distributor(coords; dtype = Float64)
+        xbasis = RealFourier(coords["x"], Nx; bounds = (0, Lx))
+        ybasis = ChebyshevT(coords["y"], Ny; bounds = (0, Ly))
 
-        u = Field(dist; name="u", bases=(xbasis, ybasis))
-        tau_1 = Field(dist; name="tau_1", bases=(xbasis,))
-        tau_2 = Field(dist; name="tau_2", bases=(xbasis,))
+        u = Field(dist; name = "u", bases = (xbasis, ybasis))
+        tau_1 = Field(dist; name = "tau_1", bases = (xbasis,))
+        tau_2 = Field(dist; name = "tau_2", bases = (xbasis,))
 
         x, y = local_grids(dist, xbasis, ybasis)
-        f = Field(dist; bases=(xbasis, ybasis))
-        g = Field(dist; bases=(xbasis,))
-        h = Field(dist; bases=(xbasis,))
-        fill_random!(f, "g"; seed=seed)
-        low_pass_filter!(f; shape=(Nx ÷ 4, Ny ÷ 4))
+        f = Field(dist; bases = (xbasis, ybasis))
+        g = Field(dist; bases = (xbasis,))
+        h = Field(dist; bases = (xbasis,))
+        fill_random!(f, "g"; seed = seed)
+        low_pass_filter!(f; shape = (Nx ÷ 4, Ny ÷ 4))
         g["g"] = sin.(8 .* x) .* 0.025
         h["g"] .= 0
 
@@ -78,7 +78,7 @@ const REFDIR = joinpath(@__DIR__, "reference_values")
         lift_basis = derivative_basis(ybasis, 2)
         lift = (A, n) -> Lift(A, lift_basis, n)
 
-        problem = LBVP([u, tau_1, tau_2]; namespace=@locals)
+        problem = LBVP([u, tau_1, tau_2]; namespace = @locals)
         add_equation!(problem, "lap(u) + lift(tau_1,-1) + lift(tau_2,-2) = f")
         add_equation!(problem, "u(y=0) = g")
         add_equation!(problem, "dy(u)(y=Ly) = h")
@@ -111,16 +111,16 @@ const REFDIR = joinpath(@__DIR__, "reference_values")
         num_steps = ref["parameters"]["num_steps"]
 
         xcoord = Coordinate("x")
-        dist = Distributor(xcoord; dtype=Float64)
-        xbasis = RealFourier(xcoord, Nx; bounds=(0, Lx), dealias=3/2)
+        dist = Distributor(xcoord; dtype = Float64)
+        xbasis = RealFourier(xcoord, Nx; bounds = (0, Lx), dealias = 3 / 2)
 
-        u = Field(dist; name="u", bases=(xbasis,))
+        u = Field(dist; name = "u", bases = (xbasis,))
 
         a = a_visc
         b = b_disp
         dx = A -> Differentiate(A, xcoord)
 
-        problem = IVP([u]; namespace=@locals)
+        problem = IVP([u]; namespace = @locals)
         add_equation!(problem, "dt(u) - a*dx(dx(u)) - b*dx(dx(dx(u))) = - u*dx(u)")
 
         x = local_grid(dist, xbasis)
@@ -130,7 +130,7 @@ const REFDIR = joinpath(@__DIR__, "reference_values")
         # Record initial condition field for comparison after time-stepping
         u_initial = copy(vec(u["g"]))
         u_peak_ref = ref["reference"]["u_peak_t0"]
-        @test isapprox(maximum(u_initial), u_peak_ref; rtol=rtol)
+        @test isapprox(maximum(u_initial), u_peak_ref; rtol = rtol)
 
         # Time-step a few iterations
         solver = build_solver(problem, SBDF2)
@@ -163,23 +163,23 @@ const REFDIR = joinpath(@__DIR__, "reference_values")
         R_ref = ref["reference"]["R_n3"]
 
         coords = SphericalCoordinates("phi", "theta", "r")
-        dist = Distributor(coords; dtype=Float64)
-        ball = BallBasis(coords; shape=(1, 1, Nr), radius=1, dtype=Float64, dealias=2)
+        dist = Distributor(coords; dtype = Float64)
+        ball = BallBasis(coords; shape = (1, 1, Nr), radius = 1, dtype = Float64, dealias = 2)
 
-        f = Field(dist; name="f", bases=(ball,))
-        tau = Field(dist; name="tau", bases=(surface(ball),))
+        f = Field(dist; name = "f", bases = (ball,))
+        tau = Field(dist; name = "tau", bases = (surface(ball),))
 
         lift = A -> Lift(A, ball, -1)
 
-        problem = NLBVP([f, tau]; namespace=@locals)
+        problem = NLBVP([f, tau]; namespace = @locals)
         add_equation!(problem, "lap(f) + lift(tau) = - f^n")
         add_equation!(problem, "f(r=1) = 0")
 
         _, _, r = local_grids(dist, ball)
         R0 = 5
-        f["g"] = @. R0^(2/(n-1)) * (1 - r^2)^2
+        f["g"] = @. R0^(2 / (n - 1)) * (1 - r^2)^2
 
-        solver = build_solver(problem; ncc_cutoff=1e-3)
+        solver = build_solver(problem; ncc_cutoff = 1.0e-3)
         pert_norm = Inf
         max_iter = ref["parameters"]["max_iter"]
         iter_count = 0
@@ -190,10 +190,10 @@ const REFDIR = joinpath(@__DIR__, "reference_values")
         end
 
         # Extract R from f(r=0)
-        f0 = allgather_data(f(r=0) |> evaluate, "g")[1, 1, 1]
-        R_computed = f0^((n-1)/2)
+        f0 = allgather_data(f(r = 0) |> evaluate, "g")[1, 1, 1]
+        R_computed = f0^((n - 1) / 2)
 
-        @test isapprox(R_computed, R_ref; rtol=rtol)
+        @test isapprox(R_computed, R_ref; rtol = rtol)
         @test iter_count < max_iter
     end
 

@@ -24,7 +24,7 @@ using Dedalus
         c2 = CartesianCoordinates("x")
         d = Distributor(c2, Float64)
         @test Dedalus.first_axis(d, b) == 1
-        grids = local_grids(d, b; scales=1)
+        grids = local_grids(d, b; scales = 1)
         @test length(grids) == 1
         @test vec(grids[1]) ≈ collect(range(0, 2pi, 9)[1:8])
     end
@@ -33,7 +33,7 @@ using Dedalus
         c = CartesianCoordinates("x")
         d = Distributor(c, Float64)
         b = RealFourier(c.coords[1], 8, (0, 2pi))
-        f = Dedalus.Field(d; name="f", bases=(b,))
+        f = Dedalus.Field(d; name = "f", bases = (b,))
         f["g"] = 2
         @test all(==(2), f["g"])
         f["c"] = 0

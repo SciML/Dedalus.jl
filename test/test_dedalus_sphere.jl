@@ -41,10 +41,10 @@ using SpecialFunctions: beta
                 backward = P'
                 product = backward * forward
                 @test size(product) == (N, N)
-                @test isapprox(product, I(N), atol=1e-10)
+                @test isapprox(product, I(N), atol = 1.0e-10)
             catch e
                 @test_broken false  # Mark as broken if API call fails
-                @warn "Forward-backward test failed for N=$N, a=$a, b=$b" exception=e
+                @warn "Forward-backward test failed for N=$N, a=$a, b=$b" exception = e
             end
         end
     end
@@ -63,10 +63,10 @@ using SpecialFunctions: beta
                 backward = P'
                 product = forward * backward
                 @test size(product) == (N, N)
-                @test isapprox(product, I(N), atol=1e-10)
+                @test isapprox(product, I(N), atol = 1.0e-10)
             catch e
                 @test_broken false
-                @warn "Backward-forward test failed for N=$N, a=$a, b=$b" exception=e
+                @warn "Backward-forward test failed for N=$N, a=$a, b=$b" exception = e
             end
         end
     end
@@ -114,10 +114,10 @@ using SpecialFunctions: beta
 
                 product = backward_trim * Ap_mat[1:min(n_out, size(P1_trim, 1)), 1:min(n_in, size(P0_trim, 1))] * forward_trim
                 n = min(size(product, 1), size(product, 2))
-                @test isapprox(product[1:n, 1:n], I(n), atol=1e-9)
+                @test isapprox(product[1:n, 1:n], I(n), atol = 1.0e-9)
             catch e
                 @test_broken false
-                @warn "A+ round-trip test failed for N=$N, a=$a, b=$b" exception=e
+                @warn "A+ round-trip test failed for N=$N, a=$a, b=$b" exception = e
             end
         end
     end
@@ -160,10 +160,10 @@ using SpecialFunctions: beta
                 @test cols > 0
                 m1 = Matrix(path1_mat[1:rows, 1:cols])
                 m2 = Matrix(path2_mat[1:rows, 1:cols])
-                @test isapprox(m1, m2, atol=1e-12)
+                @test isapprox(m1, m2, atol = 1.0e-12)
             catch e
                 @test_broken false
-                @warn "A+/B+ commutation test failed for N=$N, a=$a, b=$b" exception=e
+                @warn "A+/B+ commutation test failed for N=$N, a=$a, b=$b" exception = e
             end
         end
     end
@@ -213,10 +213,10 @@ using SpecialFunctions: beta
                 @test cols > 0
                 m1 = Matrix(path1_mat[1:rows, 1:cols])
                 m2 = Matrix(path2_mat[1:rows, 1:cols])
-                @test isapprox(m1, m2, atol=1e-11)
+                @test isapprox(m1, m2, atol = 1.0e-11)
             catch e
                 @test_broken false
-                @warn "A++/B++ double commutation test failed for N=$N, a=$a, b=$b" exception=e
+                @warn "A++/B++ double commutation test failed for N=$N, a=$a, b=$b" exception = e
             end
         end
     end
@@ -232,10 +232,10 @@ using SpecialFunctions: beta
                 @test m > 0
                 # mass(a, b) = 2^(a+b+1) * Beta(a+1, b+1)
                 expected = 2^(a + b + 1) * beta(a + 1, b + 1)
-                @test isapprox(m, expected, rtol=1e-12)
+                @test isapprox(m, expected, rtol = 1.0e-12)
             catch e
                 @test_broken false
-                @warn "Mass positivity test failed for a=$a, b=$b" exception=e
+                @warn "Mass positivity test failed for a=$a, b=$b" exception = e
             end
         end
 
@@ -246,10 +246,10 @@ using SpecialFunctions: beta
                 # only when a+b is the same (which it is by symmetry)
                 m_ab = Dedalus.jacobi_mass(a, b)
                 m_ba = Dedalus.jacobi_mass(b, a)
-                @test isapprox(m_ab, m_ba, rtol=1e-14)
+                @test isapprox(m_ab, m_ba, rtol = 1.0e-14)
             catch e
                 @test_broken false
-                @warn "Mass symmetry test failed for a=$a, b=$b" exception=e
+                @warn "Mass symmetry test failed for a=$a, b=$b" exception = e
             end
         end
 
@@ -257,23 +257,23 @@ using SpecialFunctions: beta
             (a <= -1 || b <= -1) && continue
             try
                 m = Dedalus.jacobi_mass(a, b)
-                m_log = Dedalus.jacobi_mass(a, b; log=true)
-                @test isapprox(exp(m_log), m, rtol=1e-12)
+                m_log = Dedalus.jacobi_mass(a, b; log = true)
+                @test isapprox(exp(m_log), m, rtol = 1.0e-12)
             catch e
                 @test_broken false
-                @warn "Mass log test failed for a=$a, b=$b" exception=e
+                @warn "Mass log test failed for a=$a, b=$b" exception = e
             end
         end
 
         # Known values: mass(0, 0) = 2 (Legendre)
         @testset "mass known values" begin
             try
-                @test isapprox(Dedalus.jacobi_mass(0, 0), 2.0, atol=1e-14)
+                @test isapprox(Dedalus.jacobi_mass(0, 0), 2.0, atol = 1.0e-14)
                 # mass(-0.5, -0.5) = 2^0 * Beta(0.5, 0.5) = pi
-                @test isapprox(Dedalus.jacobi_mass(-0.5, -0.5), pi, atol=1e-12)
+                @test isapprox(Dedalus.jacobi_mass(-0.5, -0.5), pi, atol = 1.0e-12)
             catch e
                 @test_broken false
-                @warn "Mass known values test failed" exception=e
+                @warn "Mass known values test failed" exception = e
             end
         end
     end
@@ -285,10 +285,10 @@ using SpecialFunctions: beta
                 # Zero shift should give ratio of 1
                 n_arr = collect(0.0:4.0)
                 ratios = Dedalus.jacobi_norm_ratio(0, 0, 0, n_arr, a, b)
-                @test all(isapprox.(ratios, 1.0, atol=1e-12))
+                @test all(isapprox.(ratios, 1.0, atol = 1.0e-12))
             catch e
                 @test_broken false
-                @warn "Norm ratio identity test failed for a=$a, b=$b" exception=e
+                @warn "Norm ratio identity test failed for a=$a, b=$b" exception = e
             end
         end
 
@@ -299,7 +299,7 @@ using SpecialFunctions: beta
                 @test all(ratios .> 0)
             catch e
                 @test_broken false
-                @warn "Norm ratio positivity test failed for a=$a, b=$b" exception=e
+                @warn "Norm ratio positivity test failed for a=$a, b=$b" exception = e
             end
         end
     end
@@ -313,10 +313,10 @@ using SpecialFunctions: beta
                 Id_op = Dedalus.jacobi_operator("Id")
                 Id_mat = Matrix(sparse(Id_op(N, a, b)))
                 @test size(Id_mat) == (N, N)
-                @test isapprox(Id_mat, I(N), atol=1e-14)
+                @test isapprox(Id_mat, I(N), atol = 1.0e-14)
             catch e
                 @test_broken false
-                @warn "Identity operator test failed for N=$N, a=$a, b=$b" exception=e
+                @warn "Identity operator test failed for N=$N, a=$a, b=$b" exception = e
             end
         end
 
@@ -325,14 +325,14 @@ using SpecialFunctions: beta
                 Pi_op = Dedalus.jacobi_operator("Pi")
                 Pi_mat = Matrix(sparse(Pi_op(N, 0.0, 0.0)))
                 # Parity: diag((-1)^0, (-1)^1, ..., (-1)^(N-1))
-                expected_diag = [(-1.0)^k for k in 0:(N-1)]
-                @test isapprox(Pi_mat, diagm(expected_diag), atol=1e-14)
+                expected_diag = [(-1.0)^k for k in 0:(N - 1)]
+                @test isapprox(Pi_mat, diagm(expected_diag), atol = 1.0e-14)
                 # Pi^2 = I
                 Pi2 = Pi_mat * Pi_mat
-                @test isapprox(Pi2, I(N), atol=1e-14)
+                @test isapprox(Pi2, I(N), atol = 1.0e-14)
             catch e
                 @test_broken false
-                @warn "Parity operator test failed for N=$N" exception=e
+                @warn "Parity operator test failed for N=$N" exception = e
             end
         end
 
@@ -340,11 +340,11 @@ using SpecialFunctions: beta
             try
                 N_op = Dedalus.jacobi_operator("N")
                 N_mat = Matrix(sparse(N_op(N, 0.0, 0.0)))
-                expected_diag = collect(0.0:(N-1))
-                @test isapprox(N_mat, diagm(expected_diag), atol=1e-14)
+                expected_diag = collect(0.0:(N - 1))
+                @test isapprox(N_mat, diagm(expected_diag), atol = 1.0e-14)
             catch e
                 @test_broken false
-                @warn "Number operator test failed for N=$N" exception=e
+                @warn "Number operator test failed for N=$N" exception = e
             end
         end
 
@@ -354,10 +354,10 @@ using SpecialFunctions: beta
                 # For Legendre (a=b=0), Z should be a symmetric tridiagonal matrix
                 Z_mat = Matrix(sparse(Z_op(N, 0.0, 0.0)))
                 Z_sq = Z_mat[1:N, 1:N]
-                @test isapprox(Z_sq, Z_sq', atol=1e-14)
+                @test isapprox(Z_sq, Z_sq', atol = 1.0e-14)
             catch e
                 @test_broken false
-                @warn "Z operator symmetry test failed for N=$N" exception=e
+                @warn "Z operator symmetry test failed for N=$N" exception = e
             end
         end
     end
@@ -377,10 +377,10 @@ using SpecialFunctions: beta
                 m_ap = Matrix(sparse(Ap(N, 0.0, 0.0)))
                 rows = min(size(m_composed, 1), size(m_ap, 1))
                 cols = min(size(m_composed, 2), size(m_ap, 2))
-                @test isapprox(m_composed[1:rows, 1:cols], m_ap[1:rows, 1:cols], atol=1e-13)
+                @test isapprox(m_composed[1:rows, 1:cols], m_ap[1:rows, 1:cols], atol = 1.0e-13)
             catch e
                 @test_broken false
-                @warn "Compose identity test failed for N=$N" exception=e
+                @warn "Compose identity test failed for N=$N" exception = e
             end
         end
 
@@ -390,10 +390,10 @@ using SpecialFunctions: beta
                 Ap2 = 2.0 * Ap
                 m_ap = Matrix(sparse(Ap(N, 0.0, 0.0)))
                 m_ap2 = Matrix(sparse(Ap2(N, 0.0, 0.0)))
-                @test isapprox(m_ap2, 2.0 * m_ap, atol=1e-14)
+                @test isapprox(m_ap2, 2.0 * m_ap, atol = 1.0e-14)
             catch e
                 @test_broken false
-                @warn "Scalar multiplication test failed for N=$N" exception=e
+                @warn "Scalar multiplication test failed for N=$N" exception = e
             end
         end
 
@@ -403,10 +403,10 @@ using SpecialFunctions: beta
                 neg_Ap = -Ap
                 m_ap = Matrix(sparse(Ap(N, 0.0, 0.0)))
                 m_neg = Matrix(sparse(neg_Ap(N, 0.0, 0.0)))
-                @test isapprox(m_neg, -m_ap, atol=1e-14)
+                @test isapprox(m_neg, -m_ap, atol = 1.0e-14)
             catch e
                 @test_broken false
-                @warn "Operator negation test failed for N=$N" exception=e
+                @warn "Operator negation test failed for N=$N" exception = e
             end
         end
     end
@@ -430,13 +430,13 @@ using SpecialFunctions: beta
                 @test all(weights .> 0)
 
                 # Weights should sum to mass(0,0) = 2 (Legendre quadrature)
-                @test isapprox(sum(weights), 2.0, atol=1e-10)
+                @test isapprox(sum(weights), 2.0, atol = 1.0e-10)
 
                 # Nodes should be sorted (ascending from Jacobi eigenvalue solver)
                 @test issorted(cos_theta)
             catch e
                 @test_broken false
-                @warn "Sphere quadrature test failed for Lmax=$Lmax" exception=e
+                @warn "Sphere quadrature test failed for Lmax=$Lmax" exception = e
             end
         end
 
@@ -453,11 +453,11 @@ using SpecialFunctions: beta
                     else
                         exact = 0.0
                     end
-                    @test isapprox(numerical, exact, atol=1e-10)
+                    @test isapprox(numerical, exact, atol = 1.0e-10)
                 end
             catch e
                 @test_broken false
-                @warn "Sphere quadrature polynomial integration test failed for Lmax=$Lmax" exception=e
+                @warn "Sphere quadrature polynomial integration test failed for Lmax=$Lmax" exception = e
             end
         end
     end
@@ -477,7 +477,7 @@ using SpecialFunctions: beta
                 @test size(Y, 2) == length(cos_theta)
             catch e
                 @test_broken false
-                @warn "Sphere harmonics test failed for Lmax=$Lmax, m=$m" exception=e
+                @warn "Sphere harmonics test failed for Lmax=$Lmax, m=$m" exception = e
             end
         end
 
@@ -489,10 +489,10 @@ using SpecialFunctions: beta
                 n_modes = size(Y, 1)
                 # Orthogonality: Y * diag(weights) * Y' should be close to identity
                 G = Y * diagm(weights) * Y'
-                @test isapprox(G, I(n_modes), atol=1e-10)
+                @test isapprox(G, I(n_modes), atol = 1.0e-10)
             catch e
                 @test_broken false
-                @warn "Sphere harmonics orthogonality test failed for Lmax=$Lmax, m=$m" exception=e
+                @warn "Sphere harmonics orthogonality test failed for Lmax=$Lmax, m=$m" exception = e
             end
         end
     end
@@ -508,10 +508,10 @@ using SpecialFunctions: beta
                 Id_mat = Matrix(sparse(Id_op(Lmax, m, s)))
                 n = Lmax + 1 - max(abs(m), abs(s))
                 @test size(Id_mat) == (n, n)
-                @test isapprox(Id_mat, I(n), atol=1e-14)
+                @test isapprox(Id_mat, I(n), atol = 1.0e-14)
             catch e
                 @test_broken false
-                @warn "Sphere Id test failed for Lmax=$Lmax" exception=e
+                @warn "Sphere Id test failed for Lmax=$Lmax" exception = e
             end
         end
 
@@ -524,10 +524,10 @@ using SpecialFunctions: beta
                 # L eigenvalues should be max(|m|,|s|), max(|m|,|s|)+1, ..., Lmax
                 L_min = max(abs(m), abs(s))
                 expected = diagm(collect(Float64.(L_min:Lmax)))
-                @test isapprox(L_mat, expected, atol=1e-14)
+                @test isapprox(L_mat, expected, atol = 1.0e-14)
             catch e
                 @test_broken false
-                @warn "Sphere L test failed for Lmax=$Lmax" exception=e
+                @warn "Sphere L test failed for Lmax=$Lmax" exception = e
             end
         end
 
@@ -542,12 +542,12 @@ using SpecialFunctions: beta
                 # Check that entries beyond the first super/sub diagonal are zero
                 for i in 1:size(Cos_mat, 1), j in 1:size(Cos_mat, 2)
                     if abs(i - j) > 1
-                        @test abs(Cos_mat[i, j]) < 1e-14
+                        @test abs(Cos_mat[i, j]) < 1.0e-14
                     end
                 end
             catch e
                 @test_broken false
-                @warn "Sphere Cos tridiagonal test failed for Lmax=$Lmax" exception=e
+                @warn "Sphere Cos tridiagonal test failed for Lmax=$Lmax" exception = e
             end
         end
     end
@@ -567,14 +567,14 @@ using SpecialFunctions: beta
                 @test b >= 0
             catch e
                 @test_broken false
-                @warn "spin2Jacobi test failed for Lmax=$Lmax, m=$m, s=$s" exception=e
+                @warn "spin2Jacobi test failed for Lmax=$Lmax, m=$m, s=$s" exception = e
             end
         end
 
         @testset "spin shift Lmax=$Lmax" for Lmax in [4, 8]
             try
                 m, s = 1, 0
-                n, a, b, dn, da, db = Dedalus.spin2Jacobi(Lmax, m, s; ds=1)
+                n, a, b, dn, da, db = Dedalus.spin2Jacobi(Lmax, m, s; ds = 1)
                 # After spin shift s -> s+1:
                 n2 = Lmax + 1 - max(abs(m), abs(s + 1))
                 a2 = abs(m + s + 1)
@@ -584,7 +584,7 @@ using SpecialFunctions: beta
                 @test db == b2 - b
             catch e
                 @test_broken false
-                @warn "spin2Jacobi shift test failed for Lmax=$Lmax" exception=e
+                @warn "spin2Jacobi shift test failed for Lmax=$Lmax" exception = e
             end
         end
     end
@@ -600,11 +600,11 @@ using SpecialFunctions: beta
                 C = A + B
                 @test size(C) == (3, 2)
                 C_dense = Matrix(sparse(C))
-                @test isapprox(C_dense[1:2, :], [6.0 8.0; 10.0 12.0], atol=1e-14)
-                @test isapprox(C_dense[3, :], [9.0, 10.0], atol=1e-14)
+                @test isapprox(C_dense[1:2, :], [6.0 8.0; 10.0 12.0], atol = 1.0e-14)
+                @test isapprox(C_dense[3, :], [9.0, 10.0], atol = 1.0e-14)
             catch e
                 @test_broken false
-                @warn "InfiniteCSC addition test failed" exception=e
+                @warn "InfiniteCSC addition test failed" exception = e
             end
         end
 
@@ -612,10 +612,10 @@ using SpecialFunctions: beta
             try
                 A = Dedalus.InfiniteCSC(sparse([1.0 2.0; 3.0 4.0]))
                 B = 3.0 * A
-                @test isapprox(Matrix(sparse(B)), [3.0 6.0; 9.0 12.0], atol=1e-14)
+                @test isapprox(Matrix(sparse(B)), [3.0 6.0; 9.0 12.0], atol = 1.0e-14)
             catch e
                 @test_broken false
-                @warn "InfiniteCSC scalar test failed" exception=e
+                @warn "InfiniteCSC scalar test failed" exception = e
             end
         end
 
@@ -625,11 +625,11 @@ using SpecialFunctions: beta
                 A = Dedalus.InfiniteCSC(sparse([1.0 2.0 3.0; 4.0 5.0 6.0]))
                 sq = Dedalus.square(A)
                 @test size(sq) == (3, 3)
-                @test isapprox(Matrix(sq)[1:2, :], [1.0 2.0 3.0; 4.0 5.0 6.0], atol=1e-14)
-                @test isapprox(Matrix(sq)[3, :], [0.0, 0.0, 0.0], atol=1e-14)
+                @test isapprox(Matrix(sq)[1:2, :], [1.0 2.0 3.0; 4.0 5.0 6.0], atol = 1.0e-14)
+                @test isapprox(Matrix(sq)[3, :], [0.0, 0.0, 0.0], atol = 1.0e-14)
             catch e
                 @test_broken false
-                @warn "InfiniteCSC square test failed" exception=e
+                @warn "InfiniteCSC square test failed" exception = e
             end
         end
     end
@@ -648,7 +648,7 @@ using SpecialFunctions: beta
                 @test c3[3] == 9
             catch e
                 @test_broken false
-                @warn "Codomain addition test failed" exception=e
+                @warn "Codomain addition test failed" exception = e
             end
         end
 
@@ -661,7 +661,7 @@ using SpecialFunctions: beta
                 @test nc[3] == -3
             catch e
                 @test_broken false
-                @warn "Codomain negation test failed" exception=e
+                @warn "Codomain negation test failed" exception = e
             end
         end
 
@@ -672,7 +672,7 @@ using SpecialFunctions: beta
                 @test result == (11, 22, 33)
             catch e
                 @test_broken false
-                @warn "Codomain evaluation test failed" exception=e
+                @warn "Codomain evaluation test failed" exception = e
             end
         end
     end
@@ -690,7 +690,7 @@ using SpecialFunctions: beta
                 @test jc[4] == 0
             catch e
                 @test_broken false
-                @warn "JacobiCodomain basic test failed" exception=e
+                @warn "JacobiCodomain basic test failed" exception = e
             end
         end
 
@@ -705,7 +705,7 @@ using SpecialFunctions: beta
                 @test b == 2.0
             catch e
                 @test_broken false
-                @warn "JacobiCodomain parity test failed" exception=e
+                @warn "JacobiCodomain parity test failed" exception = e
             end
         end
 
@@ -718,7 +718,7 @@ using SpecialFunctions: beta
                 @test jc3[3] == 1  # db
             catch e
                 @test_broken false
-                @warn "JacobiCodomain composition test failed" exception=e
+                @warn "JacobiCodomain composition test failed" exception = e
             end
         end
     end
@@ -737,7 +737,7 @@ using SpecialFunctions: beta
                 @test all(isfinite.(conn))
             catch e
                 @test_broken false
-                @warn "Coefficient connection size test failed for N=$N" exception=e
+                @warn "Coefficient connection size test failed for N=$N" exception = e
             end
         end
 
@@ -754,7 +754,7 @@ using SpecialFunctions: beta
                 end
             catch e
                 @test_broken false
-                @warn "Coefficient connection diagonal test failed for N=$N" exception=e
+                @warn "Coefficient connection diagonal test failed for N=$N" exception = e
             end
         end
     end
@@ -780,18 +780,18 @@ using SpecialFunctions: beta
                 @test Dedalus.intertwiner_k(Q0, -1, 0) == 0.0
 
                 # At L=1, mu=1, s=0: k = -1 * sqrt((1-0)*(1+0+1)/2) = -sqrt(1)
-                @test isapprox(Dedalus.intertwiner_k(Q1, 1, 0), -1.0, atol=1e-14)
+                @test isapprox(Dedalus.intertwiner_k(Q1, 1, 0), -1.0, atol = 1.0e-14)
                 # At L=1, mu=-1, s=0: k = 1 * sqrt((1-0)*(1+0+1)/2) = sqrt(1)
-                @test isapprox(Dedalus.intertwiner_k(Q1, -1, 0), 1.0, atol=1e-14)
+                @test isapprox(Dedalus.intertwiner_k(Q1, -1, 0), 1.0, atol = 1.0e-14)
 
                 # At L=2, mu=1, s=0: k = -1*sqrt((2)*(3)/2) = -sqrt(3)
-                @test isapprox(Dedalus.intertwiner_k(Q2, 1, 0), -sqrt(3), atol=1e-14)
+                @test isapprox(Dedalus.intertwiner_k(Q2, 1, 0), -sqrt(3), atol = 1.0e-14)
 
                 # At L=3, mu=1, s=1: k = -1*sqrt((3-1)*(3+1+1)/2) = -sqrt(5)
-                @test isapprox(Dedalus.intertwiner_k(Q3, 1, 1), -sqrt(5), atol=1e-14)
+                @test isapprox(Dedalus.intertwiner_k(Q3, 1, 1), -sqrt(5), atol = 1.0e-14)
             catch e
                 @test_broken false
-                @warn "intertwiner_k test failed" exception=e
+                @warn "intertwiner_k test failed" exception = e
             end
         end
 
@@ -819,7 +819,7 @@ using SpecialFunctions: beta
                 @test Dedalus.forbidden_spin(Q2, (1, 1, 1)) == true  # |3| > 2
             catch e
                 @test_broken false
-                @warn "forbidden_spin test failed" exception=e
+                @warn "forbidden_spin test failed" exception = e
             end
         end
 
@@ -848,7 +848,7 @@ using SpecialFunctions: beta
                 @test Dedalus.forbidden_regularity(Q3, (-1, -1)) == false
             catch e
                 @test_broken false
-                @warn "forbidden_regularity test failed" exception=e
+                @warn "forbidden_regularity test failed" exception = e
             end
         end
 
@@ -862,7 +862,7 @@ using SpecialFunctions: beta
                 @test Dedalus.tensor_getindex(Q1, (), ()) == 1
             catch e
                 @test_broken false
-                @warn "tensor_getindex rank 0 test failed" exception=e
+                @warn "tensor_getindex rank 0 test failed" exception = e
             end
         end
 
@@ -886,11 +886,11 @@ using SpecialFunctions: beta
                 # For L >= 1, the matrix should be orthogonal (unitary)
                 if L >= 1
                     product = mat * mat'
-                    @test isapprox(product, I(3), atol=1e-12)
+                    @test isapprox(product, I(3), atol = 1.0e-12)
                 end
             catch e
                 @test_broken false
-                @warn "tensor_getindex rank 1 test failed for L=$L" exception=e
+                @warn "tensor_getindex rank 1 test failed for L=$L" exception = e
             end
         end
 
@@ -910,7 +910,7 @@ using SpecialFunctions: beta
                 # Forbidden rows (|total_spin| > L) should be zero
                 for (i, s) in enumerate(spins)
                     if abs(sum(s)) > L
-                        @test norm(mat[i, :]) < 1e-14
+                        @test norm(mat[i, :]) < 1.0e-14
                     end
                 end
                 # Non-forbidden part should have orthonormal rows
@@ -919,11 +919,11 @@ using SpecialFunctions: beta
                 if length(allowed) > 0
                     sub = mat[allowed, :]
                     product = sub * sub'
-                    @test isapprox(product, I(length(allowed)), atol=1e-12)
+                    @test isapprox(product, I(length(allowed)), atol = 1.0e-12)
                 end
             catch e
                 @test_broken false
-                @warn "tensor_getindex rank 2 test failed for L=$L" exception=e
+                @warn "tensor_getindex rank 2 test failed for L=$L" exception = e
             end
         end
 
@@ -938,13 +938,13 @@ using SpecialFunctions: beta
                 product = mat * mat'
                 # Check near-diagonal structure (may have zero rows for forbidden spins)
                 for i in 1:n
-                    if norm(mat[i, :]) > 1e-14
-                        @test isapprox(product[i, i], 1.0, atol=1e-12)
+                    if norm(mat[i, :]) > 1.0e-14
+                        @test isapprox(product[i, i], 1.0, atol = 1.0e-12)
                     end
                 end
             catch e
                 @test_broken false
-                @warn "_tensor_eval test failed for L=$L, rank=$rank" exception=e
+                @warn "_tensor_eval test failed for L=$L, rank=$rank" exception = e
             end
         end
     end

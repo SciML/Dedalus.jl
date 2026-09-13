@@ -28,24 +28,24 @@ second = hour / 3600
 # Parameters
 Nphi = 256
 Ntheta = 128
-dealias = 3/2
+dealias = 3 / 2
 R = 6.37122e6 * meter
 Omega = 7.292e-5 / second
-nu = 1e5 * meter^2 / second / 32^2  # Hyperdiffusion matched at ell=32
+nu = 1.0e5 * meter^2 / second / 32^2  # Hyperdiffusion matched at ell=32
 g = 9.80616 * meter / second^2
-H = 1e4 * meter
+H = 1.0e4 * meter
 timestep = 600 * second
 stop_sim_time = 360 * hour
 dtype = Float64
 
 # Bases
 coords = S2Coordinates("phi", "theta")
-dist = Distributor(coords; dtype=dtype)
-basis = SphereBasis(coords, (Nphi, Ntheta); radius=R, dealias=dealias, dtype=dtype)
+dist = Distributor(coords; dtype = dtype)
+basis = SphereBasis(coords, (Nphi, Ntheta); radius = R, dealias = dealias, dtype = dtype)
 
 # Fields
-u = VectorField(dist, coords; name="u", bases=(basis,))
-h = Field(dist; name="h", bases=(basis,))
+u = VectorField(dist, coords; name = "u", bases = (basis,))
+h = Field(dist; name = "h", bases = (basis,))
 
 # Substitutions
 zcross = A -> MulCosine(skew(A))
@@ -62,8 +62,8 @@ u_jet = @. umax / en * exp(1 / (lat[jet] - lat0) / (lat[jet] - lat1))
 u["g"][1][jet] = u_jet
 
 # Initial conditions: balanced height
-c = Field(dist; name="c")
-problem = LBVP([h, c]; namespace=@locals)
+c = Field(dist; name = "c")
+problem = LBVP([h, c]; namespace = @locals)
 add_equation!(problem, "g*lap(h) + c = - div(u@grad(u) + 2*Omega*zcross(u))")
 add_equation!(problem, "ave(h) = 0")
 solver = build_solver(problem)
@@ -77,7 +77,7 @@ beta = 1 / 15
 h["g"] .+= @. hpert * cos(lat) * exp(-(phi / alpha)^2) * exp(-((lat2 - lat) / beta)^2)
 
 # Problem
-problem = IVP([u, h]; namespace=@locals)
+problem = IVP([u, h]; namespace = @locals)
 add_equation!(problem, "dt(u) + nu*lap(lap(u)) + g*grad(h) + 2*Omega*zcross(u) = - u@grad(u)")
 add_equation!(problem, "dt(h) + nu*lap(lap(h)) + H*div(u) = - div(h*u)")
 
@@ -86,9 +86,9 @@ solver = build_solver(problem, RK222)
 solver.stop_sim_time = stop_sim_time
 
 # Analysis
-snapshots = add_file_handler(solver.evaluator, "snapshots"; sim_dt=1*hour, max_writes=10)
-add_task!(snapshots, h; name="height")
-add_task!(snapshots, -divergence(skew(u)); name="vorticity")
+snapshots = add_file_handler(solver.evaluator, "snapshots"; sim_dt = 1 * hour, max_writes = 10)
+add_task!(snapshots, h; name = "height")
+add_task!(snapshots, -divergence(skew(u)); name = "vorticity")
 
 # Main loop
 try
