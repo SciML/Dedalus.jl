@@ -196,7 +196,7 @@ function expand_operand(op::NonlinearOperator, vars...)
     return op
 end
 
-split(op::AbstractOperator, vars...) = split_op(op, vars...)
+split_expr(op::AbstractOperator, vars...) = split_op(op, vars...)
 expand(op::NonlinearOperator, vars...) = expand_operand(op, vars...)
 
 function expand(op::AbstractLinearOperator, vars...)

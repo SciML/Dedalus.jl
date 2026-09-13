@@ -405,7 +405,7 @@ function expand_operand(c::AbstractCurrent, vars...)
     return c
 end
 
-split(c::AbstractCurrent, vars...) = split_operand(c, vars...)
+split_expr(c::AbstractCurrent, vars...) = split_operand(c, vars...)
 expand(c::AbstractCurrent, vars...) = expand_operand(c, vars...)
 
 function require_linearity(
