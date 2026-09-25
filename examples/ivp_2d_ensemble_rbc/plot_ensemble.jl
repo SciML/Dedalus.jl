@@ -18,11 +18,11 @@ function main(filename, start, count, output)
     tasks = ["buoyancy", "ensemble buoyancy", "vorticity", "ensemble vorticity"]
     N_cardinal = 1
     dpi = 200
-    title_func(sim_time) = "t = $(round(sim_time; digits=3))"
+    title_func(sim_time) = "t = $(round(sim_time; digits = 3))"
     savename_func(write) = "write_$(lpad(write, 6, '0')).png"
 
     # Plot writes
-    h5open(filename, "r") do file
+    return h5open(filename, "r") do file
         for index in start:(start + count - 1)
             for (i, task) in enumerate(tasks)
                 for j in 1:N_cardinal
@@ -62,7 +62,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     files = String[]
     for arg in ARGS
         if startswith(arg, "--output=")
-            output = arg[length("--output=") + 1:end]
+            output = arg[(length("--output=") + 1):end]
         else
             push!(files, arg)
         end

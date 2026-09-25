@@ -45,7 +45,7 @@ MPI.Init()
 Dedalus.init_mpi!()
 ```
 """
-function init_mpi!(; comm=nothing)
+function init_mpi!(; comm = nothing)
     mpi_mod = nothing
     try
         mpi_mod = Base.require(Main, :MPI)
@@ -83,7 +83,7 @@ end
 
 Return the MPI rank of the current process. Returns `0` in serial mode.
 """
-function mpi_rank(; comm=nothing)
+function mpi_rank(; comm = nothing)
     MPI_ENABLED[] || return 0
     c = comm === nothing ? _mpi_comm[] : comm
     mpi = _mpi_module[]
@@ -95,7 +95,7 @@ end
 
 Return the total number of MPI processes. Returns `1` in serial mode.
 """
-function mpi_size(; comm=nothing)
+function mpi_size(; comm = nothing)
     MPI_ENABLED[] || return 1
     c = comm === nothing ? _mpi_comm[] : comm
     mpi = _mpi_module[]
@@ -107,7 +107,7 @@ end
 
 Execute an MPI barrier. A no-op in serial mode.
 """
-function mpi_barrier(; comm=nothing)
+function mpi_barrier(; comm = nothing)
     MPI_ENABLED[] || return nothing
     c = comm === nothing ? _mpi_comm[] : comm
     mpi = _mpi_module[]
@@ -128,7 +128,7 @@ In serial mode, returns `(nothing, Int[])`.
 `dims` is a vector of process counts per dimension (only entries > 1 are used).
 `periods` defaults to all non-periodic.
 """
-function create_cart_comm(comm, dims; periods=nothing, reorder::Bool=false)
+function create_cart_comm(comm, dims; periods = nothing, reorder::Bool = false)
     if !MPI_ENABLED[]
         return (nothing, Int[])
     end
@@ -137,7 +137,7 @@ function create_cart_comm(comm, dims; periods=nothing, reorder::Bool=false)
     if periods === nothing
         periods = zeros(Bool, ndims)
     end
-    comm_cart = mpi.Cart_create(comm, dims; periodic=periods, reorder=reorder)
+    comm_cart = mpi.Cart_create(comm, dims; periodic = periods, reorder = reorder)
     coords = mpi.Cart_coords(comm_cart)
     return (comm_cart, coords)
 end
@@ -209,10 +209,12 @@ end
 Perform MPI_Alltoallv. All counts and displacements are in number of elements,
 not bytes. In serial mode, copies sendbuf to recvbuf.
 """
-function alltoallv!(sendbuf::AbstractVector, sendcounts::AbstractVector{<:Integer},
-                    sdispls::AbstractVector{<:Integer},
-                    recvbuf::AbstractVector, recvcounts::AbstractVector{<:Integer},
-                    rdispls::AbstractVector{<:Integer}, comm)
+function alltoallv!(
+        sendbuf::AbstractVector, sendcounts::AbstractVector{<:Integer},
+        sdispls::AbstractVector{<:Integer},
+        recvbuf::AbstractVector, recvcounts::AbstractVector{<:Integer},
+        rdispls::AbstractVector{<:Integer}, comm
+    )
     if !MPI_ENABLED[] || comm === nothing
         # Serial fallback: direct copy of the relevant segment
         copyto!(recvbuf, 1, sendbuf, 1, min(length(sendbuf), length(recvbuf)))
@@ -236,9 +238,11 @@ end
 
 Perform MPI_Allgatherv. In serial mode, copies sendbuf into recvbuf.
 """
-function allgatherv!(sendbuf::AbstractVector, sendcount::Integer,
-                     recvbuf::AbstractVector, recvcounts::AbstractVector{<:Integer},
-                     rdispls::AbstractVector{<:Integer}, comm)
+function allgatherv!(
+        sendbuf::AbstractVector, sendcount::Integer,
+        recvbuf::AbstractVector, recvcounts::AbstractVector{<:Integer},
+        rdispls::AbstractVector{<:Integer}, comm
+    )
     if !MPI_ENABLED[] || comm === nothing
         copyto!(recvbuf, 1, sendbuf, 1, sendcount)
         return nothing
@@ -268,15 +272,15 @@ sync(; enter_barrier=false, exit_barrier=true) do
 end
 ```
 """
-function sync(f::Function; comm=nothing, enter_barrier::Bool=true, exit_barrier::Bool=true)
+function sync(f::Function; comm = nothing, enter_barrier::Bool = true, exit_barrier::Bool = true)
     if enter_barrier
-        mpi_barrier(; comm=comm)
+        mpi_barrier(; comm = comm)
     end
-    try
+    return try
         f()
     finally
         if exit_barrier
-            mpi_barrier(; comm=comm)
+            mpi_barrier(; comm = comm)
         end
     end
 end
@@ -298,19 +302,19 @@ rotate_processes() do
 end
 ```
 """
-function rotate_processes(f::Function; comm=nothing)
-    rank = mpi_rank(; comm=comm)
-    size = mpi_size(; comm=comm)
+function rotate_processes(f::Function; comm = nothing)
+    rank = mpi_rank(; comm = comm)
+    size = mpi_size(; comm = comm)
     # Wait for all lower-ranked processes
     for _ in 1:rank
-        mpi_barrier(; comm=comm)
+        mpi_barrier(; comm = comm)
     end
-    try
+    return try
         f()
     finally
         # Wait for all higher-ranked processes
         for _ in 1:(size - rank)
-            mpi_barrier(; comm=comm)
+            mpi_barrier(; comm = comm)
         end
     end
 end
@@ -327,9 +331,9 @@ to ensure the directory exists on all processes afterwards.
 
 In serial mode, simply creates the directory if it does not exist.
 """
-function parallel_mkdir(path; comm=nothing)
-    sync(; comm=comm, enter_barrier=false, exit_barrier=true) do
-        if mpi_rank(; comm=comm) == 0
+function parallel_mkdir(path; comm = nothing)
+    return sync(; comm = comm, enter_barrier = false, exit_barrier = true) do
+        if mpi_rank(; comm = comm) == 0
             if !isdir(path)
                 mkpath(path)
             end
@@ -342,18 +346,18 @@ end
 # ---------------------------------------------------------------------------
 
 export sync,
-       rotate_processes,
-       parallel_mkdir,
-       init_mpi!,
-       get_mpi,
-       mpi_rank,
-       mpi_size,
-       mpi_barrier,
-       create_cart_comm,
-       cart_sub,
-       cart_coords_for_rank,
-       comm_size,
-       comm_rank,
-       alltoallv!,
-       allgatherv!,
-       MPI_ENABLED
+    rotate_processes,
+    parallel_mkdir,
+    init_mpi!,
+    get_mpi,
+    mpi_rank,
+    mpi_size,
+    mpi_barrier,
+    create_cart_comm,
+    cart_sub,
+    cart_coords_for_rank,
+    comm_size,
+    comm_rank,
+    alltoallv!,
+    allgatherv!,
+    MPI_ENABLED

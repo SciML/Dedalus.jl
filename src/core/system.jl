@@ -43,7 +43,7 @@ function CoeffSystem(subproblems, dtype::Type{T}) where {T}
             views_sp[nothing] = reshape(@view(data[1:0]), 0, 0)
         end
     end
-    CoeffSystem{T}(data, views)
+    return CoeffSystem{T}(data, views)
 end
 
 """
@@ -52,8 +52,8 @@ end
 Keyword-argument convenience constructor that delegates to the positional
 form `CoeffSystem(subproblems, dtype)`.
 """
-function CoeffSystem(subproblems; dtype::Type{T}=Float64) where {T}
-    CoeffSystem(subproblems, dtype)
+function CoeffSystem(subproblems; dtype::Type{T} = Float64) where {T}
+    return CoeffSystem(subproblems, dtype)
 end
 
 """
@@ -61,7 +61,7 @@ end
 
 Return view of coefficient data for the given subproblem and subsystem.
 """
-@inline function get_subdata(cs::CoeffSystem, sp; ss=nothing)
+@inline function get_subdata(cs::CoeffSystem, sp; ss = nothing)
     return cs.views[sp][ss]
 end
 
@@ -97,7 +97,7 @@ function FieldSystem(fields, subproblems, coeff_layout)
     starts = cumsum(array_sizes) .- array_sizes
     buffer = zeros(T, buffer_size)
 
-    flat_views = [@view(buffer[s+1:s+sz]) for (s, sz) in zip(starts, array_sizes)]
+    flat_views = [@view(buffer[(s + 1):(s + sz)]) for (s, sz) in zip(starts, array_sizes)]
     array_views = [reshape(flat, shape) for (flat, shape) in zip(flat_views, array_shapes)]
 
     # Build permutation — placeholder identity for serial mode
@@ -108,7 +108,7 @@ function FieldSystem(fields, subproblems, coeff_layout)
     field_buffer = @view buffer[1:min(size(perm, 2), n)]
     work_buffer = zeros(T, max(size(perm, 1), size(perm, 2)))
 
-    FieldSystem{T}(collect(fields), buffer, array_views, perm, buffer, group_buffer, field_buffer, work_buffer)
+    return FieldSystem{T}(collect(fields), buffer, array_views, perm, buffer, group_buffer, field_buffer, work_buffer)
 end
 
 """
@@ -121,7 +121,7 @@ function gather!(fs::FieldSystem)
         av .= field["c"]
     end
     mul!(fs.work_buffer, fs.perm, fs.field_buffer)
-    fs.group_buffer .= @view fs.work_buffer[1:length(fs.group_buffer)]
+    return fs.group_buffer .= @view fs.work_buffer[1:length(fs.group_buffer)]
 end
 
 """
@@ -135,6 +135,7 @@ function scatter!(fs::FieldSystem)
     for (field, av) in zip(fs.fields, fs.array_views)
         field["c"] = av
     end
+    return
 end
 
 # ============================================================
@@ -142,7 +143,7 @@ end
 # ============================================================
 
 export CoeffSystem,
-       FieldSystem,
-       get_subdata,
-       gather!,
-       scatter!
+    FieldSystem,
+    get_subdata,
+    gather!,
+    scatter!

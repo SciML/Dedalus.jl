@@ -170,10 +170,10 @@ function AlltoallvTranspose(global_shape_in, dtype, axis::Integer, comm_sub)
     # Dimensions before the transpose axis, the two transpose axes, and after.
     # axis is 1-based: axes 1..axis-1 are "before", axis and axis+1 are transposed,
     # axis+2..end are "after".
-    N0 = axis > 1 ? prod(gs[1:axis-1]) : 1
+    N0 = axis > 1 ? prod(gs[1:(axis - 1)]) : 1
     N1 = gs[axis]
-    N2 = gs[axis+1]
-    N3_raw = axis + 2 <= length(gs) ? prod(gs[axis+2:end]) : 1
+    N2 = gs[axis + 1]
+    N3_raw = axis + 2 <= length(gs) ? prod(gs[(axis + 2):end]) : 1
     N3 = N3_raw * datasize
 
     # Block sizes (ceiling division)
@@ -181,12 +181,12 @@ function AlltoallvTranspose(global_shape_in, dtype, axis::Integer, comm_sub)
     B2 = cld(Int(N2), nprocs)
 
     # Per-rank start/end/count arrays
-    ranks = Int32.(collect(0:nprocs-1))
+    ranks = Int32.(collect(0:(nprocs - 1)))
 
     col_starts = Int32.(min.(B2 .* ranks, Int(N2)))
     row_starts = Int32.(min.(B1 .* ranks, Int(N1)))
-    col_ends   = Int32.(min.(B2 .* (ranks .+ 1), Int(N2)))
-    row_ends   = Int32.(min.(B1 .* (ranks .+ 1), Int(N1)))
+    col_ends = Int32.(min.(B2 .* (ranks .+ 1), Int(N2)))
+    row_ends = Int32.(min.(B1 .* (ranks .+ 1), Int(N1)))
 
     col_counts = col_ends .- col_starts
     row_counts = row_ends .- row_starts
@@ -241,9 +241,9 @@ function split_rows!(plan::AlltoallvTranspose, A::AbstractArray{Float64, 4}, B::
     N3 = plan.N3
     nprocs = length(plan.row_starts)
     i = 1
-    @inbounds for proc in 1:nprocs
+    return @inbounds for proc in 1:nprocs
         row_start = Int(plan.row_starts[proc]) + 1  # 1-based
-        row_end   = Int(plan.row_ends[proc])         # inclusive
+        row_end = Int(plan.row_ends[proc])         # inclusive
         for n0 in 1:N0
             for n1 in row_start:row_end
                 for n2 in 1:col_count
@@ -269,9 +269,9 @@ function combine_rows!(plan::AlltoallvTranspose, B::Vector{Float64}, A::Abstract
     N3 = plan.N3
     nprocs = length(plan.row_starts)
     i = 1
-    @inbounds for proc in 1:nprocs
+    return @inbounds for proc in 1:nprocs
         row_start = Int(plan.row_starts[proc]) + 1
-        row_end   = Int(plan.row_ends[proc])
+        row_end = Int(plan.row_ends[proc])
         for n0 in 1:N0
             for n1 in row_start:row_end
                 for n2 in 1:col_count
@@ -297,9 +297,9 @@ function split_columns!(plan::AlltoallvTranspose, A::AbstractArray{Float64, 4}, 
     N3 = plan.N3
     nprocs = length(plan.col_starts)
     i = 1
-    @inbounds for proc in 1:nprocs
+    return @inbounds for proc in 1:nprocs
         col_start = Int(plan.col_starts[proc]) + 1  # 1-based
-        col_end   = Int(plan.col_ends[proc])         # inclusive
+        col_end = Int(plan.col_ends[proc])         # inclusive
         for n0 in 1:N0
             for n1 in 1:row_count
                 for n2 in col_start:col_end
@@ -325,9 +325,9 @@ function combine_columns!(plan::AlltoallvTranspose, B::Vector{Float64}, A::Abstr
     N3 = plan.N3
     nprocs = length(plan.col_starts)
     i = 1
-    @inbounds for proc in 1:nprocs
+    return @inbounds for proc in 1:nprocs
         col_start = Int(plan.col_starts[proc]) + 1
-        col_end   = Int(plan.col_ends[proc])
+        col_end = Int(plan.col_ends[proc])
         for n0 in 1:N0
             for n1 in 1:row_count
                 for n2 in col_start:col_end
@@ -379,12 +379,14 @@ function localize_rows(plan::AlltoallvTranspose, CL::AbstractArray, RL::Abstract
     end
 
     # MPI Alltoallv
-    alltoallv!(plan.CL_buffer, Vector{Int}(plan.CL_counts), Vector{Int}(plan.CL_displs),
-               plan.RL_buffer, Vector{Int}(plan.RL_counts), Vector{Int}(plan.RL_displs),
-               plan.comm_sub)
+    alltoallv!(
+        plan.CL_buffer, Vector{Int}(plan.CL_counts), Vector{Int}(plan.CL_displs),
+        plan.RL_buffer, Vector{Int}(plan.RL_counts), Vector{Int}(plan.RL_displs),
+        plan.comm_sub
+    )
 
     # Unpack receiving buffer into row-local dataset
-    if plan.local_row_count > 0
+    return if plan.local_row_count > 0
         combine_columns!(plan, plan.RL_buffer, RL_reduced)
     end
 end
@@ -406,12 +408,14 @@ function localize_columns(plan::AlltoallvTranspose, RL::AbstractArray, CL::Abstr
     end
 
     # MPI Alltoallv
-    alltoallv!(plan.RL_buffer, Vector{Int}(plan.RL_counts), Vector{Int}(plan.RL_displs),
-               plan.CL_buffer, Vector{Int}(plan.CL_counts), Vector{Int}(plan.CL_displs),
-               plan.comm_sub)
+    alltoallv!(
+        plan.RL_buffer, Vector{Int}(plan.RL_counts), Vector{Int}(plan.RL_displs),
+        plan.CL_buffer, Vector{Int}(plan.CL_counts), Vector{Int}(plan.CL_displs),
+        plan.comm_sub
+    )
 
     # Unpack receiving buffer into column-local dataset
-    if plan.local_col_count > 0
+    return if plan.local_col_count > 0
         combine_rows!(plan, plan.CL_buffer, CL_reduced)
     end
 end
@@ -474,25 +478,25 @@ function ColDistributor(global_shape_in, dtype, axis::Integer, comm_sub)
     nprocs = comm_size(comm_sub)
     myrank = comm_rank(comm_sub)
 
-    N0 = axis > 1 ? prod(gs[1:axis-1]) : 1
+    N0 = axis > 1 ? prod(gs[1:(axis - 1)]) : 1
     N1 = gs[axis]
-    N2 = gs[axis+1]
-    N3_raw = axis + 2 <= length(gs) ? prod(gs[axis+2:end]) : 1
+    N2 = gs[axis + 1]
+    N3_raw = axis + 2 <= length(gs) ? prod(gs[(axis + 2):end]) : 1
     N3 = N3_raw * datasize
 
     # Blocks: rows are block-distributed, columns span full N2
     B1 = cld(Int(N1), nprocs)
     B2 = Int(N2)
 
-    ranks = Int32.(collect(0:nprocs-1))
+    ranks = Int32.(collect(0:(nprocs - 1)))
 
     col_starts = Int32.(0 .* ranks)                       # always 0
     row_starts = Int32.(min.(B1 .* ranks, Int(N1)))
-    col_ends   = Int32.(0 .* ranks .+ B2)                 # always B2
-    row_ends   = Int32.(min.(B1 .* (ranks .+ 1), Int(N1)))
+    col_ends = Int32.(0 .* ranks .+ B2)                 # always B2
+    row_ends = Int32.(min.(B1 .* (ranks .+ 1), Int(N1)))
 
     local_row_start = Int(row_starts[myrank + 1])
-    local_row_end   = Int(row_ends[myrank + 1])
+    local_row_end = Int(row_ends[myrank + 1])
 
     col_counts = col_ends .- col_starts
     row_counts = row_ends .- row_starts
@@ -542,8 +546,8 @@ function localize_rows(plan::ColDistributor, CL::AbstractArray, RL::AbstractArra
     RL_reduced = _make_reduced_view(RL, plan.RL_reduced_shape)
     # Restrict to local rows (1-based slicing)
     start = plan.local_row_start + 1
-    stop  = plan.local_row_end
-    @views copyto!(RL_reduced, CL_reduced[:, start:stop, :, :])
+    stop = plan.local_row_end
+    return @views copyto!(RL_reduced, CL_reduced[:, start:stop, :, :])
 end
 
 """
@@ -561,12 +565,14 @@ function localize_columns(plan::ColDistributor, RL::AbstractArray, CL::AbstractA
     copyto!(plan.RL_buffer, 1, flat_rl, 1, min(length(flat_rl), length(plan.RL_buffer)))
 
     # Allgatherv
-    allgatherv!(plan.RL_buffer, plan.local_RL_count,
-                plan.CL_buffer, Vector{Int}(plan.CL_counts), Vector{Int}(plan.CL_displs),
-                plan.comm_sub)
+    allgatherv!(
+        plan.RL_buffer, plan.local_RL_count,
+        plan.CL_buffer, Vector{Int}(plan.CL_counts), Vector{Int}(plan.CL_displs),
+        plan.comm_sub
+    )
 
     # Unpack buffer into column-local dataset
-    combine_rows!(plan, plan.CL_buffer, CL_reduced)
+    return combine_rows!(plan, plan.CL_buffer, CL_reduced)
 end
 
 # Share the packing functions from AlltoallvTranspose:
@@ -578,9 +584,9 @@ function combine_rows!(plan::ColDistributor, B::Vector{Float64}, A::AbstractArra
     N3 = plan.N3
     nprocs = length(plan.row_starts)
     i = 1
-    @inbounds for proc in 1:nprocs
+    return @inbounds for proc in 1:nprocs
         row_start = Int(plan.row_starts[proc]) + 1
-        row_end   = Int(plan.row_ends[proc])
+        row_end = Int(plan.row_ends[proc])
         for n0 in 1:N0
             for n1 in row_start:row_end
                 for n2 in 1:col_count
@@ -652,25 +658,25 @@ function RowDistributor(global_shape_in, dtype, axis::Integer, comm_sub)
     nprocs = comm_size(comm_sub)
     myrank = comm_rank(comm_sub)
 
-    N0 = axis > 1 ? prod(gs[1:axis-1]) : 1
+    N0 = axis > 1 ? prod(gs[1:(axis - 1)]) : 1
     N1 = gs[axis]
-    N2 = gs[axis+1]
-    N3_raw = axis + 2 <= length(gs) ? prod(gs[axis+2:end]) : 1
+    N2 = gs[axis + 1]
+    N3_raw = axis + 2 <= length(gs) ? prod(gs[(axis + 2):end]) : 1
     N3 = N3_raw * datasize
 
     # Blocks: rows span full N1, columns are block-distributed
     B1 = Int(N1)
     B2 = cld(Int(N2), nprocs)
 
-    ranks = Int32.(collect(0:nprocs-1))
+    ranks = Int32.(collect(0:(nprocs - 1)))
 
     col_starts = Int32.(min.(B2 .* ranks, Int(N2)))
     row_starts = Int32.(0 .* ranks)                       # always 0
-    col_ends   = Int32.(min.(B2 .* (ranks .+ 1), Int(N2)))
-    row_ends   = Int32.(0 .* ranks .+ B1)                 # always B1
+    col_ends = Int32.(min.(B2 .* (ranks .+ 1), Int(N2)))
+    row_ends = Int32.(0 .* ranks .+ B1)                 # always B1
 
     local_col_start = Int(col_starts[myrank + 1])
-    local_col_end   = Int(col_ends[myrank + 1])
+    local_col_end = Int(col_ends[myrank + 1])
 
     col_counts = col_ends .- col_starts
     row_counts = row_ends .- row_starts
@@ -725,12 +731,14 @@ function localize_rows(plan::RowDistributor, CL::AbstractArray, RL::AbstractArra
     copyto!(plan.CL_buffer, 1, flat_cl, 1, min(length(flat_cl), length(plan.CL_buffer)))
 
     # Allgatherv
-    allgatherv!(plan.CL_buffer, plan.local_CL_count,
-                plan.RL_buffer, Vector{Int}(plan.RL_counts), Vector{Int}(plan.RL_displs),
-                plan.comm_sub)
+    allgatherv!(
+        plan.CL_buffer, plan.local_CL_count,
+        plan.RL_buffer, Vector{Int}(plan.RL_counts), Vector{Int}(plan.RL_displs),
+        plan.comm_sub
+    )
 
     # Unpack buffer into row-local dataset
-    combine_columns!(plan, plan.RL_buffer, RL_reduced)
+    return combine_columns!(plan, plan.RL_buffer, RL_reduced)
 end
 
 function combine_columns!(plan::RowDistributor, B::Vector{Float64}, A::AbstractArray{Float64, 4})
@@ -739,9 +747,9 @@ function combine_columns!(plan::RowDistributor, B::Vector{Float64}, A::AbstractA
     N3 = plan.N3
     nprocs = length(plan.col_starts)
     i = 1
-    @inbounds for proc in 1:nprocs
+    return @inbounds for proc in 1:nprocs
         col_start = Int(plan.col_starts[proc]) + 1
-        col_end   = Int(plan.col_ends[proc])
+        col_end = Int(plan.col_ends[proc])
         for n0 in 1:N0
             for n1 in 1:row_count
                 for n2 in col_start:col_end
@@ -765,8 +773,8 @@ function localize_columns(plan::RowDistributor, RL::AbstractArray, CL::AbstractA
     RL_reduced = _make_reduced_view(RL, plan.RL_reduced_shape)
     # Restrict to local columns (1-based slicing)
     start = plan.local_col_start + 1
-    stop  = plan.local_col_end
-    @views copyto!(CL_reduced, RL_reduced[:, :, start:stop, :])
+    stop = plan.local_col_end
+    return @views copyto!(CL_reduced, RL_reduced[:, :, start:stop, :])
 end
 
 # ============================================================================
@@ -836,7 +844,7 @@ mutable struct Distributor <: AbstractDistributor
     _cs_by_axis::Union{Nothing, Dict{Int, Any}}
     _default_nonconst_groups::Union{Nothing, Tuple}
 
-    function Distributor(coordsystems, dtype; mesh=nothing, comm=nothing)
+    function Distributor(coordsystems, dtype; mesh = nothing, comm = nothing)
         # Accept single coordsys in place of tuple/list
         if !(coordsystems isa Tuple || coordsystems isa AbstractVector)
             coordsystems = (coordsystems,)
@@ -900,12 +908,18 @@ mutable struct Distributor <: AbstractDistributor
 
         # Check mesh compatibility
         if length(mesh_arr) >= dim
-            throw(ArgumentError(
-                "Mesh ($(mesh_arr)) must have lower dimension than distributor ($dim)"))
+            throw(
+                ArgumentError(
+                    "Mesh ($(mesh_arr)) must have lower dimension than distributor ($dim)"
+                )
+            )
         end
         if prod(mesh_arr) != mpi_comm_size
-            throw(ArgumentError(
-                "Wrong number of processes ($mpi_comm_size) for specified mesh ($(mesh_arr))"))
+            throw(
+                ArgumentError(
+                    "Wrong number of processes ($mpi_comm_size) for specified mesh ($(mesh_arr))"
+                )
+            )
         end
 
         # Create cartesian communicator
@@ -913,9 +927,11 @@ mutable struct Distributor <: AbstractDistributor
         if using_mpi && length(reduced_mesh) > 0
             mpi = get_mpi()
             # Create Cartesian communicator via MPI.jl
-            comm_cart = mpi.Cart_create(comm, reduced_mesh;
-                                         periodic=zeros(Bool, length(reduced_mesh)),
-                                         reorder=false)
+            comm_cart = mpi.Cart_create(
+                comm, reduced_mesh;
+                periodic = zeros(Bool, length(reduced_mesh)),
+                reorder = false
+            )
             comm_coords_arr = Int.(mpi.Cart_coords(comm_cart))
         elseif using_mpi
             # MPI but no distributed axes (single process or mesh = [1])
@@ -969,7 +985,7 @@ end
 # ============================================================================
 
 function Base.show(io::IO, d::Distributor)
-    print(io, "Distributor(dim=$(d.dim), mesh=$(d.mesh))")
+    return print(io, "Distributor(dim=$(d.dim), mesh=$(d.mesh))")
 end
 
 # ============================================================================
@@ -1153,8 +1169,10 @@ end
 Compute the necessary buffer size (bytes) for all layouts.
 """
 function buffer_size(dist::Distributor, domain, scales, dtype)
-    return maximum(buffer_size(layout, domain, scales, dtype)
-                   for layout in dist.layouts)
+    return maximum(
+        buffer_size(layout, domain, scales, dtype)
+            for layout in dist.layouts
+    )
 end
 
 # ============================================================================
@@ -1186,12 +1204,12 @@ end
 
 Return the local grid for a 1D basis.
 """
-function local_grid(dist::Distributor, basis; scale=nothing)
+function local_grid(dist::Distributor, basis; scale = nothing)
     if scale === nothing
         scale = 1
     end
     if get_dim(basis) == 1
-        return local_grid(basis, dist; scale=scale)
+        return local_grid(basis, dist; scale = scale)
     else
         throw(ArgumentError("Use `local_grids` for multidimensional bases."))
     end
@@ -1202,7 +1220,7 @@ end
 
 Return local grids for one or more bases.
 """
-function local_grids(dist::Distributor, bases...; scales=nothing)
+function local_grids(dist::Distributor, bases...; scales = nothing)
     scales = remedy_scales(dist, scales)
     grids = Any[]
     for basis in bases
@@ -1307,19 +1325,21 @@ mutable struct Layout
             end
         end
 
-        return new(dist, gs, lf, -1,  # index set later
-                   ext_m, ext_c,
-                   Dict{Any, Tuple}(),
-                   Dict{Any, Any}(),
-                   Dict{Any, Any}(),
-                   Dict{Any, Any}(),
-                   Dict{Any, Any}(),
-                   Dict{Any, Any}())
+        return new(
+            dist, gs, lf, -1,  # index set later
+            ext_m, ext_c,
+            Dict{Any, Tuple}(),
+            Dict{Any, Any}(),
+            Dict{Any, Any}(),
+            Dict{Any, Any}(),
+            Dict{Any, Any}(),
+            Dict{Any, Any}()
+        )
     end
 end
 
 function Base.show(io::IO, l::Layout)
-    print(io, "Layout(index=$(l.index), grid_space=$(l.grid_space))")
+    return print(io, "Layout(index=$(l.index), grid_space=$(l.grid_space))")
 end
 
 # ============================================================================
@@ -1359,8 +1379,10 @@ end
 
 Local chunk indices by axis.
 """
-function local_chunks(layout::Layout, domain, scales;
-                      rank=nothing, broadcast::Bool=false)
+function local_chunks(
+        layout::Layout, domain, scales;
+        rank = nothing, broadcast::Bool = false
+    )
     gs = global_shape(layout, domain, scales)
     cs = chunk_shape(layout, domain)
 
@@ -1433,10 +1455,12 @@ end
 
 Local element indices by axis (0-based, matching Python convention).
 """
-function local_elements(layout::Layout, domain, scales;
-                        rank=nothing, broadcast::Bool=false)
+function local_elements(
+        layout::Layout, domain, scales;
+        rank = nothing, broadcast::Bool = false
+    )
     cs = chunk_shape(layout, domain)
-    lc = local_chunks(layout, domain, scales; rank=rank, broadcast=broadcast)
+    lc = local_chunks(layout, domain, scales; rank = rank, broadcast = broadcast)
 
     indices = Vector{Vector{Int}}()
     for (chunk_size, chunks) in zip(cs, lc)
@@ -1460,15 +1484,17 @@ end
 Make dense array of mode inclusion. Returns a boolean array indicating
 which elements are valid.
 """
-function valid_elements(layout::Layout, tensorsig, domain, scales;
-                        rank=nothing, broadcast::Bool=false)
+function valid_elements(
+        layout::Layout, tensorsig, domain, scales;
+        rank = nothing, broadcast::Bool = false
+    )
     cache_key = (objectid(tensorsig), objectid(domain), scales, rank, broadcast)
     cached = get(layout._valid_elements_cache, cache_key, nothing)
     if cached !== nothing
         return cached
     end
 
-    elements = local_elements(layout, domain, scales; rank=rank, broadcast=broadcast)
+    elements = local_elements(layout, domain, scales; rank = rank, broadcast = broadcast)
 
     # Create meshgrid-like dense array of elements
     dim = length(elements)
@@ -1526,13 +1552,13 @@ end
 
 Local data shape.
 """
-function local_shape(layout::Layout, domain, scales; rank=nothing)
+function local_shape(layout::Layout, domain, scales; rank = nothing)
     cache_key = (objectid(domain), Tuple(scales), rank)
     cached = get(layout._local_shape_cache, cache_key, nothing)
     if cached !== nothing
         return cached
     end
-    le = local_elements(layout, domain, scales; rank=rank)
+    le = local_elements(layout, domain, scales; rank = rank)
     shape = Tuple(length(e) for e in le)
     layout._local_shape_cache[cache_key] = shape
     return shape
@@ -1579,15 +1605,17 @@ end
 
 Dense array of local groups (first axis).
 """
-function local_group_arrays(layout::Layout, domain, scales;
-                            rank=nothing, broadcast::Bool=false)
+function local_group_arrays(
+        layout::Layout, domain, scales;
+        rank = nothing, broadcast::Bool = false
+    )
     cache_key = (objectid(domain), Tuple(scales), rank, broadcast)
     cached = get(layout._local_group_arrays_cache, cache_key, nothing)
     if cached !== nothing
         return cached
     end
 
-    elements = local_elements(layout, domain, scales; rank=rank, broadcast=broadcast)
+    elements = local_elements(layout, domain, scales; rank = rank, broadcast = broadcast)
     # Build meshgrid-like dense array of elements
     # This is a simplified version for serial mode
     result = _build_group_arrays_from_elements(layout, elements, domain)
@@ -1634,7 +1662,7 @@ function _build_group_arrays_from_elements(layout::Layout, elements, domain)
         base = reshape(elements[d], shape...)
         reps = copy(grid_sizes)
         reps[d] = 1
-        element_grids[d] = repeat(base; outer=reps)
+        element_grids[d] = repeat(base; outer = reps)
     end
 
     # Convert to groups
@@ -1659,15 +1687,17 @@ end
 
 Compute unique local groupsets.
 """
-function local_groupsets(layout::Layout, group_coupling, domain, scales;
-                         rank=nothing, broadcast::Bool=false)
+function local_groupsets(
+        layout::Layout, group_coupling, domain, scales;
+        rank = nothing, broadcast::Bool = false
+    )
     cache_key = (Tuple(group_coupling), objectid(domain), Tuple(scales), rank, broadcast)
     cached = get(layout._local_groupsets_cache, cache_key, nothing)
     if cached !== nothing
         return cached
     end
 
-    lga = local_group_arrays(layout, domain, scales; rank=rank, broadcast=broadcast)
+    lga = local_group_arrays(layout, domain, scales; rank = rank, broadcast = broadcast)
     dim = length(lga)
 
     # Replace non-enumerated axes (coupled axes) with nothing
@@ -1718,7 +1748,7 @@ In serial mode with mesh=[1], R=0 (no distributed axes), so we get
 D+1 layouts (one per transform axis plus the initial coeff layout)
 connected by D transforms (one per axis).
 """
-function _build_layouts!(dist::Distributor; dry_run::Bool=false)
+function _build_layouts!(dist::Distributor; dry_run::Bool = false)
     D = dist.dim
     # R = number of mesh dimensions > 1
     R = count(m -> m > 1, dist.mesh)
@@ -1826,7 +1856,7 @@ struct DistTransform
 end
 
 function Base.show(io::IO, t::DistTransform)
-    print(io, "DistTransform(axis=$(t.axis), layout0=$(t.layout0.index) -> layout1=$(t.layout1.index))")
+    return print(io, "DistTransform(axis=$(t.axis), layout0=$(t.layout0.index) -> layout1=$(t.layout1.index))")
 end
 
 """
@@ -1835,7 +1865,7 @@ end
 Backward transform (coeff -> grid) a list of fields along the transform axis.
 """
 function increment(transform::DistTransform, fields)
-    if length(fields) == 1
+    return if length(fields) == 1
         increment_single(transform, fields[1])
     else
         for field in fields
@@ -1850,7 +1880,7 @@ end
 Forward transform (grid -> coeff) a list of fields along the transform axis.
 """
 function decrement(transform::DistTransform, fields)
-    if length(fields) == 1
+    return if length(fields) == 1
         decrement_single(transform, fields[1])
     else
         for field in fields
@@ -1876,7 +1906,7 @@ function increment_single(transform::DistTransform, field)
     gdata = field.data
 
     # Transform non-constant bases with data
-    if basis !== nothing && prod(size(cdata)) > 0
+    return if basis !== nothing && prod(size(cdata)) > 0
         backward_transform(basis, field, ax, cdata, gdata)
     end
 end
@@ -1898,7 +1928,7 @@ function decrement_single(transform::DistTransform, field)
     cdata = field.data
 
     # Transform non-constant bases with data
-    if basis !== nothing && prod(size(gdata)) > 0
+    return if basis !== nothing && prod(size(gdata)) > 0
         forward_transform(basis, field, ax, gdata, cdata)
     end
 end
@@ -1959,7 +1989,7 @@ mutable struct Transpose
 end
 
 function Base.show(io::IO, t::Transpose)
-    print(io, "Transpose(axis=$(t.axis), layout0=$(t.layout0.index) -> layout1=$(t.layout1.index))")
+    return print(io, "Transpose(axis=$(t.axis), layout0=$(t.layout0.index) -> layout1=$(t.layout1.index))")
 end
 
 """
@@ -1986,8 +2016,10 @@ end
 Build or retrieve a cached transpose plan. Returns `nothing` if no
 communication is needed (serial mode or identity shapes).
 """
-function _get_plan(transpose_obj::Transpose, ncomp::Integer, sub_shape::Tuple,
-                   chunk_shape_val::Tuple, dtype)
+function _get_plan(
+        transpose_obj::Transpose, ncomp::Integer, sub_shape::Tuple,
+        chunk_shape_val::Tuple, dtype
+    )
     cache_key = (ncomp, sub_shape, chunk_shape_val, dtype)
     cached = get(transpose_obj._plan_cache, cache_key, nothing)
     if cached !== nothing
@@ -2050,8 +2082,10 @@ function _group_plans(transpose_obj::Transpose, fields)
         for f in grp_fields
             ncomp += prod([get_dim(cs) for cs in f.tensorsig])
         end
-        plan = _get_plan(transpose_obj, ncomp, sub_shape_val, chunk_shape_val,
-                         grp_fields[end].dtype)
+        plan = _get_plan(
+            transpose_obj, ncomp, sub_shape_val, chunk_shape_val,
+            grp_fields[end].dtype
+        )
         push!(plans, (grp_fields, plan))
     end
     return plans
@@ -2063,7 +2097,7 @@ end
 Backward transpose a list of fields (coeff-side to grid-side).
 """
 function increment(transpose_obj::Transpose, fields)
-    if length(fields) == 1
+    return if length(fields) == 1
         increment_single(transpose_obj, fields[1])
     else
         for field in fields
@@ -2078,7 +2112,7 @@ end
 Forward transpose a list of fields (grid-side to coeff-side).
 """
 function decrement(transpose_obj::Transpose, fields)
-    if length(fields) == 1
+    return if length(fields) == 1
         decrement_single(transpose_obj, fields[1])
     else
         for field in fields
@@ -2097,7 +2131,7 @@ In MPI mode, uses `localize_columns` to redistribute data.
 """
 function increment_single(transpose_obj::Transpose, field)
     plan = _single_plan(transpose_obj, field)
-    if plan !== nothing
+    return if plan !== nothing
         # Reference views from both layouts
         data0 = field.data
         preset_layout!(field, transpose_obj.layout1)
@@ -2120,7 +2154,7 @@ In MPI mode, uses `localize_rows` to redistribute data.
 """
 function decrement_single(transpose_obj::Transpose, field)
     plan = _single_plan(transpose_obj, field)
-    if plan !== nothing
+    return if plan !== nothing
         # Reference views from both layouts
         data1 = field.data
         preset_layout!(field, transpose_obj.layout0)
@@ -2142,43 +2176,43 @@ end
 # ============================================================================
 
 export Distributor,
-       Layout,
-       DistTransform,
-       Transpose,
-       SerialComm,
-       SerialCommCart,
-       AbstractTransposePlanner,
-       AlltoallvTranspose,
-       ColDistributor,
-       RowDistributor,
-       get_layout_object,
-       get_transform_object,
-       get_coordsystem,
-       cs_by_axis,
-       first_axis,
-       last_axis,
-       local_grid,
-       local_grids,
-       local_modes,
-       global_shape,
-       chunk_shape,
-       group_shape,
-       local_chunks,
-       global_elements,
-       local_elements,
-       valid_elements,
-       slices,
-       local_shape,
-       buffer_size,
-       local_group_arrays,
-       global_group_arrays,
-       local_groupsets,
-       increment,
-       decrement,
-       increment_single,
-       decrement_single,
-       backward_transform,
-       forward_transform,
-       elements_to_groups,
-       localize_rows,
-       localize_columns
+    Layout,
+    DistTransform,
+    Transpose,
+    SerialComm,
+    SerialCommCart,
+    AbstractTransposePlanner,
+    AlltoallvTranspose,
+    ColDistributor,
+    RowDistributor,
+    get_layout_object,
+    get_transform_object,
+    get_coordsystem,
+    cs_by_axis,
+    first_axis,
+    last_axis,
+    local_grid,
+    local_grids,
+    local_modes,
+    global_shape,
+    chunk_shape,
+    group_shape,
+    local_chunks,
+    global_elements,
+    local_elements,
+    valid_elements,
+    slices,
+    local_shape,
+    buffer_size,
+    local_group_arrays,
+    global_group_arrays,
+    local_groupsets,
+    increment,
+    decrement,
+    increment_single,
+    decrement_single,
+    backward_transform,
+    forward_transform,
+    elements_to_groups,
+    localize_rows,
+    localize_columns

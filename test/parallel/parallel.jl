@@ -14,14 +14,14 @@ using MPI
             script = tempname() * ".jl"
             write(
                 script, """
-                    using MPI
-                    MPI.Init()
-                    using Dedalus
-                    Dedalus.init_mpi!()
-                    using Test
-                    include($(repr(file)))
-                    MPI.Finalize()
-                    """
+                using MPI
+                MPI.Init()
+                using Dedalus
+                Dedalus.init_mpi!()
+                using Test
+                include($(repr(file)))
+                MPI.Finalize()
+                """
             )
             cmd = `$exe -n 4 $(Base.julia_cmd()) --project=$project $script`
             @test success(pipeline(cmd; stdout = stdout, stderr = stderr))

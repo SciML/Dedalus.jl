@@ -86,7 +86,7 @@ struct Add <: Operator end
 ```
 """
 macro register_dispatch(AbstractT, ConcreteT)
-    esc(:(register_subtype!($AbstractT, $ConcreteT)))
+    return esc(:(register_subtype!($AbstractT, $ConcreteT)))
 end
 
 # ---- overridable hooks ------------------------------------------------------
@@ -201,16 +201,20 @@ function dispatch_construct(::Type{T}, args...; kwargs...) where {T}
 
     # --- exactly one match required -------------------------------------------
     if isempty(passlist)
-        throw(TypeError(
-            "None of the registered subtypes of $T passed dispatch check for " *
-            "args=$(processed_args), kwargs=$(processed_kwargs). " *
-            "Registered subtypes: $(subtypes_list)."
-        ))
+        throw(
+            TypeError(
+                "None of the registered subtypes of $T passed dispatch check for " *
+                    "args=$(processed_args), kwargs=$(processed_kwargs). " *
+                    "Registered subtypes: $(subtypes_list)."
+            )
+        )
     elseif length(passlist) > 1
-        throw(TypeError(
-            "Multiple registered subtypes of $T passed dispatch check: " *
-            "$(passlist). Dispatch requires exactly one match."
-        ))
+        throw(
+            TypeError(
+                "Multiple registered subtypes of $T passed dispatch check: " *
+                    "$(passlist). Dispatch requires exactly one match."
+            )
+        )
     end
 
     subtype = only(passlist)
@@ -292,14 +296,14 @@ end
 # ---- exports ----------------------------------------------------------------
 
 export dispatch_construct,
-       register_subtype!,
-       registered_subtypes,
-       clear_registry!,
-       @register_dispatch,
-       preprocess_args,
-       check_args,
-       postprocess_args,
-       stop_dispatch,
-       CachedDispatch,
-       clear_cache!,
-       TypeError
+    register_subtype!,
+    registered_subtypes,
+    clear_registry!,
+    @register_dispatch,
+    preprocess_args,
+    check_args,
+    postprocess_args,
+    stop_dispatch,
+    CachedDispatch,
+    clear_cache!,
+    TypeError

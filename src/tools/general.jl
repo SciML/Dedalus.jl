@@ -121,7 +121,7 @@ Base.collect(s::OrderedSet{T}) where {T} = collect(T, keys(s.dict))
 function Base.show(io::IO, s::OrderedSet{T}) where {T}
     print(io, "OrderedSet{", T, "}(")
     print(io, collect(s))
-    print(io, ")")
+    return print(io, ")")
 end
 
 Base.empty!(s::OrderedSet) = (empty!(s.dict); s)
@@ -172,10 +172,10 @@ substrings are compared numerically.
 natural_sort(["item10", "item2", "item1"])  # ["item1", "item2", "item10"]
 ```
 """
-function natural_sort(iterable; reverse::Bool=false)
+function natural_sort(iterable; reverse::Bool = false)
     function _natural_key(item)
-        parts = split(string(item), r"([0-9]+)"; keepempty=false)
-        raw = split(string(item), r"[^0-9]+"; keepempty=false)
+        parts = split(string(item), r"([0-9]+)"; keepempty = false)
+        raw = split(string(item), r"[^0-9]+"; keepempty = false)
         # Rebuild interleaved key: split on digit groups, convert digits to Int.
         key = Any[]
         for m in eachmatch(r"([0-9]+)|([^0-9]+)", string(item))
@@ -188,7 +188,7 @@ function natural_sort(iterable; reverse::Bool=false)
         end
         return key
     end
-    return sort(collect(iterable); by=_natural_key, rev=reverse)
+    return sort(collect(iterable); by = _natural_key, rev = reverse)
 end
 
 # ---------------------------------------------------------------------------
@@ -210,10 +210,10 @@ end
 # 1 2 3 2 1 2 3 2 1
 ```
 """
-function oscillate(iterable; max_passes::Real=Inf)
+function oscillate(iterable; max_passes::Real = Inf)
     items = collect(iterable)
     n = length(items)
-    return Channel{eltype(items)}(; ctype=eltype(items), csize=0) do ch
+    return Channel{eltype(items)}(; ctype = eltype(items), csize = 0) do ch
         passes = 0
         while true
             # Forward pass
@@ -221,7 +221,7 @@ function oscillate(iterable; max_passes::Real=Inf)
                 put!(ch, items[i])
             end
             # Backward pass (exclude first and last to avoid repeats)
-            for i in (n-1):-1:2
+            for i in (n - 1):-1:2
                 put!(ch, items[i])
             end
             passes += 1
@@ -285,7 +285,7 @@ struct Foo; x::Int; end
 unify_attributes([Foo(1), Foo(1)], :x)  # 1
 ```
 """
-function unify_attributes(objects, attr::Symbol; require::Bool=true)
+function unify_attributes(objects, attr::Symbol; require::Bool = true)
     attrs = Any[]
     for obj in objects
         try
@@ -375,7 +375,7 @@ Base.firstindex(dt::DeferredTuple) = 1
 Base.lastindex(dt::DeferredTuple) = dt.size
 Base.size(dt::DeferredTuple) = (dt.size,)
 
-function Base.iterate(dt::DeferredTuple, state::Int=1)
+function Base.iterate(dt::DeferredTuple, state::Int = 1)
     state > dt.size && return nothing
     return (dt.entry_function(state), state + 1)
 end
@@ -396,7 +396,7 @@ is_real_dtype(Float64)     # true
 is_real_dtype(ComplexF64)  # false
 ```
 """
-function is_real_dtype(::Type{T}) where {T<:Number}
+function is_real_dtype(::Type{T}) where {T <: Number}
     return T <: Real
 end
 
@@ -416,7 +416,7 @@ is_complex_dtype(ComplexF64)  # true
 is_complex_dtype(Float64)     # false
 ```
 """
-function is_complex_dtype(::Type{T}) where {T<:Number}
+function is_complex_dtype(::Type{T}) where {T <: Number}
     return T <: Complex
 end
 
@@ -429,12 +429,12 @@ end
 # ---------------------------------------------------------------------------
 
 export OrderedSet,
-       rev_enumerate,
-       natural_sort,
-       oscillate,
-       unify,
-       unify_attributes,
-       replace_iter,
-       DeferredTuple,
-       is_real_dtype,
-       is_complex_dtype
+    rev_enumerate,
+    natural_sort,
+    oscillate,
+    unify,
+    unify_attributes,
+    replace_iter,
+    DeferredTuple,
+    is_real_dtype,
+    is_complex_dtype

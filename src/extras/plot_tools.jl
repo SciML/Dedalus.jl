@@ -34,14 +34,14 @@ plotting helpers.
 """
 struct FieldWrapper
     field::Field
-    attrs::Dict{String,Any}
+    attrs::Dict{String, Any}
     dims::Vector{Any}  # Vector{DimWrapper}; use Any to avoid forward-ref issues
 
     function FieldWrapper(field::Field)
-        attrs = Dict{String,Any}("name" => something(field.name, ""))
+        attrs = Dict{String, Any}("name" => something(field.name, ""))
         ndim = field.domain isa Nothing ? 0 : length(field.domain.bases)
         dims = [DimWrapper(field, ax) for ax in 1:ndim]
-        new(field, attrs, dims)
+        return new(field, attrs, dims)
     end
 end
 
@@ -91,7 +91,7 @@ struct DimWrapper
     function DimWrapper(field::Field, axis::Int)
         basis = field.domain.bases[axis]
         dist = field.dist
-        new(field, axis, basis, dist)
+        return new(field, axis, basis, dist)
     end
 end
 
@@ -244,10 +244,12 @@ struct MultiFigure
     pad::PlotFrame
     margin::PlotFrame
     fig::PlotBox
-    figsize::Tuple{Int,Int}
+    figsize::Tuple{Int, Int}
 
-    function MultiFigure(nrows::Int, ncols::Int, image::PlotBox, pad::PlotFrame,
-                         margin::PlotFrame; scale::Real=1.0)
+    function MultiFigure(
+            nrows::Int, ncols::Int, image::PlotBox, pad::PlotFrame,
+            margin::PlotFrame; scale::Real = 1.0
+        )
         # Build composite boxes
         subfig = pad + image
         fig = margin + nrows * ybox(subfig) + ncols * xbox(subfig)
@@ -259,10 +261,12 @@ struct MultiFigure
         # Apply scale
         image_s = image * intscale
         pad_s = pad * intscale
-        margin_s = PlotFrame(margin.top * intscale,
-                             margin.bottom * intscale,
-                             margin.left * intscale + extra_w / 2,
-                             margin.right * intscale + extra_w / 2)
+        margin_s = PlotFrame(
+            margin.top * intscale,
+            margin.bottom * intscale,
+            margin.left * intscale + extra_w / 2,
+            margin.right * intscale + extra_w / 2
+        )
 
         # Rebuild composite boxes
         subfig_s = pad_s + image_s
@@ -271,7 +275,7 @@ struct MultiFigure
         figx = Int(round(fig_s.x))
         figy = Int(round(fig_s.y))
 
-        new(nrows, ncols, image_s, pad_s, margin_s, fig_s, (figx, figy))
+        return new(nrows, ncols, image_s, pad_s, margin_s, fig_s, (figx, figy))
     end
 end
 
@@ -288,8 +292,10 @@ Compute figure-fraction rectangle for a sub-axes within image `(i, j)`.
 
 Returns `(fig_left, fig_bottom, fig_width, fig_height)` in figure fractions.
 """
-function subfigure_axes(mf::MultiFigure, i::Int, j::Int,
-                        rect::NTuple{4,<:Real})
+function subfigure_axes(
+        mf::MultiFigure, i::Int, j::Int,
+        rect::NTuple{4, <:Real}
+    )
     # Reverse row index (row 1 is at top, like Python)
     irev = mf.nrows - i  # 0-based reversed index
     subfig = mf.pad + mf.image
@@ -316,7 +322,7 @@ Interior vertices are placed halfway between grid points. Edge vertices are
 either placed at the grid edges (`cut_edges=true`) or reflected outward by
 half the edge spacing (`cut_edges=false`, the default).
 """
-function get_1d_vertices(grid::AbstractVector; cut_edges::Bool=false)
+function get_1d_vertices(grid::AbstractVector; cut_edges::Bool = false)
     if ndims(grid) > 1
         throw(ArgumentError("grid must be a 1D array"))
     end
@@ -324,7 +330,7 @@ function get_1d_vertices(grid::AbstractVector; cut_edges::Bool=false)
     vert = zeros(Float64, length(grid) + 1)
     # Interior vertices: halfway between points
     for k in 2:length(grid)
-        vert[k] = grid[k-1] + d[k-1] / 2
+        vert[k] = grid[k - 1] + d[k - 1] / 2
     end
     # Edge vertices
     if cut_edges
@@ -351,10 +357,12 @@ Construct quadrilateral mesh arrays from two 1D grids, intended for use with
 
 `x` maps to the *columns* (last axis) and `y` maps to the *rows* (first axis).
 """
-function quad_mesh(x::AbstractVector, y::AbstractVector;
-                   cut_x_edges::Bool=false, cut_y_edges::Bool=false)
-    xvert = get_1d_vertices(x; cut_edges=cut_x_edges)
-    yvert = get_1d_vertices(y; cut_edges=cut_y_edges)
+function quad_mesh(
+        x::AbstractVector, y::AbstractVector;
+        cut_x_edges::Bool = false, cut_y_edges::Bool = false
+    )
+    xvert = get_1d_vertices(x; cut_edges = cut_x_edges)
+    yvert = get_1d_vertices(y; cut_edges = cut_y_edges)
     # xvert along columns, yvert along rows
     xmesh = reshape(xvert, 1, :) .* ones(Float64, length(yvert), 1)
     ymesh = ones(Float64, 1, length(xvert)) .* reshape(yvert, :, 1)
@@ -376,7 +384,7 @@ Compute padded image limits `(x0, x1, y0, y1)` from x and y grids.
 - `xpad`:  padding fraction for x axis (default `0.0`)
 - `ypad`:  padding fraction for y axis (default `0.0`)
 """
-function pad_limits(xgrid, ygrid; xpad::Real=0.0, ypad::Real=0.0)
+function pad_limits(xgrid, ygrid; xpad::Real = 0.0, ypad::Real = 0.0)
     xmin, xmax = minimum(xgrid), maximum(xgrid)
     ymin, ymax = minimum(ygrid), maximum(ygrid)
     dx = xmax - xmin
@@ -412,9 +420,11 @@ quad meshes suitable for `pcolormesh`-style plotting.
 Returns `(xmesh, ymesh, data)` where `xmesh` and `ymesh` are the vertex
 grids and `data` is the selected 2D data slice.
 """
-function get_plane(dset, xaxis::Int, yaxis::Int, slices::Tuple;
-                   xscale=0, yscale=0,
-                   cut_x_edges::Bool=false, cut_y_edges::Bool=false)
+function get_plane(
+        dset, xaxis::Int, yaxis::Int, slices::Tuple;
+        xscale = 0, yscale = 0,
+        cut_x_edges::Bool = false, cut_y_edges::Bool = false
+    )
     slices_vec = collect(slices)
 
     # Build quad meshes from sorted grids
@@ -422,8 +432,10 @@ function get_plane(dset, xaxis::Int, yaxis::Int, slices::Tuple;
     ygrid = dset.dims[yaxis][yscale][slices_vec[yaxis]]
     xorder = sortperm(xgrid)
     yorder = sortperm(ygrid)
-    xmesh, ymesh = quad_mesh(xgrid[xorder], ygrid[yorder];
-                             cut_x_edges=cut_x_edges, cut_y_edges=cut_y_edges)
+    xmesh, ymesh = quad_mesh(
+        xgrid[xorder], ygrid[yorder];
+        cut_x_edges = cut_x_edges, cut_y_edges = cut_y_edges
+    )
 
     # Select and arrange data
     data = dset[slices...]
@@ -469,12 +481,14 @@ A `NamedTuple` with fields:
 - `clim`: `(cmin, cmax)` color limits
 - `limits`: `(x0, x1, y0, y1)` axis limits
 """
-function plot_bot(dset, image_axes::Tuple{Int,Int}, data_slices::Tuple;
-                  image_scales::Tuple=(0, 0),
-                  clim=nothing,
-                  even_scale::Bool=false,
-                  title=nothing,
-                  func=nothing)
+function plot_bot(
+        dset, image_axes::Tuple{Int, Int}, data_slices::Tuple;
+        image_scales::Tuple = (0, 0),
+        clim = nothing,
+        even_scale::Bool = false,
+        title = nothing,
+        func = nothing
+    )
     # Wrap fields
     if dset isa Field
         dset = FieldWrapper(dset)
@@ -484,8 +498,10 @@ function plot_bot(dset, image_axes::Tuple{Int,Int}, data_slices::Tuple;
     xscale, yscale = image_scales
 
     # Get meshes and data
-    xmesh, ymesh, data = get_plane(dset, xaxis, yaxis, data_slices;
-                                   xscale=xscale, yscale=yscale)
+    xmesh, ymesh, data = get_plane(
+        dset, xaxis, yaxis, data_slices;
+        xscale = xscale, yscale = yscale
+    )
     if func !== nothing
         xmesh, ymesh, data = func(xmesh, ymesh, data)
     end
@@ -519,9 +535,11 @@ function plot_bot(dset, image_axes::Tuple{Int,Int}, data_slices::Tuple;
 
     limits = pad_limits(xmesh, ymesh)
 
-    return (xmesh=xmesh, ymesh=ymesh, data=data,
-            xlabel=xlabel, ylabel=ylabel, title=title,
-            clim=clim, limits=limits)
+    return (
+        xmesh = xmesh, ymesh = ymesh, data = data,
+        xlabel = xlabel, ylabel = ylabel, title = title,
+        clim = clim, limits = limits,
+    )
 end
 
 # ---------------------------------------------------------------------------
@@ -539,7 +557,7 @@ Convenience wrapper around `plot_bot` for 2D datasets.
 
 All other keyword arguments are forwarded to `plot_bot`.
 """
-function plot_bot_2d(dset; transpose::Bool=false, kwargs...)
+function plot_bot_2d(dset; transpose::Bool = false, kwargs...)
     if dset isa Field
         dset = FieldWrapper(dset)
     end
@@ -574,8 +592,10 @@ normal to the specified axis.
 
 All other keyword arguments are forwarded to `plot_bot`.
 """
-function plot_bot_3d(dset, normal_axis, normal_index::Int;
-                     transpose::Bool=false, kwargs...)
+function plot_bot_3d(
+        dset, normal_axis, normal_index::Int;
+        transpose::Bool = false, kwargs...
+    )
     if dset isa Field
         dset = FieldWrapper(dset)
     end
@@ -619,8 +639,8 @@ end
 # ---------------------------------------------------------------------------
 
 export FieldWrapper, DimWrapper, label, shape,
-       PlotBox, xbox, ybox,
-       PlotFrame, bottom_left, top_right,
-       MultiFigure, subfigure_axes,
-       get_1d_vertices, quad_mesh, pad_limits, get_plane,
-       plot_bot, plot_bot_2d, plot_bot_3d
+    PlotBox, xbox, ybox,
+    PlotFrame, bottom_left, top_right,
+    MultiFigure, subfigure_axes,
+    get_1d_vertices, quad_mesh, pad_limits, get_plane,
+    plot_bot, plot_bot_2d, plot_bot_3d

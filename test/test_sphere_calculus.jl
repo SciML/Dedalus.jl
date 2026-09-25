@@ -20,8 +20,8 @@ using Dedalus
     function build_sphere(Nphi, Ntheta, dealias, T)
         c = S2Coordinates("phi", "theta")
         d = Distributor(c, T)
-        b = SphereBasis(c, (Nphi, Ntheta), radius=radius, dealias=(dealias, dealias), dtype=T)
-        phi, theta = local_grids(d, b, scales=dealias)
+        b = SphereBasis(c, (Nphi, Ntheta), radius = radius, dealias = (dealias, dealias), dtype = T)
+        phi, theta = local_grids(d, b, scales = dealias)
         return c, d, b, phi, theta
     end
 
@@ -33,9 +33,9 @@ using Dedalus
         # Y_2^2(theta, phi) = (1/4) sqrt(15/2pi) sin^2(theta) e^{2i phi}
         if l == 2 && m == 2
             return @. exp(2im * phi) * sqrt(15 / (2 * pi)) * sin(theta)^2 / 4
-        # Y_10^6(theta, phi)  -- use recurrence-free closed form from
-        # associated Legendre + normalization.  We only need a few (l,m) pairs
-        # for the eigenvalue tests, so a small manual table suffices.
+            # Y_10^6(theta, phi)  -- use recurrence-free closed form from
+            # associated Legendre + normalization.  We only need a few (l,m) pairs
+            # for the eigenvalue tests, so a small manual table suffices.
         elseif l == 10 && m == 6
             # |m| <= l, so valid.
             # P_10^6(x) = (1-x^2)^3 * d^6/dx^6 P_10(x) / 2^10 / 10! * (-1)^6 ...
@@ -90,24 +90,24 @@ using Dedalus
     #    skew(f)[0] = f[1], skew(f)[1] = -f[0]  (on S2 vector field)
     # ========================================================================
     @testset "skew explicit Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T layout=$layout" for
-            Nphi in Nphi_range,
+        Nphi in Nphi_range,
             Ntheta in Ntheta_range,
             dealias in dealias_range,
             T in dtype_range,
             layout in ["c", "g"]
         try
             c, d, b, phi, theta = build_sphere(Nphi, Ntheta, dealias, T)
-            f = VectorField(d, c, bases=b)
-            fill_random!(f, layout="g")
-            low_pass_filter!(f, scales=0.75)
+            f = VectorField(d, c, bases = b)
+            fill_random!(f, layout = "g")
+            low_pass_filter!(f, scales = 0.75)
             change_layout!(f, layout)
             g = evaluate(skew(f))
             # On the 2-sphere: skew swaps components with a sign flip
-            @test isapprox(g["g"][1, :], f["g"][2, :], atol=1e-12)
-            @test isapprox(g["g"][2, :], -f["g"][1, :], atol=1e-12)
+            @test isapprox(g["g"][1, :], f["g"][2, :], atol = 1.0e-12)
+            @test isapprox(g["g"][2, :], -f["g"][1, :], atol = 1.0e-12)
         catch e
             @test_broken false
-            @warn "test_skew_explicit failed" exception=e
+            @warn "test_skew_explicit failed" exception = e
         end
     end
 
@@ -115,26 +115,26 @@ using Dedalus
     # 2. Skew implicit -- LBVP: skew(u) = skew(f)
     # ========================================================================
     @testset "skew implicit Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T" for
-            Nphi in Nphi_range,
+        Nphi in Nphi_range,
             Ntheta in Ntheta_range,
             dealias in dealias_range,
             T in dtype_range
         try
             c, d, b, phi, theta = build_sphere(Nphi, Ntheta, dealias, T)
-            f = VectorField(d, c, bases=b)
-            fill_random!(f, layout="g")
-            low_pass_filter!(f, scales=0.75)
-            u = VectorField(d, c, bases=b)
-            problem = LBVP([u], namespace=Dict("u" => u, "f" => f, "skew" => skew))
+            f = VectorField(d, c, bases = b)
+            fill_random!(f, layout = "g")
+            low_pass_filter!(f, scales = 0.75)
+            u = VectorField(d, c, bases = b)
+            problem = LBVP([u], namespace = Dict("u" => u, "f" => f, "skew" => skew))
             add_equation!(problem, "skew(u) = skew(f)")
             solver = build_solver(problem)
             solve!(solver)
             change_scales!(u, dealias)
             change_scales!(f, dealias)
-            @test isapprox(u["g"], f["g"], atol=1e-10)
+            @test isapprox(u["g"], f["g"], atol = 1.0e-10)
         catch e
             @test_broken false
-            @warn "test_skew_implicit failed" exception=e
+            @warn "test_skew_implicit failed" exception = e
         end
     end
 
@@ -142,25 +142,25 @@ using Dedalus
     # 3. Transpose explicit
     # ========================================================================
     @testset "transpose explicit Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T layout=$layout" for
-            Nphi in Nphi_range,
+        Nphi in Nphi_range,
             Ntheta in Ntheta_range,
             dealias in dealias_range,
             T in dtype_range,
             layout in ["c", "g"]
         try
             c, d, b, phi, theta = build_sphere(Nphi, Ntheta, dealias, T)
-            f = TensorField(d, (c, c), bases=b)
-            fill_random!(f, layout="g")
-            low_pass_filter!(f, scales=0.75)
+            f = TensorField(d, (c, c), bases = b)
+            fill_random!(f, layout = "g")
+            low_pass_filter!(f, scales = 0.75)
             change_layout!(f, layout)
             g = evaluate(tensor_transpose(f))
             # Transposed: g[i,j,...] = f[j,i,...]
             for i in 1:2, j in 1:2
-                @test isapprox(g["g"][i, j, :], f["g"][j, i, :], atol=1e-12)
+                @test isapprox(g["g"][i, j, :], f["g"][j, i, :], atol = 1.0e-12)
             end
         catch e
             @test_broken false
-            @warn "test_transpose_explicit failed" exception=e
+            @warn "test_transpose_explicit failed" exception = e
         end
     end
 
@@ -168,27 +168,31 @@ using Dedalus
     # 4. Transpose implicit -- LBVP: trans(u) = trans(f)
     # ========================================================================
     @testset "transpose implicit Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T" for
-            Nphi in Nphi_range,
+        Nphi in Nphi_range,
             Ntheta in Ntheta_range,
             dealias in dealias_range,
             T in dtype_range
         try
             c, d, b, phi, theta = build_sphere(Nphi, Ntheta, dealias, T)
-            f = TensorField(d, (c, c), bases=b)
-            fill_random!(f, layout="g")
-            low_pass_filter!(f, scales=0.75)
-            u = TensorField(d, (c, c), bases=b)
-            problem = LBVP([u], namespace=Dict("u" => u, "f" => f,
-                                               "trans" => tensor_transpose))
+            f = TensorField(d, (c, c), bases = b)
+            fill_random!(f, layout = "g")
+            low_pass_filter!(f, scales = 0.75)
+            u = TensorField(d, (c, c), bases = b)
+            problem = LBVP(
+                [u], namespace = Dict(
+                    "u" => u, "f" => f,
+                    "trans" => tensor_transpose
+                )
+            )
             add_equation!(problem, "trans(u) = trans(f)")
             solver = build_solver(problem)
             solve!(solver)
             change_scales!(u, dealias)
             change_scales!(f, dealias)
-            @test isapprox(u["g"], f["g"], atol=1e-10)
+            @test isapprox(u["g"], f["g"], atol = 1.0e-10)
         catch e
             @test_broken false
-            @warn "test_transpose_implicit failed" exception=e
+            @warn "test_transpose_implicit failed" exception = e
         end
     end
 
@@ -196,7 +200,7 @@ using Dedalus
     # 5. Convert constant scalar explicit
     # ========================================================================
     @testset "convert constant scalar explicit Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T" for
-            Nphi in Nphi_range,
+        Nphi in Nphi_range,
             Ntheta in Ntheta_range,
             dealias in dealias_range,
             T in dtype_range
@@ -210,10 +214,10 @@ using Dedalus
             end
             f["g"] = fref
             g = evaluate(Convert(f, b))
-            @test isapprox(g["g"], fill!(similar(g["g"]), fref), atol=1e-12)
+            @test isapprox(g["g"], fill!(similar(g["g"]), fref), atol = 1.0e-12)
         catch e
             @test_broken false
-            @warn "test_convert_constant_scalar_explicit failed" exception=e
+            @warn "test_convert_constant_scalar_explicit failed" exception = e
         end
     end
 
@@ -222,13 +226,13 @@ using Dedalus
     #    Average of (1 + x + z) over S2 should be 1 (x, z have zero mean)
     # ========================================================================
     @testset "sphere average scalar explicit Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T" for
-            Nphi in Nphi_range,
+        Nphi in Nphi_range,
             Ntheta in Ntheta_range,
             dealias in dealias_range,
             T in dtype_range
         try
             c, d, b, phi, theta = build_sphere(Nphi, Ntheta, dealias, T)
-            f = Field(d, bases=b)
+            f = Field(d, bases = b)
             preset_scales!(f, dealias)
             x = @. sin(theta) * cos(phi)
             z = @. cos(theta)
@@ -238,10 +242,10 @@ using Dedalus
                 f["g"] = @. 1 + x + z
             end
             h = evaluate(Average(f, c))
-            @test isapprox(h["g"], fill!(similar(h["g"]), 1), atol=1e-12)
+            @test isapprox(h["g"], fill!(similar(h["g"]), 1), atol = 1.0e-12)
         catch e
             @test_broken false
-            @warn "test_sphere_average_scalar_explicit failed" exception=e
+            @warn "test_sphere_average_scalar_explicit failed" exception = e
         end
     end
 
@@ -250,14 +254,14 @@ using Dedalus
     #    grad(Y_2^2) = [1/(R sin theta) d/dphi Y_2^2, 1/R d/dtheta Y_2^2]
     # ========================================================================
     @testset "gradient scalar explicit Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T" for
-            Nphi in Nphi_range,
+        Nphi in Nphi_range,
             Ntheta in Ntheta_range,
             dealias in dealias_range,
             T in dtype_range
         try
             c, d, b, phi, theta = build_sphere(Nphi, Ntheta, dealias, T)
             m, l = 2, 2
-            f = Field(d, bases=b)
+            f = Field(d, bases = b)
             preset_scales!(f, dealias)
             Y22 = sph_harm_y(m, l, theta, phi)
             if T == ComplexF64
@@ -276,11 +280,11 @@ using Dedalus
                 ug_theta = real.(ug_theta)
             end
             # u["g"] should have shape [2, Nphi, Ntheta] with component 1=phi, 2=theta
-            @test isapprox(u["g"][1, :], ug_phi, atol=1e-10)
-            @test isapprox(u["g"][2, :], ug_theta, atol=1e-10)
+            @test isapprox(u["g"][1, :], ug_phi, atol = 1.0e-10)
+            @test isapprox(u["g"][2, :], ug_theta, atol = 1.0e-10)
         catch e
             @test_broken false
-            @warn "test_gradient_scalar_explicit failed" exception=e
+            @warn "test_gradient_scalar_explicit failed" exception = e
         end
     end
 
@@ -288,7 +292,7 @@ using Dedalus
     # 8. MulCosine explicit -- cos(theta) * f for ranks 0, 1, 2
     # ========================================================================
     @testset "cosine explicit Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T rank=$rank" for
-            Nphi in Nphi_range,
+        Nphi in Nphi_range,
             Ntheta in Ntheta_range,
             dealias in dealias_range,
             T in dtype_range,
@@ -296,21 +300,21 @@ using Dedalus
         try
             c, d, b, phi, theta = build_sphere(Nphi, Ntheta, dealias, T)
             if rank == 0
-                f = Field(d, bases=b)
+                f = Field(d, bases = b)
             elseif rank == 1
-                f = VectorField(d, c, bases=b)
+                f = VectorField(d, c, bases = b)
             else
-                f = TensorField(d, (c, c), bases=b)
+                f = TensorField(d, (c, c), bases = b)
             end
-            fill_random!(f, layout="g")
-            low_pass_filter!(f, scales=0.75)
+            fill_random!(f, layout = "g")
+            low_pass_filter!(f, scales = 0.75)
             g = evaluate(MulCosine(f))
             change_scales!(g, dealias)
             change_scales!(f, dealias)
-            @test isapprox(g["g"], cos.(theta) .* f["g"], atol=1e-10)
+            @test isapprox(g["g"], cos.(theta) .* f["g"], atol = 1.0e-10)
         catch e
             @test_broken false
-            @warn "test_cosine_explicit failed (rank=$rank)" exception=e
+            @warn "test_cosine_explicit failed (rank=$rank)" exception = e
         end
     end
 
@@ -318,7 +322,7 @@ using Dedalus
     # 9. MulCosine implicit -- LBVP: u + MulCosine(u) = f + MulCosine(f)
     # ========================================================================
     @testset "cosine implicit Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T rank=$rank" for
-            Nphi in Nphi_range,
+        Nphi in Nphi_range,
             Ntheta in Ntheta_range,
             dealias in dealias_range,
             T in dtype_range,
@@ -326,28 +330,32 @@ using Dedalus
         try
             c, d, b, phi, theta = build_sphere(Nphi, Ntheta, dealias, T)
             if rank == 0
-                f = Field(d, bases=b)
-                u = Field(d, bases=b)
+                f = Field(d, bases = b)
+                u = Field(d, bases = b)
             elseif rank == 1
-                f = VectorField(d, c, bases=b)
-                u = VectorField(d, c, bases=b)
+                f = VectorField(d, c, bases = b)
+                u = VectorField(d, c, bases = b)
             else
-                f = TensorField(d, (c, c), bases=b)
-                u = TensorField(d, (c, c), bases=b)
+                f = TensorField(d, (c, c), bases = b)
+                u = TensorField(d, (c, c), bases = b)
             end
-            fill_random!(f, layout="g")
-            low_pass_filter!(f, scales=0.75)
-            problem = LBVP([u], namespace=Dict("u" => u, "f" => f,
-                                               "MulCosine" => MulCosine))
+            fill_random!(f, layout = "g")
+            low_pass_filter!(f, scales = 0.75)
+            problem = LBVP(
+                [u], namespace = Dict(
+                    "u" => u, "f" => f,
+                    "MulCosine" => MulCosine
+                )
+            )
             add_equation!(problem, "u + MulCosine(u) = f + MulCosine(f)")
             solver = build_solver(problem)
             solve!(solver)
             change_scales!(u, dealias)
             change_scales!(f, dealias)
-            @test isapprox(u["g"], f["g"], atol=1e-10)
+            @test isapprox(u["g"], f["g"], atol = 1.0e-10)
         catch e
             @test_broken false
-            @warn "test_cosine_implicit failed (rank=$rank)" exception=e
+            @warn "test_cosine_implicit failed (rank=$rank)" exception = e
         end
     end
 
@@ -356,14 +364,14 @@ using Dedalus
     #     lap(Y_l^m) = -l(l+1)/R^2 * Y_l^m
     # ========================================================================
     @testset "laplacian scalar explicit Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T" for
-            Nphi in Nphi_range,
+        Nphi in Nphi_range,
             Ntheta in Ntheta_range,
             dealias in dealias_range,
             T in dtype_range
         try
             c, d, b, phi, theta = build_sphere(Nphi, Ntheta, dealias, T)
             m, l = 6, 10
-            f = Field(d, bases=b)
+            f = Field(d, bases = b)
             preset_scales!(f, dealias)
             Y = sph_harm_y(m, l, theta, phi)
             if T == ComplexF64
@@ -375,10 +383,10 @@ using Dedalus
             # Eigenvalue: lap(Y_l^m) = -l(l+1)/R^2 Y_l^m
             eigenval = -l * (l + 1) / radius^2
             expected = eigenval .* f["g"]
-            @test isapprox(u["g"], expected, atol=1e-6)
+            @test isapprox(u["g"], expected, atol = 1.0e-6)
         catch e
             @test_broken false
-            @warn "test_laplacian_scalar_explicit failed" exception=e
+            @warn "test_laplacian_scalar_explicit failed" exception = e
         end
     end
 
@@ -388,14 +396,14 @@ using Dedalus
     #     => u = -f / [l(l+1)] * R^2
     # ========================================================================
     @testset "laplacian scalar implicit Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T" for
-            Nphi in Nphi_range,
+        Nphi in Nphi_range,
             Ntheta in Ntheta_range,
             dealias in dealias_range,
             T in dtype_range
         try
             c, d, b, phi, theta = build_sphere(Nphi, Ntheta, dealias, T)
             m, l = 5, 10
-            f = Field(d, bases=b)
+            f = Field(d, bases = b)
             preset_scales!(f, dealias)
             Y = sph_harm_y(m, l, theta, phi)
             if T == ComplexF64
@@ -403,11 +411,14 @@ using Dedalus
             else
                 f["g"] = real.(Y)
             end
-            u = Field(d, bases=b)
+            u = Field(d, bases = b)
             tau = Field(d)
-            problem = LBVP([u, tau], namespace=Dict(
-                "u" => u, "tau" => tau, "f" => f,
-                "lap" => Laplacian, "ave" => A -> Average(A, c)))
+            problem = LBVP(
+                [u, tau], namespace = Dict(
+                    "u" => u, "tau" => tau, "f" => f,
+                    "lap" => Laplacian, "ave" => A -> Average(A, c)
+                )
+            )
             add_equation!(problem, "lap(u) + tau = f")
             add_equation!(problem, "ave(u) = 0")
             solver = build_solver(problem)
@@ -416,10 +427,10 @@ using Dedalus
             change_scales!(f, 1)
             # Expected: u = -f * R^2 / [l(l+1)]
             expected = @. -f["g"] / (l * (l + 1)) * radius^2
-            @test isapprox(u["g"], expected, atol=1e-6)
+            @test isapprox(u["g"], expected, atol = 1.0e-6)
         catch e
             @test_broken false
-            @warn "test_laplacian_scalar_implicit failed" exception=e
+            @warn "test_laplacian_scalar_implicit failed" exception = e
         end
     end
 
@@ -430,27 +441,30 @@ using Dedalus
     #     Solution: u = h (divergence-free part)
     # ========================================================================
     @testset "divergence cleaning Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T" for
-            Nphi in Nphi_range,
+        Nphi in Nphi_range,
             Ntheta in Ntheta_range,
             dealias in dealias_range,
             T in dtype_range
         try
             c, d, b, phi, theta = build_sphere(Nphi, Ntheta, dealias, T)
-            f = Field(d, bases=b)
-            fill_random!(f, layout="g")
-            low_pass_filter!(f, scales=0.75)
+            f = Field(d, bases = b)
+            fill_random!(f, layout = "g")
+            low_pass_filter!(f, scales = 0.75)
             # Build vector field as grad(f) + skew(grad(f))
             g_vec = evaluate(Gradient(f))
             h_vec = evaluate(skew(g_vec))
             # Divergence cleaning LBVP
-            u = VectorField(d, c, bases=b)
-            psi = Field(d, bases=b)
+            u = VectorField(d, c, bases = b)
+            psi = Field(d, bases = b)
             tau = Field(d)
-            problem = LBVP([u, psi, tau], namespace=Dict(
-                "u" => u, "psi" => psi, "tau" => tau,
-                "h" => h_vec, "g" => g_vec,
-                "grad" => Gradient, "div" => Divergence,
-                "ave" => A -> Average(A, c)))
+            problem = LBVP(
+                [u, psi, tau], namespace = Dict(
+                    "u" => u, "psi" => psi, "tau" => tau,
+                    "h" => h_vec, "g" => g_vec,
+                    "grad" => Gradient, "div" => Divergence,
+                    "ave" => A -> Average(A, c)
+                )
+            )
             add_equation!(problem, "u + grad(psi) = h + g")
             add_equation!(problem, "div(u) + tau = 0")
             add_equation!(problem, "ave(psi) = 0")
@@ -458,10 +472,10 @@ using Dedalus
             solve!(solver)
             change_scales!(u, 1)
             change_scales!(h_vec, 1)
-            @test isapprox(u["g"], h_vec["g"], atol=1e-10)
+            @test isapprox(u["g"], h_vec["g"], atol = 1.0e-10)
         catch e
             @test_broken false
-            @warn "test_divergence_cleaning failed" exception=e
+            @warn "test_divergence_cleaning failed" exception = e
         end
     end
 
@@ -470,25 +484,25 @@ using Dedalus
     #     SphereEllProduct(f, c, func) where func(ell, r) = ell + 3
     # ========================================================================
     @testset "sphere ell product scalar Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T" for
-            Nphi in Nphi_range,
+        Nphi in Nphi_range,
             Ntheta in Ntheta_range,
             dealias in dealias_range,
             T in [Float64, ComplexF64]
         try
             c, d, b, phi, theta = build_sphere(Nphi, Ntheta, dealias, T)
-            f = Field(d, bases=b, dtype=T)
-            g = Field(d, bases=b, dtype=T)
-            fill_random!(f, layout="g")
+            f = Field(d, bases = b, dtype = T)
+            g = Field(d, bases = b, dtype = T)
+            fill_random!(f, layout = "g")
             func = (ell, r) -> ell + 3
             # Manually build expected result in coefficient space
             for (ell, m_ind, ell_ind) in ell_maps(b, d)
                 g["c"][m_ind, ell_ind] = func(ell, radius) * f["c"][m_ind, ell_ind]
             end
             h = evaluate(SphereEllProduct(f, c, func))
-            @test isapprox(g["c"], h["c"], atol=1e-12)
+            @test isapprox(g["c"], h["c"], atol = 1.0e-12)
         catch e
             @test_broken false
-            @warn "test_sphere_ell_product_scalar failed" exception=e
+            @warn "test_sphere_ell_product_scalar failed" exception = e
         end
     end
 
@@ -497,15 +511,15 @@ using Dedalus
     #     SphereEllProduct(f, c, func) where func(ell, r) = ell + 3
     # ========================================================================
     @testset "sphere ell product vector Nphi=$Nphi Ntheta=$Ntheta dealias=$dealias T=$T" for
-            Nphi in Nphi_range,
+        Nphi in Nphi_range,
             Ntheta in Ntheta_range,
             dealias in dealias_range,
             T in [Float64, ComplexF64]
         try
             c, d, b, phi, theta = build_sphere(Nphi, Ntheta, dealias, T)
-            f = VectorField(d, c, bases=b, dtype=T)
-            g = VectorField(d, c, bases=b, dtype=T)
-            fill_random!(f, layout="g")
+            f = VectorField(d, c, bases = b, dtype = T)
+            g = VectorField(d, c, bases = b, dtype = T)
+            fill_random!(f, layout = "g")
             func = (ell, r) -> ell + 3
             # Manually build expected result in coefficient space
             dim = 2  # S2 has 2 components
@@ -515,10 +529,10 @@ using Dedalus
                 end
             end
             h = evaluate(SphereEllProduct(f, c, func))
-            @test isapprox(g["c"], h["c"], atol=1e-12)
+            @test isapprox(g["c"], h["c"], atol = 1.0e-12)
         catch e
             @test_broken false
-            @warn "test_sphere_ell_product_vector failed" exception=e
+            @warn "test_sphere_ell_product_vector failed" exception = e
         end
     end
 

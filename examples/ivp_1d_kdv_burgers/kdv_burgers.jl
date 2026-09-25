@@ -21,27 +21,27 @@ logger = Logging.current_logger()
 # Parameters
 Lx = 10
 Nx = 1024
-a = 1e-4
-b = 2e-4
-dealias = 3/2
+a = 1.0e-4
+b = 2.0e-4
+dealias = 3 / 2
 stop_sim_time = 10
 timestepper = SBDF2
-timestep = 2e-3
+timestep = 2.0e-3
 dtype = Float64
 
 # Bases
 xcoord = Coordinate("x")
-dist = Distributor(xcoord; dtype=dtype)
-xbasis = RealFourier(xcoord, Nx; bounds=(0, Lx), dealias=dealias)
+dist = Distributor(xcoord; dtype = dtype)
+xbasis = RealFourier(xcoord, Nx; bounds = (0, Lx), dealias = dealias)
 
 # Fields
-u = Field(dist; name="u", bases=(xbasis,))
+u = Field(dist; name = "u", bases = (xbasis,))
 
 # Substitutions
 dx = A -> Differentiate(A, xcoord)
 
 # Problem
-problem = IVP([u]; namespace=@locals)
+problem = IVP([u]; namespace = @locals)
 add_equation!(problem, "dt(u) - a*dx(dx(u)) - b*dx(dx(dx(u))) = - u*dx(u)")
 
 # Initial conditions

@@ -43,7 +43,7 @@ Called during module initialization once operator and arithmetic modules are loa
 """
 function populate_parseables!(operator_names::Dict, arithmetic_names::Dict)
     merge!(PARSEABLE_NAMESPACE, operator_names)
-    merge!(PARSEABLE_NAMESPACE, arithmetic_names)
+    return merge!(PARSEABLE_NAMESPACE, arithmetic_names)
 end
 
 # ============================================================================
@@ -97,7 +97,7 @@ end
 Construct the shared `ProblemData` for a problem, setting up the namespace
 chain.  Priority: local_namespace > external namespace > parseables.
 """
-function _make_problem_data(variables; namespace=nothing)
+function _make_problem_data(variables; namespace = nothing)
     dist = unify_attributes(variables, :dist)
     local_ns = Dict{String, Any}()
     for var in variables
@@ -224,7 +224,7 @@ Add an equation to the problem. The equation can be:
 
 Returns the equation dictionary.
 """
-function add_equation!(problem::ProblemBase, equation; condition::String="True")
+function add_equation!(problem::ProblemBase, equation; condition::String = "True")
     data = _data(problem)
     @debug "Adding equation $(length(data.equations))"
     # Split equation into LHS and RHS
@@ -276,9 +276,12 @@ Throws `UnsupportedEquationError` if the sub-expression has a larger domain.
 function _check_domain_containment(subexpr, supexpr, subname, supname)
     sub_nc = subexpr.domain.nonconstant
     sup_const = supexpr.domain.constant
-    if any(sub_nc .& sup_const)
-        throw(UnsupportedEquationError(
-            "$subname domain cannot be larger than $supname domain."))
+    return if any(sub_nc .& sup_const)
+        throw(
+            UnsupportedEquationError(
+                "$subname domain cannot be larger than $supname domain."
+            )
+        )
     end
 end
 
@@ -307,8 +310,8 @@ mutable struct LinearBoundaryValueProblem <: ProblemBase
     data::ProblemData
 end
 
-function LinearBoundaryValueProblem(variables::AbstractVector; namespace=nothing)
-    data = _make_problem_data(variables; namespace=namespace)
+function LinearBoundaryValueProblem(variables::AbstractVector; namespace = nothing)
+    data = _make_problem_data(variables; namespace = namespace)
     return LinearBoundaryValueProblem(data)
 end
 
@@ -324,17 +327,21 @@ function _check_equation_conditions(p::LinearBoundaryValueProblem, eqn)
     LHS = operand_cast(eqn["LHS"], dist, ts, dt)
     RHS = operand_cast(eqn["RHS"], dist, ts, dt)
     # LHS must be linear in variables (no affine allowed)
-    require_linearity(LHS, vars...;
-        allow_affine=false,
-        self_name="LBVP LHS",
-        vars_name="problem variables",
-        error_type=UnsupportedEquationError)
+    require_linearity(
+        LHS, vars...;
+        allow_affine = false,
+        self_name = "LBVP LHS",
+        vars_name = "problem variables",
+        error_type = UnsupportedEquationError
+    )
     # RHS must be independent of variables
-    require_independent(RHS, vars...;
-        self_name="LBVP RHS",
-        vars_name="problem variables",
-        error_type=UnsupportedEquationError)
-    _check_domain_containment(RHS, LHS, "RHS", "LHS")
+    require_independent(
+        RHS, vars...;
+        self_name = "LBVP RHS",
+        vars_name = "problem variables",
+        error_type = UnsupportedEquationError
+    )
+    return _check_domain_containment(RHS, LHS, "RHS", "LHS")
 end
 
 function _build_matrix_expressions(p::LinearBoundaryValueProblem, eqn)
@@ -346,8 +353,8 @@ function _build_matrix_expressions(p::LinearBoundaryValueProblem, eqn)
     L = eqn["LHS"]
     F = eqn["RHS"]
     # Reinitialize and prep NCCs
-    L = reinitialize(L; ncc=true, ncc_vars=vars)
-    prep_nccs(L; vars=vars)
+    L = reinitialize(L; ncc = true, ncc_vars = vars)
+    prep_nccs(L; vars = vars)
     # Convert to same domain
     domain = (L - F).domain
     L = convert_operand(L, domain.bases)
@@ -364,7 +371,7 @@ function _build_matrix_expressions(p::LinearBoundaryValueProblem, eqn)
     eqn["matrix_dependence"] = matrix_dependence(L, vars...)
     eqn["matrix_coupling"] = matrix_coupling(L, vars...)
     @debug "  L: $L"
-    @debug "  F: $F"
+    return @debug "  F: $F"
 end
 
 # ============================================================================
@@ -394,8 +401,8 @@ mutable struct NonlinearBoundaryValueProblem <: ProblemBase
     perturbations::Vector{Any}
 end
 
-function NonlinearBoundaryValueProblem(variables; namespace=nothing)
-    data = _make_problem_data(variables; namespace=namespace)
+function NonlinearBoundaryValueProblem(variables; namespace = nothing)
+    data = _make_problem_data(variables; namespace = namespace)
     # Build perturbation variables
     perturbations = Any[]
     for var in variables
@@ -418,7 +425,7 @@ solver_class(::NonlinearBoundaryValueProblem) = NonlinearBoundaryValueSolver
 
 function _check_equation_conditions(::NonlinearBoundaryValueProblem, eqn)
     # No conditions for NLBVP
-    nothing
+    return nothing
 end
 
 function _build_matrix_expressions(p::NonlinearBoundaryValueProblem, eqn)
@@ -433,8 +440,8 @@ function _build_matrix_expressions(p::NonlinearBoundaryValueProblem, eqn)
         dF = replace_op(dF, field, unlock(field))
     end
     # Reinitialize and prep NCCs
-    dF = reinitialize(dF; ncc=true, ncc_vars=perts)
-    prep_nccs(dF; vars=perts)
+    dF = reinitialize(dF; ncc = true, ncc_vars = perts)
+    prep_nccs(dF; vars = perts)
     # Convert to same domain
     domain = (dF + F).domain
     F = convert_operand(F, domain.bases)
@@ -446,7 +453,7 @@ function _build_matrix_expressions(p::NonlinearBoundaryValueProblem, eqn)
     eqn["matrix_dependence"] = matrix_dependence(dF, perts...)
     eqn["matrix_coupling"] = matrix_coupling(dF, perts...)
     @debug "  F: $F"
-    @debug "  dF: $dF"
+    return @debug "  dF: $dF"
 end
 
 # ============================================================================
@@ -474,11 +481,11 @@ mutable struct InitialValueProblem <: ProblemBase
     time::Any
 end
 
-function InitialValueProblem(variables; time="t", namespace=nothing)
-    data = _make_problem_data(variables; namespace=namespace)
+function InitialValueProblem(variables; time = "t", namespace = nothing)
+    data = _make_problem_data(variables; namespace = namespace)
     dist = data.dist
     if time isa AbstractString
-        time_field = _make_scalar_field(dist; name=time, dtype=Float64)
+        time_field = _make_scalar_field(dist; name = time, dtype = Float64)
     elseif _is_field(time)
         if any(time.domain.nonconstant)
             throw(ArgumentError("Time field cannot have any bases."))
@@ -502,27 +509,35 @@ function _check_equation_conditions(p::InitialValueProblem, eqn)
     LHS = operand_cast(eqn["LHS"], dist, ts, dt_type)
     RHS = operand_cast(eqn["RHS"], dist, ts, dt_type)
     # LHS must be linear in variables
-    require_linearity(LHS, vars...;
-        allow_affine=false,
-        self_name="IVP LHS",
-        vars_name="problem variables",
-        error_type=UnsupportedEquationError)
+    require_linearity(
+        LHS, vars...;
+        allow_affine = false,
+        self_name = "IVP LHS",
+        vars_name = "problem variables",
+        error_type = UnsupportedEquationError
+    )
     # LHS must be independent of time
-    require_independent(LHS, p.time;
-        self_name="IVP LHS",
-        vars_name="time",
-        error_type=UnsupportedEquationError)
+    require_independent(
+        LHS, p.time;
+        self_name = "IVP LHS",
+        vars_name = "time",
+        error_type = UnsupportedEquationError
+    )
     # LHS must be first order in time derivatives
-    require_first_order(LHS, TimeDerivative;
-        self_name="IVP LHS",
-        ops_name="time derivatives",
-        error_type=UnsupportedEquationError)
+    require_first_order(
+        LHS, TimeDerivative;
+        self_name = "IVP LHS",
+        ops_name = "time derivatives",
+        error_type = UnsupportedEquationError
+    )
     # RHS must be independent of time derivatives
-    require_independent(RHS, TimeDerivative;
-        self_name="IVP RHS",
-        vars_name="time derivatives",
-        error_type=UnsupportedEquationError)
-    _check_domain_containment(RHS, LHS, "RHS", "LHS")
+    require_independent(
+        RHS, TimeDerivative;
+        self_name = "IVP RHS",
+        vars_name = "time derivatives",
+        error_type = UnsupportedEquationError
+    )
+    return _check_domain_containment(RHS, LHS, "RHS", "LHS")
 end
 
 function _build_matrix_expressions(p::InitialValueProblem, eqn)
@@ -539,12 +554,12 @@ function _build_matrix_expressions(p::InitialValueProblem, eqn)
     end
     # Reinitialize and prep NCCs
     if M !== nothing && M != 0
-        M = reinitialize(M; ncc=true, ncc_vars=vars)
-        prep_nccs(M; vars=vars)
+        M = reinitialize(M; ncc = true, ncc_vars = vars)
+        prep_nccs(M; vars = vars)
     end
     if L !== nothing && L != 0
-        L = reinitialize(L; ncc=true, ncc_vars=vars)
-        prep_nccs(L; vars=vars)
+        L = reinitialize(L; ncc = true, ncc_vars = vars)
+        prep_nccs(L; vars = vars)
     end
     # Convert to same domain
     domain = _combined_domain(M, L, F)
@@ -570,7 +585,7 @@ function _build_matrix_expressions(p::InitialValueProblem, eqn)
     eqn["matrix_coupling"] = matrix_coupling(ml_combined, vars...)
     @debug "  M: $M"
     @debug "  L: $L"
-    @debug "  F: $F"
+    return @debug "  F: $F"
 end
 
 """
@@ -589,15 +604,17 @@ Parameters:
 - `backgrounds`: Background fields for linearization (default: IVP variables)
 - `perturbations`: Perturbation fields for EVP (default: copies of IVP variables)
 """
-function build_EVP(ivp::InitialValueProblem;
-                   eigenvalue=nothing,
-                   backgrounds=nothing,
-                   perturbations=nothing,
-                   kw...)
+function build_EVP(
+        ivp::InitialValueProblem;
+        eigenvalue = nothing,
+        backgrounds = nothing,
+        perturbations = nothing,
+        kw...
+    )
     variables = get_variables(ivp)
     dist = get_dist(ivp)
     if eigenvalue === nothing
-        eigenvalue = _make_scalar_field(dist; name="λ")  # lambda
+        eigenvalue = _make_scalar_field(dist; name = "λ")  # lambda
     end
     if perturbations === nothing
         perturbations = [copy(var) for var in variables]
@@ -632,13 +649,18 @@ function build_EVP(ivp::InitialValueProblem;
         # Take Frechet differential of F(X)
         if F != 0
             if has(F, ivp.time)
-                throw(UnsupportedEquationError(
-                    "Cannot convert time-dependent IVP to EVP."))
+                throw(
+                    UnsupportedEquationError(
+                        "Cannot convert time-dependent IVP to EVP."
+                    )
+                )
             end
-            dF = frechet_differential(F;
-                variables=variables,
-                perturbations=perturbations,
-                backgrounds=backgrounds)
+            dF = frechet_differential(
+                F;
+                variables = variables,
+                perturbations = perturbations,
+                backgrounds = backgrounds
+            )
         else
             dF = 0
         end
@@ -681,8 +703,8 @@ mutable struct EigenvalueProblem <: ProblemBase
     eigenvalue::Any
 end
 
-function EigenvalueProblem(variables::AbstractVector, eigenvalue; namespace=nothing)
-    data = _make_problem_data(variables; namespace=namespace)
+function EigenvalueProblem(variables::AbstractVector, eigenvalue; namespace = nothing)
+    data = _make_problem_data(variables; namespace = namespace)
     if any(eigenvalue.domain.nonconstant)
         throw(ArgumentError("Eigenvalue field cannot have any bases."))
     end
@@ -700,18 +722,22 @@ function _check_equation_conditions(p::EigenvalueProblem, eqn)
     dt = eqn["dtype"]
     LHS = operand_cast(eqn["LHS"], dist, ts, dt)
     # LHS must be linear in variables
-    require_linearity(LHS, vars...;
-        allow_affine=false,
-        self_name="EVP LHS",
-        vars_name="problem variables",
-        error_type=UnsupportedEquationError)
+    require_linearity(
+        LHS, vars...;
+        allow_affine = false,
+        self_name = "EVP LHS",
+        vars_name = "problem variables",
+        error_type = UnsupportedEquationError
+    )
     # LHS must be affine in eigenvalue (linear + constant allowed)
-    require_linearity(LHS, p.eigenvalue;
-        allow_affine=true,
-        self_name="EVP LHS",
-        vars_name="the eigenvalue",
-        error_type=UnsupportedEquationError)
-    if eqn["RHS"] != 0
+    require_linearity(
+        LHS, p.eigenvalue;
+        allow_affine = true,
+        self_name = "EVP LHS",
+        vars_name = "the eigenvalue",
+        error_type = UnsupportedEquationError
+    )
+    return if eqn["RHS"] != 0
         throw(UnsupportedEquationError("EVP RHS must be identically zero."))
     end
 end
@@ -726,12 +752,12 @@ function _build_matrix_expressions(p::EigenvalueProblem, eqn)
     end
     # Reinitialize and prep NCCs
     if M !== nothing && M != 0
-        M = reinitialize(M; ncc=true, ncc_vars=vars)
-        prep_nccs(M; vars=vars)
+        M = reinitialize(M; ncc = true, ncc_vars = vars)
+        prep_nccs(M; vars = vars)
     end
     if L !== nothing && L != 0
-        L = reinitialize(L; ncc=true, ncc_vars=vars)
-        prep_nccs(L; vars=vars)
+        L = reinitialize(L; ncc = true, ncc_vars = vars)
+        prep_nccs(L; vars = vars)
     end
     # Convert to same domain
     domain = _safe_add(M, L).domain
@@ -749,7 +775,7 @@ function _build_matrix_expressions(p::EigenvalueProblem, eqn)
     eqn["matrix_dependence"] = matrix_dependence(ml_combined, vars...)
     eqn["matrix_coupling"] = matrix_coupling(ml_combined, vars...)
     @debug "  M: $M"
-    @debug "  L: $L"
+    return @debug "  L: $L"
 end
 
 # ============================================================================
@@ -798,7 +824,7 @@ Forward reference to field construction infrastructure.
 """
 function _make_zero_field(dist, bases, tensorsig, dtype)
     # Stub: creates a zero field. Actual implementation depends on Field infrastructure.
-    f = Field(; dist=dist, bases=bases, tensorsig=tensorsig, dtype=dtype)
+    f = Field(; dist = dist, bases = bases, tensorsig = tensorsig, dtype = dtype)
     f["c"] = 0
     return f
 end
@@ -809,8 +835,8 @@ end
 Create a scalar field with no spatial bases.
 Forward reference to field construction infrastructure.
 """
-function _make_scalar_field(dist; name="", dtype=Float64)
-    return Field(; dist=dist, name=name, dtype=dtype)
+function _make_scalar_field(dist; name = "", dtype = Float64)
+    return Field(; dist = dist, name = name, dtype = dtype)
 end
 
 """
@@ -852,20 +878,20 @@ const EVP = EigenvalueProblem
 # ============================================================================
 
 export ProblemBase,
-       LinearBoundaryValueProblem,
-       NonlinearBoundaryValueProblem,
-       InitialValueProblem,
-       EigenvalueProblem,
-       LBVP, NLBVP, IVP, EVP,
-       add_equation!,
-       build_solver,
-       get_equations,
-       get_variables,
-       get_LHS_variables,
-       get_dist,
-       problem_matrix_dependence,
-       problem_matrix_coupling,
-       problem_dtype,
-       build_EVP,
-       PARSEABLE_NAMESPACE,
-       populate_parseables!
+    LinearBoundaryValueProblem,
+    NonlinearBoundaryValueProblem,
+    InitialValueProblem,
+    EigenvalueProblem,
+    LBVP, NLBVP, IVP, EVP,
+    add_equation!,
+    build_solver,
+    get_equations,
+    get_variables,
+    get_LHS_variables,
+    get_dist,
+    problem_matrix_dependence,
+    problem_matrix_coupling,
+    problem_dtype,
+    build_EVP,
+    PARSEABLE_NAMESPACE,
+    populate_parseables!

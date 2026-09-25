@@ -67,7 +67,7 @@ end
 Create a `DedalusLogger` with no sinks. Add sinks via
 [`add_stdout_sink!`](@ref) and [`add_file_sink!`](@ref).
 """
-DedalusLogger(; level::LogLevel=Logging.Debug) = DedalusLogger(level, Tuple{IO, LogLevel}[])
+DedalusLogger(; level::LogLevel = Logging.Debug) = DedalusLogger(level, Tuple{IO, LogLevel}[])
 
 Logging.shouldlog(logger::DedalusLogger, level, _module, group, id) =
     level >= logger.min_level
@@ -76,8 +76,10 @@ Logging.min_enabled_level(logger::DedalusLogger) = logger.min_level
 
 Logging.catch_exceptions(::DedalusLogger) = false
 
-function Logging.handle_message(logger::DedalusLogger, level, message, _module, group,
-                                id, filepath, line; kwargs...)
+function Logging.handle_message(
+        logger::DedalusLogger, level, message, _module, group,
+        id, filepath, line; kwargs...
+    )
     timestamp = Dates.format(Dates.now(), "yyyy-mm-dd HH:MM:SS")
     modname = _module === nothing ? "Main" : string(_module)
     levelstr = _level_string(level)
@@ -97,6 +99,7 @@ function Logging.handle_message(logger::DedalusLogger, level, message, _module, 
             flush(io)
         end
     end
+    return
 end
 
 """
@@ -175,10 +178,10 @@ global logger.
 Safe to call multiple times; subsequent calls replace the previous logger.
 """
 function setup_logging!()
-    logger = DedalusLogger(; level=Logging.Debug)
+    logger = DedalusLogger(; level = Logging.Debug)
 
     # Read config (may not have a "logging" section)
-    log_cfg = get(config, "logging", Dict{String,Any}())
+    log_cfg = get(config, "logging", Dict{String, Any}())
 
     # Stdout handler
     stdout_level = get(log_cfg, "stdout_level", "none")

@@ -43,8 +43,8 @@ const ball_alpha = -0.5
 Compute Gauss-Jacobi quadrature nodes and weights for the ball radial coordinate.
 Wraps jacobi_quadrature with parameters (a, 1/2) and rescales weights by 1/sqrt(32).
 """
-function ball_quadrature(N_max::Int; a=ball_alpha, niter::Int=3, report_error::Bool=true)
-    z, w = jacobi_quadrature(N_max, a, 0.5; days=niter)
+function ball_quadrature(N_max::Int; a = ball_alpha, niter::Int = 3, report_error::Bool = true)
+    z, w = jacobi_quadrature(N_max, a, 0.5; days = niter)
     return z, w ./ sqrt(32)
 end
 
@@ -54,7 +54,7 @@ end
 Evaluate ball radial basis polynomials at grid points z.
 Parameters: N is max degree, k is derivative order shift, ell is spherical harmonic degree.
 """
-function ball_polynomial(N::Int, k::Int, ell::Int, z; a=ball_alpha)
+function ball_polynomial(N::Int, k::Int, ell::Int, z; a = ball_alpha)
     q = k + a
     m = ell + 0.5
     # init = sqrt(2^(k+5/2)) * jacobi_envelope(q, m, q, 1/2, z)
@@ -73,7 +73,7 @@ function ball_polynomial(N::Int, k::Int, ell::Int, z; a=ball_alpha)
     # envelope = sqrt(measure(q,m,z)/mass(q,m)) / sqrt(measure(q,1/2,z)/mass(q,1/2))
     #          = sqrt(measure(q,m,z)*mass(q,1/2) / (mass(q,m)*measure(q,1/2,z)))
 
-    log_init = jacobi_measure(0, ell, z; log=true, probability=false)
+    log_init = jacobi_measure(0, ell, z; log = true, probability = false)
     # This gives log of (1-z)^0 * (1+z)^ell on the grid points
     # Actually for ball128: init = sqrt(2^(k+5/2)) * envelope
     # Let's follow the zernike pattern more closely but for dimension=3:
@@ -83,11 +83,11 @@ function ball_polynomial(N::Int, k::Int, ell::Int, z; a=ball_alpha)
     #           - jacobi_mass(k, b; log=true) + log(2)*(k + 3/2 + 1)))
     # This is exactly what we need, since dimension=3 for the ball
     b = ell + 0.5  # = m
-    log_init_vals = jacobi_measure(0, ell, z; log=true, probability=false)
-    log_init_vals .-= jacobi_mass(k, b; log=true) .- log(2) * (k + 3/2 + 1)
+    log_init_vals = jacobi_measure(0, ell, z; log = true, probability = false)
+    log_init_vals .-= jacobi_mass(k, b; log = true) .- log(2) * (k + 3 / 2 + 1)
     init = exp.(0.5 .* log_init_vals)
 
-    return jacobi_polynomials(N, k, b, z; init=init)
+    return jacobi_polynomials(N, k, b, z; init = init)
 end
 
 """
@@ -105,7 +105,7 @@ end
 Return sparse matrix operators for the ball radial basis.
 Maps ball operator names to Jacobi operators with appropriate parameters.
 """
-function ball_operator(op_name::String, N::Int, k::Int, ell::Int; a=ball_alpha, dtype::Type=Float64)
+function ball_operator(op_name::String, N::Int, k::Int, ell::Int; a = ball_alpha, dtype::Type = Float64)
     q = k + a
     m = ell + 0.5
 
@@ -200,15 +200,19 @@ end
 Unitary transformation matrix between Cartesian (r, theta, phi) and spin (-, 0, +) components.
 For rank > 1, uses Kronecker products.
 """
-function ball_unitary3D(; rank::Int=1, adjoint::Bool=false)
+function ball_unitary3D(; rank::Int = 1, adjoint::Bool = false)
     if adjoint
-        U = sqrt(0.5) * [0.0+0.0im 1.0+0.0im -1.0im;
-                          sqrt(2.0)+0.0im 0.0+0.0im 0.0+0.0im;
-                          0.0+0.0im 1.0+0.0im 1.0im]
+        U = sqrt(0.5) * [
+            0.0 + 0.0im 1.0 + 0.0im -1.0im;
+            sqrt(2.0) + 0.0im 0.0 + 0.0im 0.0 + 0.0im;
+            0.0 + 0.0im 1.0 + 0.0im 1.0im
+        ]
     else
-        U = sqrt(0.5) * [0.0+0.0im sqrt(2.0)+0.0im 0.0+0.0im;
-                          1.0+0.0im 0.0+0.0im 1.0+0.0im;
-                          1.0im 0.0+0.0im -1.0im]
+        U = sqrt(0.5) * [
+            0.0 + 0.0im sqrt(2.0) + 0.0im 0.0 + 0.0im;
+            1.0 + 0.0im 0.0 + 0.0im 1.0 + 0.0im;
+            1.0im 0.0 + 0.0im -1.0im
+        ]
     end
 
     unitary_mat = U
@@ -457,39 +461,49 @@ mutable struct BallWrapper
     _N_min_cache::Dict{Int, Int}
     store_lu::Bool
 
-    function BallWrapper(N_max::Int, L_max::Int;
-                         R_max::Int=0, a::Real=0, N_r::Union{Nothing, Int}=nothing,
-                         N_theta::Union{Nothing, Int}=nothing,
-                         ell_min::Union{Nothing, Int}=nothing,
-                         ell_max::Union{Nothing, Int}=nothing,
-                         m_min::Union{Nothing, Int}=nothing,
-                         m_max::Union{Nothing, Int}=nothing,
-                         store_lu::Bool=false)
+    function BallWrapper(
+            N_max::Int, L_max::Int;
+            R_max::Int = 0, a::Real = 0, N_r::Union{Nothing, Int} = nothing,
+            N_theta::Union{Nothing, Int} = nothing,
+            ell_min::Union{Nothing, Int} = nothing,
+            ell_max::Union{Nothing, Int} = nothing,
+            m_min::Union{Nothing, Int} = nothing,
+            m_max::Union{Nothing, Int} = nothing,
+            store_lu::Bool = false
+        )
         if N_r === nothing
             N_r = N_max + 1
         end
         a_float = Float64(a)
 
-        if ell_min === nothing; ell_min = 0; end
-        if ell_max === nothing; ell_max = L_max; end
-        if m_min === nothing; m_min = 0; end
-        if m_max === nothing; m_max = L_max; end
+        if ell_min === nothing
+            ell_min = 0
+        end
+        if ell_max === nothing
+            ell_max = L_max
+        end
+        if m_min === nothing
+            m_min = 0
+        end
+        if m_max === nothing
+            m_max = L_max
+        end
 
         # Spherical Harmonic Transforms
-        S = SphereWrapper(L_max; S_max=R_max, N_theta=N_theta, m_min=m_min, m_max=m_max)
+        S = SphereWrapper(L_max; S_max = R_max, N_theta = N_theta, m_min = m_min, m_max = m_max)
 
         theta = S.grid
         cos_theta = S.cos_grid
         sin_theta = S.sin_grid
 
         # Grid and weights for the radial transforms
-        z_projection, weights_projection = ball_quadrature(N_r - 1; niter=3, a=a_float, report_error=false)
+        z_projection, weights_projection = ball_quadrature(N_r - 1; niter = 3, a = a_float, report_error = false)
 
         # Grid and weights for radial integral using volume measure
-        z0, weights0 = ball_quadrature(N_r - 1; a=0.0)
+        z0, weights0 = ball_quadrature(N_r - 1; a = 0.0)
 
-        Q0 = ball_polynomial(N_r - 1, 0, 0, z0; a=a_float)
-        Q_projection = ball_polynomial(N_r - 1, 0, 0, z_projection; a=a_float)
+        Q0 = ball_polynomial(N_r - 1, 0, 0, z0; a = a_float)
+        Q_projection = ball_polynomial(N_r - 1, 0, 0, z_projection; a = a_float)
 
         # dV computation: volume integration weights
         # Python: dV = ((Q0.dot(weights0)).T).dot(weights_projection*Q_projection)
@@ -505,7 +519,7 @@ mutable struct BallWrapper
         pullW_dict = Dict{Int, Matrix{Float64}}()
 
         for ell in max(ell_min - R_max, 0):(ell_max + R_max)
-            W = ball_polynomial(N_max + R_max - ball_N_min(ell), 0, ell, z_projection; a=a_float)
+            W = ball_polynomial(N_max + R_max - ball_N_min(ell), 0, ell, z_projection; a = a_float)
             pushW_dict[ell] = Float64.(weights_projection' .* W)
             pullW_dict[ell] = Float64.(W')
         end
@@ -528,7 +542,8 @@ mutable struct BallWrapper
         LU_curl_initialized = [fill(false, 2) for _ in 1:n_ell]
         LU_curl = [Vector{Any}(nothing, 2) for _ in 1:n_ell]
 
-        new(N_max, L_max, R_max, a_float, N_r,
+        return new(
+            N_max, L_max, R_max, a_float, N_r,
             ell_min, ell_max, m_min, m_max,
             S, theta, cos_theta, sin_theta, radius,
             dV_result,
@@ -539,7 +554,8 @@ mutable struct BallWrapper
             Dict{Tuple{Int, Bool}, Any}(),
             Dict{Int, Vector{Float64}}(),
             Dict{Int, Int}(),
-            store_lu)
+            store_lu
+        )
     end
 end
 
@@ -560,7 +576,7 @@ In Python:
 - axis=1, dim=3 -> theta
 - axis=2, dim=3 -> radius
 """
-function ball_grid(B::BallWrapper, axis::Int; dimensions::Int=2)
+function ball_grid(B::BallWrapper, axis::Int; dimensions::Int = 2)
     if axis == 0 && dimensions == 2
         grid = B.theta
     elseif axis == 1 && dimensions == 2
@@ -592,7 +608,7 @@ In Python:
 - axis=1, dim=3 -> S.weights
 - axis=2, dim=3 -> dV
 """
-function ball_weight(B::BallWrapper, axis::Int; dimensions::Int=2)
+function ball_weight(B::BallWrapper, axis::Int; dimensions::Int = 2)
     if axis == 0 && dimensions == 2
         weight = B.S.weights
     elseif axis == 1 && dimensions == 2
@@ -618,8 +634,10 @@ end
 Get the operator matrix for the given operator name and parameters.
 Results are cached for repeated calls.
 """
-function ball_op(B::BallWrapper, op_name::String, N::Int, k::Int, ell::Int;
-                 dtype::Type=Float64, a::Union{Nothing, Real}=nothing)
+function ball_op(
+        B::BallWrapper, op_name::String, N::Int, k::Int, ell::Int;
+        dtype::Type = Float64, a::Union{Nothing, Real} = nothing
+    )
     if a === nothing
         a = B.a
     end
@@ -627,7 +645,7 @@ function ball_op(B::BallWrapper, op_name::String, N::Int, k::Int, ell::Int;
     if haskey(B._op_cache, key)
         return B._op_cache[key]
     end
-    result = ball_operator(op_name, N, k, ell; a=a, dtype=dtype)
+    result = ball_operator(op_name, N, k, ell; a = a, dtype = dtype)
     B._op_cache[key] = result
     return result
 end
@@ -667,12 +685,12 @@ end
 
 Cached accessor for ball_unitary3D.
 """
-function ball_wrapper_unitary3D(B::BallWrapper; rank::Int=1, adjoint::Bool=false)
+function ball_wrapper_unitary3D(B::BallWrapper; rank::Int = 1, adjoint::Bool = false)
     key = (rank, adjoint)
     if haskey(B._unitary_cache, key)
         return B._unitary_cache[key]
     end
-    result = ball_unitary3D(; rank=rank, adjoint=adjoint)
+    result = ball_unitary3D(; rank = rank, adjoint = adjoint)
     B._unitary_cache[key] = result
     return result
 end
@@ -724,7 +742,7 @@ function forward_angle(B::BallWrapper, m::Int, rank::Int, data_in, data_out)
     end
 
     spins_arr = ball_wrapper_spins(B, rank)
-    unitary_mat = ball_wrapper_unitary3D(B; rank=rank, adjoint=true)
+    unitary_mat = ball_wrapper_unitary3D(B; rank = rank, adjoint = true)
 
     # Apply unitary transformation: einsum "ij,j...->i..."
     n_comp = size(data_in, 1)
@@ -744,6 +762,7 @@ function forward_angle(B::BallWrapper, m::Int, rank::Int, data_in, data_out)
         # Python i is 0-based, Julia i is 1-based
         data_out[i, (l_min + 1):end] .= forward_spin(B.S, m, s, data_rot[i, :])
     end
+    return
 end
 
 """
@@ -765,6 +784,7 @@ function backward_angle(B::BallWrapper, m::Int, rank::Int, data_in, data_out)
         l_min = Int(L_min(B.S, m, s))
         data_out[i, :] .= backward_spin(B.S, m, s, data_in[i, (l_min + 1):end])
     end
+    return
 end
 
 # ============================================================================
@@ -777,13 +797,15 @@ end
 
 Build NCC (non-constant coefficient) matrix for the ball domain.
 """
-function ball_ncc_matrix(B::BallWrapper, N::Int, k::Int, ell::Int, deg_in::Int, deg_out::Int,
-                         data; cutoff::Float64=1e-6, name::String="")
+function ball_ncc_matrix(
+        B::BallWrapper, N::Int, k::Int, ell::Int, deg_in::Int, deg_out::Int,
+        data; cutoff::Float64 = 1.0e-6, name::String = ""
+    )
     q_in = B.a
     m_in = deg_in + 0.5
     q_out = k + B.a
     m_out = ell + deg_out + 0.5
-    n_terms, max_term, matrix = dsc_ncc_matrix(N, q_in, m_in, q_out, m_out, data; cutoff=cutoff)
+    n_terms, max_term, matrix = dsc_ncc_matrix(N, q_in, m_in, q_out, m_out, data; cutoff = cutoff)
     matrix ./= 0.5^(3 / 4)
     @debug "Expanded NCC $name to mode $max_term with $n_terms terms."
     return matrix
@@ -865,6 +887,7 @@ function radial_forward(B::BallWrapper, ell::Int, rank::Int, data_in, data_out)
         # Python: data_out[i*N:(i+1)*N] (0-based) -> Julia: data_out[(i-1)*N+1:i*N]
         data_out[((i - 1) * N + 1):(i * N)] .= fc
     end
+    return
 end
 
 """
@@ -886,6 +909,7 @@ function radial_backward(B::BallWrapper, ell::Int, rank::Int, data_in, data_out)
         # Python: data_in[i*N:(i+1)*N] (0-based) -> Julia: data_in[(i-1)*N+1:i*N]
         data_out[i, :] .= backward_component(B, ell, deg, data_in[((i - 1) * N + 1):(i * N)])
     end
+    return
 end
 
 # ============================================================================
@@ -916,6 +940,7 @@ function ball_pack(B::BallWrapper, ell::Int, rank::Int, data_in, data_out)
     for i in 1:(3^rank)
         data_out[((i - 1) * N + 1):(i * N)] .= data_in[i]
     end
+    return
 end
 
 """
@@ -961,8 +986,8 @@ function ball_grad(B::BallWrapper, ell::Int, rank::Int, data_in)
         N = B.N_max - ball_wrapper_N_min(B, ell - B.R_max)
 
         if ell + tau_bar >= 1
-            Cm = ball_op(B, "E", N, 0, ell + tau_bar - 1, dtype=data_dtype)
-            Dm = ball_op(B, "D-", N, 0, ell + tau_bar, dtype=data_dtype)
+            Cm = ball_op(B, "E", N, 0, ell + tau_bar - 1, dtype = data_dtype)
+            Dm = ball_op(B, "D-", N, 0, ell + tau_bar, dtype = data_dtype)
             xim = ball_xi_method(B, -1, ell + tau_bar)
             index = i  # 0-based
             if B.store_lu
@@ -979,8 +1004,8 @@ function ball_grad(B::BallWrapper, ell::Int, rank::Int, data_in)
         end
 
         if ell + tau_bar >= 0
-            Cp = ball_op(B, "E", N, 0, ell + tau_bar + 1, dtype=data_dtype)
-            Dp = ball_op(B, "D+", N, 0, ell + tau_bar, dtype=data_dtype)
+            Cp = ball_op(B, "E", N, 0, ell + tau_bar + 1, dtype = data_dtype)
+            Dp = ball_op(B, "D+", N, 0, ell + tau_bar, dtype = data_dtype)
             xip = ball_xi_method(B, +1, ell + tau_bar)
             index = i + 2 * (3^rank)  # 0-based
             if B.store_lu
@@ -1030,8 +1055,8 @@ function ball_curl(B::BallWrapper, ell::Int, rank::Int, data_in, data_out)
 
     # Component 0 (data_out[1:N+1])
     if ell >= 1
-        Cm = ball_op(B, "E", N, 0, ell - 1, dtype=data_dtype)
-        Dm = ball_op(B, "D-", N, 0, ell, dtype=data_dtype)
+        Cm = ball_op(B, "E", N, 0, ell - 1, dtype = data_dtype)
+        Dm = ball_op(B, "D-", N, 0, ell, dtype = data_dtype)
         src = data_in[(N + 2):(2 * (N + 1))]  # Python: data_in[(N+1):2*(N+1)]
         rhs = -1im * xip * Dm * src
         if B.store_lu
@@ -1048,8 +1073,8 @@ function ball_curl(B::BallWrapper, ell::Int, rank::Int, data_in, data_out)
     end
 
     # Component 1 (data_out[N+2:2*(N+1)])
-    C0 = ball_op(B, "E", N, 0, ell, dtype=data_dtype)
-    Dm_1 = ball_op(B, "D-", N, 0, ell + 1, dtype=data_dtype)
+    C0 = ball_op(B, "E", N, 0, ell, dtype = data_dtype)
+    Dm_1 = ball_op(B, "D-", N, 0, ell + 1, dtype = data_dtype)
 
     if B.store_lu
         index = 2
@@ -1059,7 +1084,7 @@ function ball_curl(B::BallWrapper, ell::Int, rank::Int, data_in, data_out)
     end
 
     if ell >= 1
-        Dp_1 = ball_op(B, "D+", N, 0, ell - 1, dtype=data_dtype)
+        Dp_1 = ball_op(B, "D+", N, 0, ell - 1, dtype = data_dtype)
         src_top = data_in[1:(N + 1)]
         src_bot = data_in[(2 * (N + 1) + 1):end]
         rhs = 1im * xim * Dm_1 * src_bot - 1im * xip * Dp_1 * src_top
@@ -1079,8 +1104,8 @@ function ball_curl(B::BallWrapper, ell::Int, rank::Int, data_in, data_out)
     end
 
     # Component 2 (data_out[2*(N+1)+1:end])
-    Cp = ball_op(B, "E", N, 0, ell + 1, dtype=data_dtype)
-    Dp_2 = ball_op(B, "D+", N, 0, ell, dtype=data_dtype)
+    Cp = ball_op(B, "E", N, 0, ell + 1, dtype = data_dtype)
+    Dp_2 = ball_op(B, "D+", N, 0, ell, dtype = data_dtype)
     src_mid = data_in[(N + 2):(2 * (N + 1))]
     rhs = 1im * xim * Dp_2 * src_mid
 
@@ -1094,7 +1119,7 @@ function ball_curl(B::BallWrapper, ell::Int, rank::Int, data_in, data_out)
         data_out[(2 * (N + 1) + 1):end] .= Matrix(Cp) \ rhs
     end
 
-    if B.store_lu && !B.LU_curl_initialized[i_LU][rank + 1]
+    return if B.store_lu && !B.LU_curl_initialized[i_LU][rank + 1]
         B.LU_curl_initialized[i_LU][rank + 1] = true
     end
 end
@@ -1126,8 +1151,8 @@ function ball_div(B::BallWrapper, data_in)
             N = B.N_max - ball_wrapper_N_min(B, ell - B.R_max)
 
             if ell + tau_bar == 0
-                C = ball_op(B, "E", N, 0, ell + tau_bar, dtype=data_dtype)
-                Dm = ball_op(B, "D-", N, 0, ell + p_tau_bar, dtype=data_dtype)
+                C = ball_op(B, "E", N, 0, ell + tau_bar, dtype = data_dtype)
+                Dm = ball_op(B, "D-", N, 0, ell + p_tau_bar, dtype = data_dtype)
                 xip = ball_xi_method(B, +1, ell + tau_bar)
 
                 # Python: data_in[i+2*(3**(rank-1))][ell], with 0-based i and ell as list index
@@ -1135,14 +1160,16 @@ function ball_div(B::BallWrapper, data_in)
                 push!(data_out[i + 1], result)
 
             elseif ell + tau_bar > 0
-                C = ball_op(B, "E", N, 0, ell + tau_bar, dtype=data_dtype)
-                Dm = ball_op(B, "D-", N, 0, ell + p_tau_bar, dtype=data_dtype)
-                Dp = ball_op(B, "D+", N, 0, ell + m_tau_bar, dtype=data_dtype)
+                C = ball_op(B, "E", N, 0, ell + tau_bar, dtype = data_dtype)
+                Dm = ball_op(B, "D-", N, 0, ell + p_tau_bar, dtype = data_dtype)
+                Dp = ball_op(B, "D+", N, 0, ell + m_tau_bar, dtype = data_dtype)
                 xim, xip = ball_xi_method(B, [-1, +1], ell + tau_bar)
 
                 # Python: data_in[i+2*(3**(rank-1))][ell] and data_in[i][ell]
-                result = Matrix(C) \ (xip * Dm * data_in[i + 2 * 3^(rank - 1) + 1][ell + 1] +
-                                      xim * Dp * data_in[i + 1][ell + 1])
+                result = Matrix(C) \ (
+                    xip * Dm * data_in[i + 2 * 3^(rank - 1) + 1][ell + 1] +
+                        xim * Dp * data_in[i + 1][ell + 1]
+                )
                 push!(data_out[i + 1], result)
 
             else
@@ -1163,7 +1190,7 @@ end
 
 Compute the Laplacian (div(grad)) in coefficient space.
 """
-function ball_div_grad(B::BallWrapper, data_in; ell_start::Int=0, ell_end::Union{Nothing, Int}=nothing)
+function ball_div_grad(B::BallWrapper, data_in; ell_start::Int = 0, ell_end::Union{Nothing, Int} = nothing)
     if ell_end === nothing
         ell_end = B.L_max
     end
@@ -1206,9 +1233,11 @@ Compute cross product of two vector fields in grid space.
 a and b are 3-component arrays.
 """
 function ball_cross_grid(B::BallWrapper, a, b)
-    return [a[2] .* b[3] .- a[3] .* b[2],
-            a[3] .* b[1] .- a[1] .* b[3],
-            a[1] .* b[2] .- a[2] .* b[1]]
+    return [
+        a[2] .* b[3] .- a[3] .* b[2],
+        a[3] .* b[1] .- a[1] .* b[3],
+        a[1] .* b[2] .- a[2] .* b[1],
+    ]
 end
 
 """
@@ -1251,7 +1280,7 @@ mutable struct BallTensorField <: AbstractBallTensorField
     data::Any
 
     function BallTensorField(rank::Int, B::BallWrapper, domain)
-        new(rank, B, domain, B.ell_min, B.ell_max, 'g', nothing)
+        return new(rank, B, domain, B.ell_min, B.ell_max, 'g', nothing)
     end
 end
 
@@ -1261,7 +1290,7 @@ end
 Ensure the tensor field is in the requested layout.
 """
 function require_layout(tf::BallTensorField, layout)
-    if layout == 'g' && tf._layout == 'c'
+    return if layout == 'g' && tf._layout == 'c'
         require_grid_space(tf)
     elseif layout == 'c' && tf._layout == 'g'
         require_coeff_space(tf)
@@ -1269,7 +1298,7 @@ function require_layout(tf::BallTensorField, layout)
 end
 
 function set_layout!(tf::BallTensorField, layout)
-    tf._layout = layout
+    return tf._layout = layout
 end
 
 # ============================================================================
@@ -1312,11 +1341,13 @@ mutable struct BallTensorField2D <: AbstractBallTensorField
             r_ell_layout = domain.distributor.layouts[2]
         end
 
-        local_grid_shape = ell_r_layout.local_shape(scales=1)
-        local_grid_shape = (Int(domain.dealias[1] * local_grid_shape[1]),
-                            Int(domain.dealias[2] * local_grid_shape[2]))
-        local_ellr_shape = ell_r_layout.local_shape(scales=domain.dealias)
-        local_rell_shape = r_ell_layout.local_shape(scales=domain.dealias)
+        local_grid_shape = ell_r_layout.local_shape(scales = 1)
+        local_grid_shape = (
+            Int(domain.dealias[1] * local_grid_shape[1]),
+            Int(domain.dealias[2] * local_grid_shape[2]),
+        )
+        local_ellr_shape = ell_r_layout.local_shape(scales = domain.dealias)
+        local_rell_shape = r_ell_layout.local_shape(scales = domain.dealias)
 
         grid_data = zeros(ComplexF64, 3^rank, local_grid_shape...)
         ellr_data = zeros(ComplexF64, 3^rank, local_ellr_shape...)
@@ -1333,11 +1364,13 @@ mutable struct BallTensorField2D <: AbstractBallTensorField
             push!(coeff_data, zeros(ComplexF64, N * (3^rank)))
         end
 
-        new(rank, B, domain, m, ell_min, ell_max,
+        return new(
+            rank, B, domain, m, ell_min, ell_max,
             ell_r_layout, r_ell_layout,
             grid_data, ellr_data, rell_data,
             fields, coeff_data,
-            'g', grid_data)
+            'g', grid_data
+        )
     end
 end
 
@@ -1365,7 +1398,7 @@ function require_coeff_space(tf::BallTensorField2D)
     end
 
     tf.data = tf.coeff_data
-    tf._layout = 'c'
+    return tf._layout = 'c'
 end
 
 """
@@ -1401,7 +1434,7 @@ function require_grid_space(tf::BallTensorField2D)
 
     backward_angle(B, tf.m, rank, angle_input, tf.grid_data)
     if rank > 0
-        unitary_mat = ball_wrapper_unitary3D(B; rank=rank, adjoint=false)
+        unitary_mat = ball_wrapper_unitary3D(B; rank = rank, adjoint = false)
         n_comp = size(tf.grid_data, 1)
         rest_dims = size(tf.grid_data)[2:end]
         data_2d = reshape(tf.grid_data, n_comp, :)
@@ -1410,7 +1443,7 @@ function require_grid_space(tf::BallTensorField2D)
     end
 
     tf.data = tf.grid_data
-    tf._layout = 'g'
+    return tf._layout = 'g'
 end
 
 # ============================================================================
@@ -1469,19 +1502,19 @@ mutable struct BallTensorField3D <: AbstractBallTensorField
         end
 
         # Allocating arrays
-        local_grid_shape = phi_layout.local_shape(scales=domain.dealias)
+        local_grid_shape = phi_layout.local_shape(scales = domain.dealias)
         grid_data = zeros(Float64, 3^rank, local_grid_shape...)
 
         scales = (1, 1, domain.dealias[3])
-        local_ellr_shape = ell_r_layout.local_shape(scales=scales)
+        local_ellr_shape = ell_r_layout.local_shape(scales = scales)
         mlr_ell_data = zeros(ComplexF64, 3^rank, local_ellr_shape...)
 
-        local_rell_shape = r_ell_layout.local_shape(scales=scales)
+        local_rell_shape = r_ell_layout.local_shape(scales = scales)
         mlr_r_data = zeros(ComplexF64, 3^rank, local_rell_shape...)
         rlm_data = zeros(ComplexF64, 3^rank, reverse(local_rell_shape)...)
 
         scales = (1, domain.dealias[2], domain.dealias[3])
-        local_mthr_shape = th_m_layout.local_shape(scales=scales)
+        local_mthr_shape = th_m_layout.local_shape(scales = scales)
         mthr_data = zeros(ComplexF64, 3^rank, local_mthr_shape...)
 
         fields = domain.new_fields(3^rank)
@@ -1496,11 +1529,13 @@ mutable struct BallTensorField3D <: AbstractBallTensorField
             push!(coeff_data, zeros(ComplexF64, N * (3^rank), m_size))
         end
 
-        new(rank, B, domain, ell_min, ell_max,
+        return new(
+            rank, B, domain, ell_min, ell_max,
             phi_layout, th_m_layout, ell_r_layout, r_ell_layout,
             grid_data, mlr_ell_data, mlr_r_data, rlm_data, mthr_data,
             fields, coeff_data,
-            'g', grid_data)
+            'g', grid_data
+        )
     end
 end
 
@@ -1514,6 +1549,7 @@ function require_coeff_space(tf::BallTensorField3D)
     while tf._layout != 'c'
         decrement_layout(tf)
     end
+    return
 end
 
 """
@@ -1525,7 +1561,7 @@ function decrement_layout(tf::BallTensorField3D)
     rank = tf.rank
     B = tf.B
 
-    if tf._layout == 'g'
+    return if tf._layout == 'g'
         for (i, field) in enumerate(tf.fields)
             field.layout = tf.phi_layout
             copyto!(field.data, tf.data[i, ntuple(_ -> Colon(), ndims(tf.data) - 1)...])
@@ -1536,9 +1572,11 @@ function decrement_layout(tf::BallTensorField3D)
     elseif tf._layout == 3
         for m in B.m_min:B.m_max
             m_local = m - B.m_min + 1  # 1-based
-            forward_angle(B, m, rank,
-                          tf.mthr_data[:, m_local, :],
-                          view(tf.mlr_ell_data, :, m_local, :, :))
+            forward_angle(
+                B, m, rank,
+                tf.mthr_data[:, m_local, :],
+                view(tf.mlr_ell_data, :, m_local, :, :)
+            )
         end
         tf._layout = 2
     elseif tf._layout == 2
@@ -1558,9 +1596,11 @@ function decrement_layout(tf::BallTensorField3D)
     elseif tf._layout == 1
         for ell in B.ell_min:B.ell_max
             ell_local = ell - B.ell_min + 1  # 1-based
-            radial_forward(B, ell, rank,
-                           tf.rlm_data[:, :, ell_local, :],
-                           tf.coeff_data[ell_local])
+            radial_forward(
+                B, ell, rank,
+                tf.rlm_data[:, :, ell_local, :],
+                tf.coeff_data[ell_local]
+            )
         end
         tf.data = tf.coeff_data
         tf._layout = 'c'
@@ -1577,6 +1617,7 @@ function require_grid_space(tf::BallTensorField3D)
     while tf._layout != 'g'
         increment_layout(tf)
     end
+    return
 end
 
 """
@@ -1588,12 +1629,14 @@ function increment_layout(tf::BallTensorField3D)
     rank = tf.rank
     B = tf.B
 
-    if tf._layout == 'c'
+    return if tf._layout == 'c'
         for ell in B.ell_min:B.ell_max
             ell_local = ell - B.ell_min + 1  # 1-based
-            radial_backward(B, ell, rank,
-                            tf.data[ell_local],
-                            view(tf.rlm_data, :, :, ell_local, :))
+            radial_backward(
+                B, ell, rank,
+                tf.data[ell_local],
+                view(tf.rlm_data, :, :, ell_local, :)
+            )
             Q_mat = B.Q[(ell, rank)]
             # einsum "ij,j...->i..."
             n_comp = size(tf.rlm_data, 1)
@@ -1618,20 +1661,24 @@ function increment_layout(tf::BallTensorField3D)
             end
         else
             for (i, _field) in enumerate(tf.fields)
-                copyto!(tf.mlr_ell_data[i, ntuple(_ -> Colon(), ndims(tf.mlr_ell_data) - 1)...],
-                        tf.mlr_r_data[i, ntuple(_ -> Colon(), ndims(tf.mlr_r_data) - 1)...])
+                copyto!(
+                    tf.mlr_ell_data[i, ntuple(_ -> Colon(), ndims(tf.mlr_ell_data) - 1)...],
+                    tf.mlr_r_data[i, ntuple(_ -> Colon(), ndims(tf.mlr_r_data) - 1)...]
+                )
             end
         end
         tf._layout = 2
     elseif tf._layout == 2
         for m in B.m_min:B.m_max
             m_local = m - B.m_min + 1  # 1-based
-            backward_angle(B, m, rank,
-                           tf.mlr_ell_data[:, m_local, :, :],
-                           view(tf.mthr_data, :, m_local, :, :))
+            backward_angle(
+                B, m, rank,
+                tf.mlr_ell_data[:, m_local, :, :],
+                view(tf.mthr_data, :, m_local, :, :)
+            )
         end
         if rank > 0
-            unitary_mat = ball_wrapper_unitary3D(B; rank=rank, adjoint=false)
+            unitary_mat = ball_wrapper_unitary3D(B; rank = rank, adjoint = false)
             n_comp = size(tf.mthr_data, 1)
             rest_dims = size(tf.mthr_data)[2:end]
             data_2d = reshape(tf.mthr_data, n_comp, :)

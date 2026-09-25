@@ -104,12 +104,14 @@ to the number of columns and `y` has size equal to the number of rows.
 - `y::AbstractArray`             -- output array (mutated in place).
 - `axis::Int`                    -- 1-based axis along which to apply the matrix.
 """
-function apply_csr!(indptr::AbstractVector{Int},
-                    indices::AbstractVector{Int},
-                    entries::AbstractVector,
-                    x::AbstractArray,
-                    y::AbstractArray,
-                    axis::Int)
+function apply_csr!(
+        indptr::AbstractVector{Int},
+        indices::AbstractVector{Int},
+        entries::AbstractVector,
+        x::AbstractArray,
+        y::AbstractArray,
+        axis::Int
+    )
     N = ndims(x)
     n_row = length(indptr) - 1
 
@@ -129,8 +131,8 @@ function apply_csr!(indptr::AbstractVector{Int},
         _apply_csr_last!(indptr, indices, entries, xr, yr, n_row, n_before)
     else
         # Middle axis: collapse dims before and after into single dims -> 3-D.
-        n_before = prod(size(x, d) for d in 1:axis-1)
-        n_after  = prod(size(x, d) for d in axis+1:N)
+        n_before = prod(size(x, d) for d in 1:(axis - 1))
+        n_after = prod(size(x, d) for d in (axis + 1):N)
         xr = reshape(x, n_before, size(x, axis), n_after)
         yr = reshape(y, n_before, n_row, n_after)
         _apply_csr_mid!(indptr, indices, entries, xr, yr, n_row, n_before, n_after)
@@ -143,7 +145,7 @@ end
 function _apply_csr_vec!(indptr, indices, entries, x, y, n_row)
     Threads.@threads for i in 1:n_row
         s = zero(eltype(y))
-        @inbounds for jj in indptr[i]:indptr[i+1]-1
+        @inbounds for jj in indptr[i]:(indptr[i + 1] - 1)
             s += entries[jj] * x[indices[jj]]
         end
         @inbounds y[i] = s
@@ -158,7 +160,7 @@ function _apply_csr_first!(indptr, indices, entries, x, y, n_row, n_after)
         @inbounds @simd for k in 1:n_after
             y[i, k] = zero(eltype(y))
         end
-        @inbounds for jj in indptr[i]:indptr[i+1]-1
+        @inbounds for jj in indptr[i]:(indptr[i + 1] - 1)
             j = indices[jj]
             a = entries[jj]
             @simd for k in 1:n_after
@@ -177,7 +179,7 @@ function _apply_csr_last!(indptr, indices, entries, x, y, n_row, n_before)
         h = div(hi - 1, n_row) + 1
         i = mod(hi - 1, n_row) + 1
         s = zero(eltype(y))
-        @inbounds for jj in indptr[i]:indptr[i+1]-1
+        @inbounds for jj in indptr[i]:(indptr[i + 1] - 1)
             s += entries[jj] * x[h, indices[jj]]
         end
         @inbounds y[h, i] = s
@@ -195,7 +197,7 @@ function _apply_csr_mid!(indptr, indices, entries, x, y, n_row, n_before, n_afte
         @inbounds @simd for k in 1:n_after
             y[h, i, k] = zero(eltype(y))
         end
-        @inbounds for jj in indptr[i]:indptr[i+1]-1
+        @inbounds for jj in indptr[i]:(indptr[i + 1] - 1)
             j = indices[jj]
             a = entries[jj]
             @simd for k in 1:n_after
@@ -227,11 +229,13 @@ After this call, `x` contains the solution vector(s).
 - `x::AbstractArray`             -- right-hand side on entry, solution on exit (mutated).
 - `axis::Int`                    -- 1-based axis along which to solve.
 """
-function solve_upper_csr!(indptr::AbstractVector{Int},
-                          indices::AbstractVector{Int},
-                          entries::AbstractVector,
-                          x::AbstractArray,
-                          axis::Int)
+function solve_upper_csr!(
+        indptr::AbstractVector{Int},
+        indices::AbstractVector{Int},
+        entries::AbstractVector,
+        x::AbstractArray,
+        axis::Int
+    )
     N = ndims(x)
     n_row = length(indptr) - 1
 
@@ -246,8 +250,8 @@ function solve_upper_csr!(indptr::AbstractVector{Int},
         xr = reshape(x, n_before, size(x, N))
         _solve_upper_csr_last!(indptr, indices, entries, xr, n_row, n_before)
     else
-        n_before = prod(size(x, d) for d in 1:axis-1)
-        n_after  = prod(size(x, d) for d in axis+1:N)
+        n_before = prod(size(x, d) for d in 1:(axis - 1))
+        n_after = prod(size(x, d) for d in (axis + 1):N)
         xr = reshape(x, n_before, size(x, axis), n_after)
         _solve_upper_csr_mid!(indptr, indices, entries, xr, n_row, n_before, n_after)
     end
@@ -259,7 +263,7 @@ end
 function _solve_upper_csr_vec!(indptr, indices, entries, x, n_row)
     @inbounds for i in n_row:-1:1
         s = x[i]
-        for jj in indptr[i+1]-1:-1:indptr[i]+1
+        for jj in (indptr[i + 1] - 1):-1:(indptr[i] + 1)
             s -= entries[jj] * x[indices[jj]]
         end
         x[i] = s / entries[indptr[i]]
@@ -271,7 +275,7 @@ end
 
 function _solve_upper_csr_first!(indptr, indices, entries, x, n_row, n_after)
     @inbounds for i in n_row:-1:1
-        for jj in indptr[i+1]-1:-1:indptr[i]+1
+        for jj in (indptr[i + 1] - 1):-1:(indptr[i] + 1)
             j = indices[jj]
             a = entries[jj]
             @simd for k in 1:n_after
@@ -292,7 +296,7 @@ function _solve_upper_csr_last!(indptr, indices, entries, x, n_row, n_before)
     Threads.@threads for h in 1:n_before
         @inbounds for i in n_row:-1:1
             s = x[h, i]
-            for jj in indptr[i+1]-1:-1:indptr[i]+1
+            for jj in (indptr[i + 1] - 1):-1:(indptr[i] + 1)
                 s -= entries[jj] * x[h, indices[jj]]
             end
             x[h, i] = s / entries[indptr[i]]
@@ -306,7 +310,7 @@ end
 function _solve_upper_csr_mid!(indptr, indices, entries, x, n_row, n_before, n_after)
     Threads.@threads for h in 1:n_before
         @inbounds for i in n_row:-1:1
-            for jj in indptr[i+1]-1:-1:indptr[i]+1
+            for jj in (indptr[i + 1] - 1):-1:(indptr[i] + 1)
                 j = indices[jj]
                 a = entries[jj]
                 @simd for k in 1:n_after

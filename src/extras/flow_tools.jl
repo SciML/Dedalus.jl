@@ -30,12 +30,12 @@ Directs parallelised reduction of distributed array data.
 # Constructor
     GlobalArrayReducer(comm=nothing; dtype=Float64)
 """
-mutable struct GlobalArrayReducer{T<:AbstractFloat}
+mutable struct GlobalArrayReducer{T <: AbstractFloat}
     comm::Any               # MPI communicator or `nothing`
     _scalar_buffer::Vector{T}
 
-    function GlobalArrayReducer(comm=nothing; dtype::Type{T}=Float64) where {T<:AbstractFloat}
-        new{T}(comm, zeros(T, 1))
+    function GlobalArrayReducer(comm = nothing; dtype::Type{T} = Float64) where {T <: AbstractFloat}
+        return new{T}(comm, zeros(T, 1))
     end
 end
 
@@ -64,7 +64,7 @@ end
 Compute global min of all array data. When `data` is empty, `empty` is used as
 the local contribution (defaults to `Inf` so it does not affect the result).
 """
-function global_min(reducer::GlobalArrayReducer, data; empty=Inf)
+function global_min(reducer::GlobalArrayReducer, data; empty = Inf)
     if length(data) > 0
         local_min = minimum(data)
     else
@@ -83,7 +83,7 @@ end
 Compute global max of all array data. When `data` is empty, `empty` is used as
 the local contribution (defaults to `-Inf`).
 """
-function global_max(reducer::GlobalArrayReducer, data; empty=-Inf)
+function global_max(reducer::GlobalArrayReducer, data; empty = -Inf)
     if length(data) > 0
         local_max = maximum(data)
     else
@@ -139,11 +139,11 @@ mutable struct GlobalFlowProperty
     reducer::GlobalArrayReducer
     properties::Any  # dictionary handler from solver.evaluator
 
-    function GlobalFlowProperty(solver; cadence::Int=1)
+    function GlobalFlowProperty(solver; cadence::Int = 1)
         comm = _get_solver_comm(solver)
         reducer = GlobalArrayReducer(comm)
-        properties = add_dictionary_handler(solver.evaluator; iter=cadence)
-        new(solver, cadence, reducer, properties)
+        properties = add_dictionary_handler(solver.evaluator; iter = cadence)
+        return new(solver, cadence, reducer, properties)
     end
 end
 
@@ -175,14 +175,16 @@ This will call the real implementation once the evaluator module is translated.
 Add a property to be evaluated. If `precompute_integral` is `true`, a companion
 integral task is registered under the name `_<name>_integral`.
 """
-function add_property!(flow::GlobalFlowProperty, property, name::AbstractString;
-                       precompute_integral::Bool=false)
-    add_task!(flow.properties, property; layout=:g, name=name)
-    if precompute_integral
+function add_property!(
+        flow::GlobalFlowProperty, property, name::AbstractString;
+        precompute_integral::Bool = false
+    )
+    add_task!(flow.properties, property; layout = :g, name = name)
+    return if precompute_integral
         task_op = flow.properties.tasks[end]["operator"]
         integral_op = Integrate(task_op)
         integral_name = "_$(name)_integral"
-        add_task!(flow.properties, integral_op; layout=:g, name=integral_name)
+        add_task!(flow.properties, integral_op; layout = :g, name = integral_name)
     end
 end
 
@@ -312,21 +314,25 @@ mutable struct CFL
     reducer::GlobalArrayReducer
     frequencies::Any  # dictionary handler
 
-    function CFL(solver, initial_dt::Real;
-                 cadence::Int=1,
-                 safety::Real=1.0,
-                 max_dt::Real=Inf,
-                 min_dt::Real=0.0,
-                 max_change::Real=Inf,
-                 min_change::Real=0.0,
-                 threshold::Real=0.0)
+    function CFL(
+            solver, initial_dt::Real;
+            cadence::Int = 1,
+            safety::Real = 1.0,
+            max_dt::Real = Inf,
+            min_dt::Real = 0.0,
+            max_change::Real = Inf,
+            min_change::Real = 0.0,
+            threshold::Real = 0.0
+        )
         comm = _get_solver_comm(solver)
         reducer = GlobalArrayReducer(comm)
-        frequencies = add_dictionary_handler(solver.evaluator; iter=cadence)
-        new(solver, Float64(initial_dt), cadence, Float64(safety),
+        frequencies = add_dictionary_handler(solver.evaluator; iter = cadence)
+        return new(
+            solver, Float64(initial_dt), cadence, Float64(safety),
             Float64(max_dt), Float64(min_dt), Float64(max_change),
             Float64(min_change), Float64(threshold),
-            reducer, frequencies)
+            reducer, frequencies
+        )
     end
 end
 
@@ -383,7 +389,7 @@ end
 Add an on-grid frequency to the CFL computation.
 """
 function add_frequency!(cfl::CFL, freq)
-    add_task!(cfl.frequencies, freq; layout=:g, scales=freq.domain.dealias)
+    return add_task!(cfl.frequencies, freq; layout = :g, scales = freq.domain.dealias)
 end
 
 """
@@ -397,11 +403,15 @@ An `AdvectiveCFL` operator is constructed and added as a frequency.
 function add_velocity!(cfl::CFL, velocity)
     coords = velocity.tensorsig
     if length(coords) != 1
-        throw(ArgumentError("Velocity must be a vector (tensorsig length 1), " *
-                            "got length $(length(coords))"))
+        throw(
+            ArgumentError(
+                "Velocity must be a vector (tensorsig length 1), " *
+                    "got length $(length(coords))"
+            )
+        )
     end
     cfl_operator = AdvectiveCFL(velocity, coords[1])
-    add_frequency!(cfl, cfl_operator)
+    return add_frequency!(cfl, cfl_operator)
 end
 
 # ---------------------------------------------------------------------------
@@ -409,19 +419,19 @@ end
 # ---------------------------------------------------------------------------
 
 export GlobalArrayReducer,
-       reduce_scalar,
-       global_min,
-       global_max,
-       global_mean,
-       GlobalFlowProperty,
-       add_property!,
-       flow_min,
-       flow_max,
-       grid_average,
-       volume_integral,
-       volume_average,
-       CFL,
-       compute_dt,
-       compute_timestep,
-       add_frequency!,
-       add_velocity!
+    reduce_scalar,
+    global_min,
+    global_max,
+    global_mean,
+    GlobalFlowProperty,
+    add_property!,
+    flow_min,
+    flow_max,
+    grid_average,
+    volume_integral,
+    volume_average,
+    CFL,
+    compute_dt,
+    compute_timestep,
+    add_frequency!,
+    add_velocity!

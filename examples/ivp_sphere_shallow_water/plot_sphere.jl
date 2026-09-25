@@ -14,10 +14,10 @@ using HDF5
 
 function build_s2_coord_vertices(phi, theta)
     phi = vec(phi)
-    phi_vert = vcat(phi, [2*pi])
+    phi_vert = vcat(phi, [2 * pi])
     phi_vert .-= phi_vert[2] / 2
     theta = vec(theta)
-    theta_mid = (theta[1:end-1] .+ theta[2:end]) ./ 2
+    theta_mid = (theta[1:(end - 1)] .+ theta[2:end]) ./ 2
     theta_vert = vcat([pi], theta_mid, [0])
     # Create meshgrid equivalent (ij indexing)
     phi_mesh = repeat(phi_vert, 1, length(theta_vert))
@@ -33,7 +33,7 @@ function main(filename, start, count, output)
     savename_func(write) = "write_$(lpad(write, 6, '0')).png"
 
     # Plot writes
-    h5open(filename, "r") do file
+    return h5open(filename, "r") do file
         dset = file["tasks"][task]
         # Read coordinate data
         # phi = vec(read(dset.dims[1][1]))
@@ -74,7 +74,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     files = String[]
     for arg in ARGS
         if startswith(arg, "--output=")
-            output = arg[length("--output=") + 1:end]
+            output = arg[(length("--output=") + 1):end]
         else
             push!(files, arg)
         end

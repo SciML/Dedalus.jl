@@ -108,8 +108,8 @@ Base.showerror(io::IO, e::SkipDispatchException) =
     print(io, "SkipDispatchException: ", e.msg)
 
 export NonlinearOperatorError,
-       DependentOperatorError,
-       SymbolicParsingError,
-       UnsupportedEquationError,
-       UndefinedParityError,
-       SkipDispatchException
+    DependentOperatorError,
+    SymbolicParsingError,
+    UnsupportedEquationError,
+    UndefinedParityError,
+    SkipDispatchException

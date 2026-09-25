@@ -21,28 +21,28 @@ using Random
 # using CairoMakie
 
 # Parameters
-Lx, Ly = 2*pi, pi
+Lx, Ly = 2 * pi, pi
 Nx, Ny = 256, 128
 dtype = Float64
 
 # Bases
 coords = CartesianCoordinates("x", "y")
-dist = Distributor(coords; dtype=dtype)
-xbasis = RealFourier(coords["x"], Nx; bounds=(0, Lx))
-ybasis = ChebyshevT(coords["y"], Ny; bounds=(0, Ly))
+dist = Distributor(coords; dtype = dtype)
+xbasis = RealFourier(coords["x"], Nx; bounds = (0, Lx))
+ybasis = ChebyshevT(coords["y"], Ny; bounds = (0, Ly))
 
 # Fields
-u = Field(dist; name="u", bases=(xbasis, ybasis))
-tau_1 = Field(dist; name="tau_1", bases=(xbasis,))
-tau_2 = Field(dist; name="tau_2", bases=(xbasis,))
+u = Field(dist; name = "u", bases = (xbasis, ybasis))
+tau_1 = Field(dist; name = "tau_1", bases = (xbasis,))
+tau_2 = Field(dist; name = "tau_2", bases = (xbasis,))
 
 # Forcing
 x, y = local_grids(dist, xbasis, ybasis)
-f = Field(dist; bases=(xbasis, ybasis))
-g = Field(dist; bases=(xbasis,))
-h = Field(dist; bases=(xbasis,))
-fill_random!(f, "g"; seed=40)
-low_pass_filter!(f; shape=(64, 32))
+f = Field(dist; bases = (xbasis, ybasis))
+g = Field(dist; bases = (xbasis,))
+h = Field(dist; bases = (xbasis,))
+fill_random!(f, "g"; seed = 40)
+low_pass_filter!(f; shape = (64, 32))
 g["g"] = sin.(8 .* x) .* 0.025
 h["g"] .= 0
 
@@ -52,7 +52,7 @@ lift_basis = derivative_basis(ybasis, 2)
 lift = (A, n) -> Lift(A, lift_basis, n)
 
 # Problem
-problem = LBVP([u, tau_1, tau_2]; namespace=@locals)
+problem = LBVP([u, tau_1, tau_2]; namespace = @locals)
 add_equation!(problem, "lap(u) + lift(tau_1,-1) + lift(tau_2,-2) = f")
 add_equation!(problem, "u(y=0) = g")
 add_equation!(problem, "dy(u)(y=Ly) = h")
@@ -62,8 +62,8 @@ solver = build_solver(problem)
 solve!(solver)
 
 # Gather global data
-x = global_grid(xbasis, dist; scale=1)
-y = global_grid(ybasis, dist; scale=1)
+x = global_grid(xbasis, dist; scale = 1)
+y = global_grid(ybasis, dist; scale = 1)
 ug = allgather_data(u, "g")
 
 # Plot

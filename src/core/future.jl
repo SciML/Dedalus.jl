@@ -75,12 +75,13 @@ The caller must have already set `future.name`, `future.tensorsig`,
 `future.dtype`, and `future.domain` before calling this, as those are
 determined by the specific operator logic.
 """
-function init_future!(future::AbstractFuture, args...; out=nothing)
+function init_future!(future::AbstractFuture, args...; out = nothing)
     future.args = collect(Any, args)
     future.original_args = Tuple(args)
     future.out = out
     future.dist = unify_attributes(
-        [a for a in args if isa(a, AbstractOperand)], :dist; require=false)
+        [a for a in args if isa(a, AbstractOperand)], :dist; require = false
+    )
     future._grid_layout = future.dist.grid_layout
     future._coeff_layout = future.dist.coeff_layout
     future.last_id = nothing
@@ -96,7 +97,7 @@ end
 
 function Base.show(io::IO, f::AbstractFuture)
     repr_args = join([repr(a) for a in f.args], ", ")
-    print(io, f.name, "(", repr_args, ")")
+    return print(io, f.name, "(", repr_args, ")")
 end
 
 function Base.string(f::AbstractFuture)
@@ -172,13 +173,17 @@ function replace_operand(f::AbstractFuture, old, new_val)
     end
     # Check for type-based replacement
     if isa(old, DataType) && isa(f, old)
-        new_args = [isa(a, AbstractOperand) ? replace_operand(a, old, new_val) : a
-                    for a in f.args]
+        new_args = [
+            isa(a, AbstractOperand) ? replace_operand(a, old, new_val) : a
+                for a in f.args
+        ]
         return new_val(new_args...)
     end
     # Rebuild with replaced arguments
-    new_args = [isa(a, AbstractOperand) ? replace_operand(a, old, new_val) : a
-                for a in f.args]
+    new_args = [
+        isa(a, AbstractOperand) ? replace_operand(a, old, new_val) : a
+            for a in f.args
+    ]
     return new_operands(f, new_args...)
 end
 
@@ -195,13 +200,17 @@ function replace_dict(f::AbstractFuture, subs::AbstractDict)
     # Check for type-based replacement
     ft = typeof(f)
     if ft in keys(subs)
-        new_args = [isa(a, AbstractOperand) ? replace_dict(a, subs) : a
-                    for a in f.args]
+        new_args = [
+            isa(a, AbstractOperand) ? replace_dict(a, subs) : a
+                for a in f.args
+        ]
         return subs[ft](new_args...)
     end
     # Rebuild with replaced arguments
-    new_args = [isa(a, AbstractOperand) ? replace_dict(a, subs) : a
-                for a in f.args]
+    new_args = [
+        isa(a, AbstractOperand) ? replace_dict(a, subs) : a
+            for a in f.args
+    ]
     return new_operands(f, new_args...)
 end
 
@@ -262,7 +271,7 @@ Recursively evaluate the operation.
 6. Reset arguments.
 7. Cache result if requested.
 """
-function evaluate_future(f::AbstractFuture; id=nothing, force::Bool=true)::Union{AbstractCurrent, Nothing}
+function evaluate_future(f::AbstractFuture; id = nothing, force::Bool = true)::Union{AbstractCurrent, Nothing}
     # Check storage
     if f.store_last && id !== nothing
         if id == f.last_id
@@ -282,7 +291,7 @@ function evaluate_future(f::AbstractFuture; id=nothing, force::Bool=true)::Union
             change_scales!(a, domain_dealias(a.domain))
         end
         if isa(a, AbstractFuture)
-            a_eval = evaluate_future(a; id=id, force=force)
+            a_eval = evaluate_future(a; id = id, force = force)
             if a_eval !== nothing
                 f.args[i] = a_eval
             else
@@ -362,10 +371,12 @@ function build_out(f::AbstractFuture)::AbstractCurrent
     bases = f.domain.bases
     ft = future_type(f)
     if any(b !== nothing for b in bases)
-        return ft(f.dist; bases=bases, tensorsig=f.tensorsig, dtype=f.dtype,
-                  name=string(f))
+        return ft(
+            f.dist; bases = bases, tensorsig = f.tensorsig, dtype = f.dtype,
+            name = string(f)
+        )
     else
-        return ft(f.dist; tensorsig=f.tensorsig, dtype=f.dtype, name=string(f))
+        return ft(f.dist; tensorsig = f.tensorsig, dtype = f.dtype, name = string(f))
     end
 end
 
@@ -374,8 +385,8 @@ end
 
 Recursively attempt to evaluate operation (non-forcing).
 """
-function attempt(f::AbstractFuture; id=nothing)::Union{AbstractCurrent, Nothing}
-    return evaluate_future(f; id=id, force=false)
+function attempt(f::AbstractFuture; id = nothing)::Union{AbstractCurrent, Nothing}
+    return evaluate_future(f; id = id, force = false)
 end
 
 # --- Abstract methods that concrete subtypes must implement ---
@@ -508,21 +519,21 @@ longer `evaluate_future(expr)`.
 const evaluate = evaluate_future
 
 export FutureField,
-       FutureLockedField,
-       init_future!,
-       reset_future!,
-       evaluate_future,
-       evaluate,
-       get_out,
-       build_out,
-       check_conditions,
-       enforce_conditions,
-       operate,
-       future_type,
-       new_operands,
-       prep_nccs,
-       gather_ncc_coeffs,
-       parse_future,
-       cast_future,
-       STORE_OUTPUTS,
-       STORE_LAST_DEFAULT
+    FutureLockedField,
+    init_future!,
+    reset_future!,
+    evaluate_future,
+    evaluate,
+    get_out,
+    build_out,
+    check_conditions,
+    enforce_conditions,
+    operate,
+    future_type,
+    new_operands,
+    prep_nccs,
+    gather_ncc_coeffs,
+    parse_future,
+    cast_future,
+    STORE_OUTPUTS,
+    STORE_LAST_DEFAULT

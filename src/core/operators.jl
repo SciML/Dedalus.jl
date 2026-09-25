@@ -108,7 +108,7 @@ end
 Precompute NCC matrices. Default delegates to operand.
 """
 function build_ncc_matrices(op::AbstractLinearOperator, separability, vars; kw...)
-    build_ncc_matrices(operator_operand(op), separability, vars; kw...)
+    return build_ncc_matrices(operator_operand(op), separability, vars; kw...)
 end
 
 """
@@ -236,7 +236,7 @@ mutable struct Power <: NonlinearOperator
     _coeff_layout::Any
 end
 
-function Power(base_operand, exponent; out=nothing)
+function Power(base_operand, exponent; out = nothing)
     if exponent == 0
         return 1
     elseif exponent == 1
@@ -247,9 +247,11 @@ function Power(base_operand, exponent; out=nothing)
     domain = base_operand.domain
     tensorsig = base_operand.tensorsig
     dtype = base_operand.dtype
-    Power(args, (base_operand, exponent), out, dist, domain, tensorsig, dtype,
-          "Pow", nothing, nothing, false, 1,
-          dist.grid_layout, dist.coeff_layout)
+    return Power(
+        args, (base_operand, exponent), out, dist, domain, tensorsig, dtype,
+        "Pow", nothing, nothing, false, 1,
+        dist.grid_layout, dist.coeff_layout
+    )
 end
 
 """Replace the stub from field.jl with a working Power operator."""
@@ -268,7 +270,7 @@ end
 
 function enforce_conditions(op::Power)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_grid_space!(arg)
     end
 end
@@ -327,9 +329,11 @@ mutable struct FieldCopy <: AbstractLinearOperator
     scales::Any
 end
 
-function FieldCopy(arg; out=nothing)
-    FieldCopy(Any[arg], (arg,), out, arg.dist, arg.domain, arg.tensorsig,
-              arg.dtype, "Copy", arg, nothing, nothing, false, 1)
+function FieldCopy(arg; out = nothing)
+    return FieldCopy(
+        Any[arg], (arg,), out, arg.dist, arg.domain, arg.tensorsig,
+        arg.dtype, "Copy", arg, nothing, nothing, false, 1
+    )
 end
 
 # Wire up the forward reference from future.jl
@@ -387,34 +391,36 @@ end
 
 """Built-in symbolic derivatives for common math functions."""
 const UFUNC_DERIVATIVES = Dict{Any, Any}(
-    abs   => x -> sign.(x),
-    sign  => x -> 0,
-    exp   => x -> exp.(x),
-    log   => x -> x .^ (-1),
-    sqrt  => x -> 0.5 .* x .^ (-0.5),
-    sin   => x -> cos.(x),
-    cos   => x -> -(sin.(x)),
-    tan   => x -> cos.(x) .^ (-2),
-    asin  => x -> (1 .- x .^ 2) .^ (-0.5),
-    acos  => x -> -((1 .- x .^ 2) .^ (-0.5)),
-    atan  => x -> (1 .+ x .^ 2) .^ (-1),
-    sinh  => x -> cosh.(x),
-    cosh  => x -> sinh.(x),
-    tanh  => x -> 1 .- tanh.(x) .^ 2,
+    abs => x -> sign.(x),
+    sign => x -> 0,
+    exp => x -> exp.(x),
+    log => x -> x .^ (-1),
+    sqrt => x -> 0.5 .* x .^ (-0.5),
+    sin => x -> cos.(x),
+    cos => x -> -(sin.(x)),
+    tan => x -> cos.(x) .^ (-2),
+    asin => x -> (1 .- x .^ 2) .^ (-0.5),
+    acos => x -> -((1 .- x .^ 2) .^ (-0.5)),
+    atan => x -> (1 .+ x .^ 2) .^ (-1),
+    sinh => x -> cosh.(x),
+    cosh => x -> sinh.(x),
+    tanh => x -> 1 .- tanh.(x) .^ 2,
     asinh => x -> (x .^ 2 .+ 1) .^ (-0.5),
     acosh => x -> (x .^ 2 .- 1) .^ (-0.5),
     atanh => x -> (1 .- x .^ 2) .^ (-1),
 )
 
-function UnaryGridFunction(func, arg; deriv=nothing, out=nothing)
+function UnaryGridFunction(func, arg; deriv = nothing, out = nothing)
     if deriv === nothing
         deriv = get(UFUNC_DERIVATIVES, func, nothing)
     end
     dist = arg.dist
-    UnaryGridFunction(Any[arg], (arg,), out, dist, arg.domain, arg.tensorsig,
-                      arg.dtype, string(func), func, deriv,
-                      nothing, nothing, false, 1,
-                      dist.grid_layout, dist.coeff_layout)
+    return UnaryGridFunction(
+        Any[arg], (arg,), out, dist, arg.domain, arg.tensorsig,
+        arg.dtype, string(func), func, deriv,
+        nothing, nothing, false, 1,
+        dist.grid_layout, dist.coeff_layout
+    )
 end
 
 function check_conditions(op::UnaryGridFunction)
@@ -424,7 +430,7 @@ end
 
 function enforce_conditions(op::UnaryGridFunction)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_grid_space!(arg)
     end
 end
@@ -447,13 +453,15 @@ function sym_diff(op::UnaryGridFunction, var)
 end
 
 function new_operands(op::UnaryGridFunction, arg; kw...)
-    return UnaryGridFunction(op.func, arg; deriv=op.deriv)
+    return UnaryGridFunction(op.func, arg; deriv = op.deriv)
 end
 
 # Register common function aliases
-for (name, func) in [("exp", exp), ("log", log), ("sin", sin), ("cos", cos),
-                      ("tan", tan), ("abs", abs), ("sqrt", sqrt),
-                      ("sinh", sinh), ("cosh", cosh), ("tanh", tanh)]
+for (name, func) in [
+        ("exp", exp), ("log", log), ("sin", sin), ("cos", cos),
+        ("tan", tan), ("abs", abs), ("sqrt", sqrt),
+        ("sinh", sinh), ("cosh", cosh), ("tanh", tanh),
+    ]
     register_operator_alias!(name, func)
 end
 
@@ -482,9 +490,11 @@ mutable struct GridOperator <: AbstractLinearOperator
     scales::Any
 end
 
-function GridOperator(arg; out=nothing)
-    GridOperator(Any[arg], (arg,), out, arg.dist, arg.domain, arg.tensorsig,
-                 arg.dtype, "Grid", arg, nothing, nothing, false, 1)
+function GridOperator(arg; out = nothing)
+    return GridOperator(
+        Any[arg], (arg,), out, arg.dist, arg.domain, arg.tensorsig,
+        arg.dtype, "Grid", arg, nothing, nothing, false, 1
+    )
 end
 
 function check_conditions(op::GridOperator)
@@ -494,7 +504,7 @@ end
 
 function enforce_conditions(op::GridOperator)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_grid_space!(arg)
     end
 end
@@ -533,9 +543,11 @@ mutable struct CoeffOperator <: AbstractLinearOperator
     scales::Any
 end
 
-function CoeffOperator(arg; out=nothing)
-    CoeffOperator(Any[arg], (arg,), out, arg.dist, arg.domain, arg.tensorsig,
-                  arg.dtype, "Coeff", arg, nothing, nothing, false, 1)
+function CoeffOperator(arg; out = nothing)
+    return CoeffOperator(
+        Any[arg], (arg,), out, arg.dist, arg.domain, arg.tensorsig,
+        arg.dtype, "Coeff", arg, nothing, nothing, false, 1
+    )
 end
 
 function check_conditions(op::CoeffOperator)
@@ -545,7 +557,7 @@ end
 
 function enforce_conditions(op::CoeffOperator)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_coeff_space!(arg)
     end
 end
@@ -589,9 +601,11 @@ mutable struct TimeDerivative <: AbstractLinearOperator
     scales::Any
 end
 
-function TimeDerivative(arg; out=nothing)
-    TimeDerivative(Any[arg], (arg,), out, arg.dist, arg.domain, arg.tensorsig,
-                   arg.dtype, "dt", arg, nothing, nothing, false, 1)
+function TimeDerivative(arg; out = nothing)
+    return TimeDerivative(
+        Any[arg], (arg,), out, arg.dist, arg.domain, arg.tensorsig,
+        arg.dtype, "dt", arg, nothing, nothing, false, 1
+    )
 end
 
 check_conditions(::TimeDerivative) = true
@@ -648,7 +662,7 @@ mutable struct Convert <: AbstractLinearOperator
     scales::Any
 end
 
-function Convert(arg, output_basis; out=nothing)
+function Convert(arg, output_basis; out = nothing)
     dist = arg.dist
     coords = basis_coordsys(output_basis)
     input_basis = get_basis(arg.domain, coords)
@@ -658,10 +672,12 @@ function Convert(arg, output_basis; out=nothing)
     ndim = get_dim(output_basis)
     subaxis_dep = fill(true, ndim)
     subaxis_coup = fill(true, ndim)
-    Convert(Any[arg], (arg,), out, dist, new_domain, arg.tensorsig, arg.dtype,
-            "Convert", arg, input_basis, output_basis, coords,
-            first_axis, last_axis, subaxis_dep, subaxis_coup,
-            nothing, nothing, false, 1)
+    return Convert(
+        Any[arg], (arg,), out, dist, new_domain, arg.tensorsig, arg.dtype,
+        "Convert", arg, input_basis, output_basis, coords,
+        first_axis, last_axis, subaxis_dep, subaxis_coup,
+        nothing, nothing, false, 1
+    )
 end
 
 function check_conditions(op::Convert)
@@ -679,7 +695,7 @@ function enforce_conditions(op::Convert)
     arg = op.args[1]
     last_axis = op.last_axis
     last_is_coeff = !arg.layout.grid_space[last_axis]
-    if last_is_coeff && op.subaxis_coupling[end]
+    return if last_is_coeff && op.subaxis_coupling[end]
         require_local!(arg, last_axis)
     end
 end
@@ -698,7 +714,7 @@ function operate(op::Convert, out)::Nothing
         preset_layout!(out, layout)
         if length(arg.data) > 0 && length(out.data) > 0
             data_axis = op.last_axis + length(arg.tensorsig)
-            apply_matrix(subspace_matrix(op, layout), arg.data, data_axis; out=out.data)
+            apply_matrix(subspace_matrix(op, layout), arg.data, data_axis; out = out.data)
         else
             out.data .= 0
         end
@@ -762,7 +778,7 @@ mutable struct Differentiate <: AbstractLinearOperator
     scales::Any
 end
 
-function Differentiate(arg, coord; out=nothing)
+function Differentiate(arg, coord; out = nothing)
     if isa(arg, Number)
         return 0
     end
@@ -780,10 +796,12 @@ function Differentiate(arg, coord; out=nothing)
     else
         arg.domain
     end
-    Differentiate(Any[arg], (arg,), out, dist, new_domain, arg.tensorsig,
-                  arg.dtype, "d$(coord.name)", arg, coord, input_basis, output_basis,
-                  axis, axis, [true], [false],
-                  nothing, nothing, false, 1)
+    return Differentiate(
+        Any[arg], (arg,), out, dist, new_domain, arg.tensorsig,
+        arg.dtype, "d$(coord.name)", arg, coord, input_basis, output_basis,
+        axis, axis, [true], [false],
+        nothing, nothing, false, 1
+    )
 end
 
 function check_conditions(op::Differentiate)
@@ -796,7 +814,7 @@ end
 
 function enforce_conditions(op::Differentiate)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_coeff_space!(arg, op.last_axis)
     end
 end
@@ -807,7 +825,7 @@ function operate(op::Differentiate, out)::Nothing
     preset_layout!(out, layout)
     if length(arg.data) > 0 && length(out.data) > 0
         data_axis = op.last_axis + length(arg.tensorsig)
-        apply_matrix(subspace_matrix(op, layout), arg.data, data_axis; out=out.data)
+        apply_matrix(subspace_matrix(op, layout), arg.data, data_axis; out = out.data)
     else
         out.data .= 0
     end
@@ -819,7 +837,7 @@ function new_operand(op::Differentiate, operand; kw...)
 end
 
 function Base.show(io::IO, op::Differentiate)
-    print(io, "d", op.coord.name, "(", string(operator_operand(op)), ")")
+    return print(io, "d", op.coord.name, "(", string(operator_operand(op)), ")")
 end
 
 # ============================================================================
@@ -855,7 +873,7 @@ mutable struct Interpolate <: AbstractLinearOperator
     scales::Any
 end
 
-function Interpolate(arg, coord, position; out=nothing)
+function Interpolate(arg, coord, position; out = nothing)
     if isa(arg, Number)
         return arg
     end
@@ -869,11 +887,13 @@ function Interpolate(arg, coord, position; out=nothing)
     first_axis = get_axis(dist, coord)
     last_axis = first_axis
     new_domain = substitute_basis(arg.domain, input_basis, output_basis)
-    Interpolate(Any[arg], (arg,), out, dist, new_domain, arg.tensorsig,
-                arg.dtype, "interp", arg, coord, position,
-                input_basis, output_basis, first_axis, last_axis,
-                [true], [true],
-                nothing, nothing, false, 1)
+    return Interpolate(
+        Any[arg], (arg,), out, dist, new_domain, arg.tensorsig,
+        arg.dtype, "interp", arg, coord, position,
+        input_basis, output_basis, first_axis, last_axis,
+        [true], [true],
+        nothing, nothing, false, 1
+    )
 end
 
 function check_conditions(op::Interpolate)
@@ -886,7 +906,7 @@ end
 
 function enforce_conditions(op::Interpolate)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_coeff_space!(arg, op.last_axis)
     end
 end
@@ -897,7 +917,7 @@ function operate(op::Interpolate, out)::Nothing
     preset_layout!(out, layout)
     if length(arg.data) > 0 && length(out.data) > 0
         data_axis = op.last_axis + length(arg.tensorsig)
-        apply_matrix(subspace_matrix(op, layout), arg.data, data_axis; out=out.data)
+        apply_matrix(subspace_matrix(op, layout), arg.data, data_axis; out = out.data)
     else
         out.data .= 0
     end
@@ -956,7 +976,7 @@ mutable struct Integrate <: AbstractLinearOperator
     scales::Any
 end
 
-function Integrate(arg, coord; out=nothing)
+function Integrate(arg, coord; out = nothing)
     if arg == 0
         return 0
     end
@@ -966,10 +986,12 @@ function Integrate(arg, coord; out=nothing)
     first_axis = get_axis(dist, coord)
     last_axis = first_axis
     new_domain = substitute_basis(arg.domain, input_basis, output_basis)
-    Integrate(Any[arg], (arg,), out, dist, new_domain, arg.tensorsig,
-              arg.dtype, "Integrate", arg, coord, input_basis, output_basis,
-              first_axis, last_axis, [true], [false],
-              nothing, nothing, false, 1)
+    return Integrate(
+        Any[arg], (arg,), out, dist, new_domain, arg.tensorsig,
+        arg.dtype, "Integrate", arg, coord, input_basis, output_basis,
+        first_axis, last_axis, [true], [false],
+        nothing, nothing, false, 1
+    )
 end
 
 function check_conditions(op::Integrate)
@@ -982,7 +1004,7 @@ end
 
 function enforce_conditions(op::Integrate)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_coeff_space!(arg, op.last_axis)
     end
 end
@@ -993,7 +1015,7 @@ function operate(op::Integrate, out)::Nothing
     preset_layout!(out, layout)
     if length(arg.data) > 0 && length(out.data) > 0
         data_axis = op.last_axis + length(arg.tensorsig)
-        apply_matrix(subspace_matrix(op, layout), arg.data, data_axis; out=out.data)
+        apply_matrix(subspace_matrix(op, layout), arg.data, data_axis; out = out.data)
     else
         out.data .= 0
     end
@@ -1059,7 +1081,7 @@ mutable struct Average <: AbstractLinearOperator
     scales::Any
 end
 
-function Average(arg, coord; out=nothing)
+function Average(arg, coord; out = nothing)
     if isa(arg, Number)
         return arg
     end
@@ -1069,10 +1091,12 @@ function Average(arg, coord; out=nothing)
     first_axis = get_axis(dist, coord)
     last_axis = first_axis
     new_domain = substitute_basis(arg.domain, input_basis, output_basis)
-    Average(Any[arg], (arg,), out, dist, new_domain, arg.tensorsig,
-            arg.dtype, "Average", arg, coord, input_basis, output_basis,
-            first_axis, last_axis, [true], [false],
-            nothing, nothing, false, 1)
+    return Average(
+        Any[arg], (arg,), out, dist, new_domain, arg.tensorsig,
+        arg.dtype, "Average", arg, coord, input_basis, output_basis,
+        first_axis, last_axis, [true], [false],
+        nothing, nothing, false, 1
+    )
 end
 
 function check_conditions(op::Average)
@@ -1085,7 +1109,7 @@ end
 
 function enforce_conditions(op::Average)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_coeff_space!(arg, op.last_axis)
     end
 end
@@ -1096,7 +1120,7 @@ function operate(op::Average, out)::Nothing
     preset_layout!(out, layout)
     if length(arg.data) > 0 && length(out.data) > 0
         data_axis = op.last_axis + length(arg.tensorsig)
-        apply_matrix(subspace_matrix(op, layout), arg.data, data_axis; out=out.data)
+        apply_matrix(subspace_matrix(op, layout), arg.data, data_axis; out = out.data)
     else
         out.data .= 0
     end
@@ -1162,7 +1186,7 @@ mutable struct Lift <: AbstractLinearOperator
     scales::Any
 end
 
-function Lift(arg, output_basis, n; out=nothing)
+function Lift(arg, output_basis, n; out = nothing)
     if arg == 0
         return 0
     end
@@ -1175,10 +1199,12 @@ function Lift(arg, output_basis, n; out=nothing)
     last_axis = first_axis + get_dim(output_basis) - 1
     new_domain = substitute_basis(arg.domain, input_basis, output_basis)
     ndim = get_dim(output_basis)
-    Lift(Any[arg], (arg,), out, dist, new_domain, arg.tensorsig, arg.dtype,
-         "Lift", arg, output_basis, n, input_basis, first_axis, last_axis,
-         fill(true, ndim), fill(true, ndim),
-         nothing, nothing, false, 1)
+    return Lift(
+        Any[arg], (arg,), out, dist, new_domain, arg.tensorsig, arg.dtype,
+        "Lift", arg, output_basis, n, input_basis, first_axis, last_axis,
+        fill(true, ndim), fill(true, ndim),
+        nothing, nothing, false, 1
+    )
 end
 
 function check_conditions(op::Lift)
@@ -1191,7 +1217,7 @@ end
 
 function enforce_conditions(op::Lift)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_coeff_space!(arg, op.last_axis)
     end
 end
@@ -1202,7 +1228,7 @@ function operate(op::Lift, out)::Nothing
     preset_layout!(out, layout)
     if length(arg.data) > 0 && length(out.data) > 0
         data_axis = op.last_axis + length(arg.tensorsig)
-        apply_matrix(subspace_matrix(op, layout), arg.data, data_axis; out=out.data)
+        apply_matrix(subspace_matrix(op, layout), arg.data, data_axis; out = out.data)
     else
         out.data .= 0
     end
@@ -1255,7 +1281,7 @@ mutable struct CartesianGradient <: AbstractLinearOperator
     scales::Any
 end
 
-function CartesianGradient(operand, coordsys; out=nothing)
+function CartesianGradient(operand, coordsys; out = nothing)
     if isa(operand, Number)
         return 0
     end
@@ -1275,9 +1301,11 @@ function CartesianGradient(operand, coordsys; out=nothing)
         end
     end
     new_domain = isempty(all_bases) ? operand.domain : Domain(operand.dist, Tuple(unique(all_bases)))
-    CartesianGradient(diff_args, Tuple(diff_args), out, operand.dist, new_domain,
-                      new_tensorsig, operand.dtype, "Grad", operand, coordsys,
-                      nothing, nothing, false, 1)
+    return CartesianGradient(
+        diff_args, Tuple(diff_args), out, operand.dist, new_domain,
+        new_tensorsig, operand.dtype, "Grad", operand, coordsys,
+        nothing, nothing, false, 1
+    )
 end
 
 function check_conditions(op::CartesianGradient)
@@ -1299,6 +1327,7 @@ function enforce_conditions(op::CartesianGradient)
             change_layout!(arg, layout)
         end
     end
+    return
 end
 
 function operate(op::CartesianGradient, out)::Nothing
@@ -1364,7 +1393,7 @@ mutable struct CartesianDivergence <: AbstractLinearOperator
     scales::Any
 end
 
-function CartesianDivergence(operand; index=1, out=nothing)
+function CartesianDivergence(operand; index = 1, out = nothing)
     if isa(operand, Number)
         return 0
     end
@@ -1373,11 +1402,13 @@ function CartesianDivergence(operand; index=1, out=nothing)
     comps = [CartesianComponent(operand, index, coord) for coord in coordsys.coords]
     diffs = [Differentiate(comp, coord) for (comp, coord) in zip(comps, coordsys.coords)]
     inner_arg = sum(diffs)
-    new_tensorsig = (operand.tensorsig[1:index-1]..., operand.tensorsig[index+1:end]...)
+    new_tensorsig = (operand.tensorsig[1:(index - 1)]..., operand.tensorsig[(index + 1):end]...)
     new_domain = isa(inner_arg, AbstractOperand) ? inner_arg.domain : operand.domain
-    CartesianDivergence(Any[inner_arg], (inner_arg,), out, operand.dist, new_domain,
-                        new_tensorsig, operand.dtype, "Div", operand, coordsys, index,
-                        nothing, nothing, false, 1)
+    return CartesianDivergence(
+        Any[inner_arg], (inner_arg,), out, operand.dist, new_domain,
+        new_tensorsig, operand.dtype, "Div", operand, coordsys, index,
+        nothing, nothing, false, 1
+    )
 end
 
 check_conditions(::CartesianDivergence) = true
@@ -1393,7 +1424,7 @@ function operate(op::CartesianDivergence, out)::Nothing
 end
 
 function new_operand(op::CartesianDivergence, operand; kw...)
-    return CartesianDivergence(operand; index=op.index, kw...)
+    return CartesianDivergence(operand; index = op.index, kw...)
 end
 
 function subproblem_matrix(op::CartesianDivergence, subproblem)
@@ -1428,7 +1459,7 @@ mutable struct CartesianCurl <: AbstractLinearOperator
     scales::Any
 end
 
-function CartesianCurl(operand; index=1, out=nothing)
+function CartesianCurl(operand; index = 1, out = nothing)
     if isa(operand, Number)
         return 0
     end
@@ -1449,9 +1480,11 @@ function CartesianCurl(operand; index=1, out=nothing)
         inner_arg = -inner_arg
     end
     new_domain = isa(inner_arg, AbstractOperand) ? inner_arg.domain : operand.domain
-    CartesianCurl(Any[inner_arg], (inner_arg,), out, operand.dist, new_domain,
-                  operand.tensorsig, operand.dtype, "Curl", operand, coordsys, index,
-                  nothing, nothing, false, 1)
+    return CartesianCurl(
+        Any[inner_arg], (inner_arg,), out, operand.dist, new_domain,
+        operand.tensorsig, operand.dtype, "Curl", operand, coordsys, index,
+        nothing, nothing, false, 1
+    )
 end
 
 check_conditions(::CartesianCurl) = true
@@ -1467,7 +1500,7 @@ function operate(op::CartesianCurl, out)::Nothing
 end
 
 function new_operand(op::CartesianCurl, operand; kw...)
-    return CartesianCurl(operand; index=op.index, kw...)
+    return CartesianCurl(operand; index = op.index, kw...)
 end
 
 # --------------------------------------------------------------------------
@@ -1496,7 +1529,7 @@ mutable struct CartesianLaplacian <: AbstractLinearOperator
     scales::Any
 end
 
-function CartesianLaplacian(operand, coordsys; out=nothing)
+function CartesianLaplacian(operand, coordsys; out = nothing)
     if isa(operand, Number)
         return 0
     end
@@ -1504,9 +1537,11 @@ function CartesianLaplacian(operand, coordsys; out=nothing)
     parts = [Differentiate(Differentiate(operand, c), c) for c in coordsys.coords]
     inner_arg = sum(parts)
     new_domain = isa(inner_arg, AbstractOperand) ? inner_arg.domain : operand.domain
-    CartesianLaplacian(Any[inner_arg], (inner_arg,), out, operand.dist, new_domain,
-                       operand.tensorsig, operand.dtype, "Lap", operand, coordsys,
-                       nothing, nothing, false, 1)
+    return CartesianLaplacian(
+        Any[inner_arg], (inner_arg,), out, operand.dist, new_domain,
+        operand.tensorsig, operand.dtype, "Lap", operand, coordsys,
+        nothing, nothing, false, 1
+    )
 end
 
 check_conditions(::CartesianLaplacian) = true
@@ -1564,15 +1599,17 @@ mutable struct CartesianTrace <: AbstractLinearOperator
     scales::Any
 end
 
-function CartesianTrace(operand; out=nothing)
+function CartesianTrace(operand; out = nothing)
     if isa(operand, Number)
         return 0
     end
     coordsys = operand.tensorsig[1]
     new_tensorsig = operand.tensorsig[3:end]
-    CartesianTrace(Any[operand], (operand,), out, operand.dist, operand.domain,
-                   new_tensorsig, operand.dtype, "Trace", operand, coordsys,
-                   nothing, nothing, false, 1)
+    return CartesianTrace(
+        Any[operand], (operand,), out, operand.dist, operand.domain,
+        new_tensorsig, operand.dtype, "Trace", operand, coordsys,
+        nothing, nothing, false, 1
+    )
 end
 
 function check_conditions(op::CartesianTrace)
@@ -1582,7 +1619,7 @@ end
 
 function enforce_conditions(op::CartesianTrace)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_grid_space!(arg)
     end
 end
@@ -1610,7 +1647,7 @@ function subproblem_matrix(op::CartesianTrace, subproblem)
     d = cs_dim(op.coordsys)
     trace_vec = vec(Matrix{Float64}(I, d, d))
     # Kronecker with remaining tensor components and coefficient size
-    n_eye = prod(cs_dim(cs) for cs in op.tensorsig; init=1)
+    n_eye = prod(cs_dim(cs) for cs in op.tensorsig; init = 1)
     n_eye *= coeff_size(subproblem, op.domain)
     eye_mat = sparse(1.0I, n_eye, n_eye)
     return kron(sparse(trace_vec'), eye_mat)
@@ -1637,7 +1674,7 @@ mutable struct CartesianTransposeComponents <: AbstractLinearOperator
     dtype::DataType
     name::String
     operand::Any
-    indices::Tuple{Int,Int}
+    indices::Tuple{Int, Int}
     new_axis_order::Tuple
     last_id::Any
     last_out::Any
@@ -1645,7 +1682,7 @@ mutable struct CartesianTransposeComponents <: AbstractLinearOperator
     scales::Any
 end
 
-function CartesianTransposeComponents(operand; indices=(1,2), out=nothing)
+function CartesianTransposeComponents(operand; indices = (1, 2), out = nothing)
     if isa(operand, Number)
         return 0
     end
@@ -1658,10 +1695,12 @@ function CartesianTransposeComponents(operand; indices=(1,2), out=nothing)
     total_dims = length(ts) + get_dim(operand.dist)
     new_order = collect(1:total_dims)
     new_order[i0], new_order[i1] = new_order[i1], new_order[i0]
-    CartesianTransposeComponents(Any[operand], (operand,), out, operand.dist,
-                                  operand.domain, Tuple(new_ts), operand.dtype,
-                                  "Trans", operand, indices, Tuple(new_order),
-                                  nothing, nothing, false, 1)
+    return CartesianTransposeComponents(
+        Any[operand], (operand,), out, operand.dist,
+        operand.domain, Tuple(new_ts), operand.dtype,
+        "Trans", operand, indices, Tuple(new_order),
+        nothing, nothing, false, 1
+    )
 end
 
 check_conditions(::CartesianTransposeComponents) = true
@@ -1677,7 +1716,7 @@ function operate(op::CartesianTransposeComponents, out)::Nothing
 end
 
 function new_operand(op::CartesianTransposeComponents, operand; kw...)
-    return CartesianTransposeComponents(operand; indices=op.indices, kw...)
+    return CartesianTransposeComponents(operand; indices = op.indices, kw...)
 end
 
 register_operator_alias!("transpose", CartesianTransposeComponents)
@@ -1712,13 +1751,15 @@ mutable struct CartesianComponent <: AbstractLinearOperator
     scales::Any
 end
 
-function CartesianComponent(operand, index, comp; out=nothing)
+function CartesianComponent(operand, index, comp; out = nothing)
     coordsys = operand.tensorsig[index]
     coord_subaxis = get_axis(operand.dist, comp) - get_axis(operand.dist, coordsys) + 1
-    new_tensorsig = (operand.tensorsig[1:index-1]..., operand.tensorsig[index+1:end]...)
-    CartesianComponent(Any[operand], (operand,), out, operand.dist, operand.domain,
-                       new_tensorsig, operand.dtype, "Comp", operand, index, comp,
-                       coord_subaxis, nothing, nothing, false, 1)
+    new_tensorsig = (operand.tensorsig[1:(index - 1)]..., operand.tensorsig[(index + 1):end]...)
+    return CartesianComponent(
+        Any[operand], (operand,), out, operand.dist, operand.domain,
+        new_tensorsig, operand.dtype, "Comp", operand, index, comp,
+        coord_subaxis, nothing, nothing, false, 1
+    )
 end
 
 check_conditions(::CartesianComponent) = true
@@ -1777,16 +1818,18 @@ mutable struct DirectProductGradient <: AbstractLinearOperator
     scales::Any
 end
 
-function DirectProductGradient(operand, coordsys; out=nothing)
+function DirectProductGradient(operand, coordsys; out = nothing)
     if isa(operand, Number)
         return 0
     end
     sub_grads = Any[gradient(operand, cs) for cs in coordsys.coordsystems]
     new_tensorsig = (coordsys, operand.tensorsig...)
     new_domain = operand.domain
-    DirectProductGradient(sub_grads, Tuple(sub_grads), out, operand.dist, new_domain,
-                          new_tensorsig, operand.dtype, "Grad", operand, coordsys,
-                          nothing, nothing, false, 1)
+    return DirectProductGradient(
+        sub_grads, Tuple(sub_grads), out, operand.dist, new_domain,
+        new_tensorsig, operand.dtype, "Grad", operand, coordsys,
+        nothing, nothing, false, 1
+    )
 end
 
 function check_conditions(op::DirectProductGradient)
@@ -1806,6 +1849,7 @@ function enforce_conditions(op::DirectProductGradient)
             change_layout!(arg, layout)
         end
     end
+    return
 end
 
 function operate(op::DirectProductGradient, out)::Nothing
@@ -1825,9 +1869,9 @@ function operate(op::DirectProductGradient, out)::Nothing
     for (cs_grad, cs) in zip(op.args, op.coordsys.coordsystems)
         dim = get_dim(cs)
         if isa(cs_grad, AbstractCurrent) && length(cs_grad.data) > 0
-            @inbounds out.data[i0:i0+dim-1, ntuple(_ -> Colon(), ndims(out.data) - 1)...] .= cs_grad.data
+            @inbounds out.data[i0:(i0 + dim - 1), ntuple(_ -> Colon(), ndims(out.data) - 1)...] .= cs_grad.data
         else
-            @inbounds out.data[i0:i0+dim-1, ntuple(_ -> Colon(), ndims(out.data) - 1)...] .= 0
+            @inbounds out.data[i0:(i0 + dim - 1), ntuple(_ -> Colon(), ndims(out.data) - 1)...] .= 0
         end
         i0 += dim
     end
@@ -1866,7 +1910,7 @@ mutable struct DirectProductDivergence <: AbstractLinearOperator
     scales::Any
 end
 
-function DirectProductDivergence(operand; index=1, out=nothing)
+function DirectProductDivergence(operand; index = 1, out = nothing)
     if isa(operand, Number)
         return 0
     end
@@ -1875,11 +1919,13 @@ function DirectProductDivergence(operand; index=1, out=nothing)
     comps = [DirectProductComponent(operand, index, cs) for cs in coordsys.coordsystems]
     divs = [divergence(comp) for comp in comps]
     inner_arg = sum(divs)
-    new_tensorsig = (operand.tensorsig[1:index-1]..., operand.tensorsig[index+1:end]...)
+    new_tensorsig = (operand.tensorsig[1:(index - 1)]..., operand.tensorsig[(index + 1):end]...)
     new_domain = isa(inner_arg, AbstractOperand) ? inner_arg.domain : operand.domain
-    DirectProductDivergence(Any[inner_arg], (inner_arg,), out, operand.dist, new_domain,
-                            new_tensorsig, operand.dtype, "Div", operand, coordsys, index,
-                            nothing, nothing, false, 1)
+    return DirectProductDivergence(
+        Any[inner_arg], (inner_arg,), out, operand.dist, new_domain,
+        new_tensorsig, operand.dtype, "Div", operand, coordsys, index,
+        nothing, nothing, false, 1
+    )
 end
 
 check_conditions(::DirectProductDivergence) = true
@@ -1895,7 +1941,7 @@ function operate(op::DirectProductDivergence, out)::Nothing
 end
 
 function new_operand(op::DirectProductDivergence, operand; kw...)
-    return DirectProductDivergence(operand; index=op.index, kw...)
+    return DirectProductDivergence(operand; index = op.index, kw...)
 end
 
 function subproblem_matrix(op::DirectProductDivergence, subproblem)
@@ -1925,7 +1971,7 @@ mutable struct DirectProductCurl <: AbstractLinearOperator
     scales::Any
 end
 
-function DirectProductCurl(operand; index=1, out=nothing)
+function DirectProductCurl(operand; index = 1, out = nothing)
     if isa(operand, Number)
         return 0
     end
@@ -1933,9 +1979,13 @@ function DirectProductCurl(operand; index=1, out=nothing)
     if get_dim(coordsys) != 3
         throw(ArgumentError("DirectProductCurl only implemented for 3D vector fields"))
     end
-    throw(ArgumentError("DirectProductCurl requires Skew and IdentityTensor operators " *
-                         "from Milestone 2 (Polar/Disk geometry). Use CartesianCurl for " *
-                         "Cartesian coordinate systems."))
+    throw(
+        ArgumentError(
+            "DirectProductCurl requires Skew and IdentityTensor operators " *
+                "from Milestone 2 (Polar/Disk geometry). Use CartesianCurl for " *
+                "Cartesian coordinate systems."
+        )
+    )
 end
 
 check_conditions(::DirectProductCurl) = true
@@ -1951,7 +2001,7 @@ function operate(op::DirectProductCurl, out)::Nothing
 end
 
 function new_operand(op::DirectProductCurl, operand; kw...)
-    return DirectProductCurl(operand; index=op.index, kw...)
+    return DirectProductCurl(operand; index = op.index, kw...)
 end
 
 """
@@ -1976,16 +2026,18 @@ mutable struct DirectProductLaplacian <: AbstractLinearOperator
     scales::Any
 end
 
-function DirectProductLaplacian(operand, coordsys; out=nothing)
+function DirectProductLaplacian(operand, coordsys; out = nothing)
     if isa(operand, Number)
         return 0
     end
     parts = [laplacian(operand, cs) for cs in coordsys.coordsystems]
     inner_arg = sum(parts)
     new_domain = isa(inner_arg, AbstractOperand) ? inner_arg.domain : operand.domain
-    DirectProductLaplacian(Any[inner_arg], (inner_arg,), out, operand.dist, new_domain,
-                           operand.tensorsig, operand.dtype, "Lap", operand, coordsys,
-                           nothing, nothing, false, 1)
+    return DirectProductLaplacian(
+        Any[inner_arg], (inner_arg,), out, operand.dist, new_domain,
+        operand.tensorsig, operand.dtype, "Lap", operand, coordsys,
+        nothing, nothing, false, 1
+    )
 end
 
 check_conditions(::DirectProductLaplacian) = true
@@ -2032,14 +2084,16 @@ mutable struct DirectProductComponent <: AbstractLinearOperator
     scales::Any
 end
 
-function DirectProductComponent(operand, index, comp; out=nothing)
+function DirectProductComponent(operand, index, comp; out = nothing)
     coordsys = operand.tensorsig[index]
     comp_subaxis = get_axis(operand.dist, comp) - get_axis(operand.dist, coordsys) + 1
     new_tensorsig = collect(operand.tensorsig)
     new_tensorsig[index] = comp
-    DirectProductComponent(Any[operand], (operand,), out, operand.dist, operand.domain,
-                           Tuple(new_tensorsig), operand.dtype, "Comp", operand, index,
-                           comp, comp_subaxis, nothing, nothing, false, 1)
+    return DirectProductComponent(
+        Any[operand], (operand,), out, operand.dist, operand.domain,
+        Tuple(new_tensorsig), operand.dtype, "Comp", operand, index,
+        comp, comp_subaxis, nothing, nothing, false, 1
+    )
 end
 
 check_conditions(::DirectProductComponent) = true
@@ -2089,12 +2143,14 @@ mutable struct AdvectiveCFL <: NonlinearOperator
     _coeff_layout::Any
 end
 
-function AdvectiveCFL(velocity, coordsys; out=nothing)
+function AdvectiveCFL(velocity, coordsys; out = nothing)
     dist = velocity.dist
-    AdvectiveCFL(Any[velocity], (velocity,), out, dist, velocity.domain,
-                 (), velocity.dtype, "AdvCFL", velocity, coordsys,
-                 nothing, nothing, false, 1,
-                 dist.grid_layout, dist.coeff_layout)
+    return AdvectiveCFL(
+        Any[velocity], (velocity,), out, dist, velocity.domain,
+        (), velocity.dtype, "AdvCFL", velocity, coordsys,
+        nothing, nothing, false, 1,
+        dist.grid_layout, dist.coeff_layout
+    )
 end
 
 function check_conditions(op::AdvectiveCFL)
@@ -2104,7 +2160,7 @@ end
 
 function enforce_conditions(op::AdvectiveCFL)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_grid_space!(arg)
     end
 end
@@ -2121,19 +2177,19 @@ gradient(field, cs) = CartesianGradient(field, cs)  # fallback
 # Divergence dispatch moved to end of file (after all operator types defined)
 
 """Curl dispatch: selects CartesianCurl or DirectProductCurl."""
-function curl(field; index=1)
+function curl(field; index = 1)
     if isa(field, Number) || field == 0
         return 0
     end
     cs = field.tensorsig[index]
     if isa(cs, SphericalCoordinates)
-        return SphericalCurl(field; index=index)
+        return SphericalCurl(field; index = index)
     elseif isa(cs, CartesianCoordinates)
-        return CartesianCurl(field; index=index)
+        return CartesianCurl(field; index = index)
     elseif isa(cs, DirectProduct)
-        return DirectProductCurl(field; index=index)
+        return DirectProductCurl(field; index = index)
     else
-        return CartesianCurl(field; index=index)  # fallback
+        return CartesianCurl(field; index = index)  # fallback
     end
 end
 
@@ -2150,7 +2206,7 @@ time_derivative(field) = TimeDerivative(field)
 
 """Extract component from vector/tensor field."""
 function component(field, index, comp)
-    CartesianComponent(field, index, comp)
+    return CartesianComponent(field, index, comp)
 end
 
 # Aliases for equation namespace
@@ -2166,18 +2222,20 @@ const dt = time_derivative
 # Display methods for all operator types
 # ============================================================================
 
-for T in [Power, FieldCopy, UnaryGridFunction, TimeDerivative,
-          GridOperator, CoeffOperator, Convert,
-          Interpolate, Integrate, Average, Lift,
-          CartesianGradient, CartesianDivergence, CartesianCurl,
-          CartesianLaplacian, CartesianTrace, CartesianTransposeComponents,
-          CartesianComponent,
-          DirectProductGradient, DirectProductDivergence, DirectProductCurl,
-          DirectProductLaplacian, DirectProductComponent,
-          AdvectiveCFL]
+for T in [
+        Power, FieldCopy, UnaryGridFunction, TimeDerivative,
+        GridOperator, CoeffOperator, Convert,
+        Interpolate, Integrate, Average, Lift,
+        CartesianGradient, CartesianDivergence, CartesianCurl,
+        CartesianLaplacian, CartesianTrace, CartesianTransposeComponents,
+        CartesianComponent,
+        DirectProductGradient, DirectProductDivergence, DirectProductCurl,
+        DirectProductLaplacian, DirectProductComponent,
+        AdvectiveCFL,
+    ]
     @eval begin
         function Base.show(io::IO, op::$T)
-            print(io, op.name, "(", join(map(string, op.args), ", "), ")")
+            return print(io, op.name, "(", join(map(string, op.args), ", "), ")")
         end
     end
 end
@@ -2197,8 +2255,10 @@ matrix.  Concrete dispatch methods for each operator+basis combination are
 defined in transforms.jl (loaded after both operators.jl and basis.jl).
 """
 function subspace_matrix(op, layout)
-    error("subspace_matrix not implemented for operator type $(typeof(op)). " *
-          "Add a dispatch method in transforms.jl for this operator+basis combination.")
+    error(
+        "subspace_matrix not implemented for operator type $(typeof(op)). " *
+            "Add a dispatch method in transforms.jl for this operator+basis combination."
+    )
 end
 
 # ============================================================================
@@ -2212,7 +2272,7 @@ function operate(op::AdvectiveCFL, out)::Nothing
     # Simplified: just use absolute value of velocity components
     out.data .= 0
     for i in axes(vel.data, 1)
-        @inbounds out.data .+= abs.(vel.data[i, fill(:, ndims(vel.data)-1)...])
+        @inbounds out.data .+= abs.(vel.data[i, fill(:, ndims(vel.data) - 1)...])
     end
     return nothing
 end
@@ -2222,57 +2282,57 @@ end
 # ============================================================================
 
 export AbstractOperator, AbstractLinearOperator, SpectralOperator, SpectralOperator1D,
-       NonlinearOperator,
-       AbstractField,
-       Power, dedalus_power,
-       FieldCopy,
-       UnaryGridFunction, UFUNC_DERIVATIVES,
-       GridOperator, CoeffOperator,
-       TimeDerivative,
-       Convert, convert_operand,
-       Differentiate, differentiate,
-       Interpolate, interpolate,
-       Integrate, integrate,
-       Average, average,
-       Lift, lift,
-       CartesianGradient, CartesianDivergence, CartesianCurl, CartesianLaplacian,
-       CartesianTrace, CartesianTransposeComponents, CartesianComponent,
-       DirectProductGradient, DirectProductDivergence, DirectProductCurl,
-       DirectProductLaplacian, DirectProductComponent,
-       AdvectiveCFL,
-       SpectralOperatorS2, SeparableSphereOperator, PolarMOperator,
-       spinindex_out, l_matrix, m_matrix,
-       symbol, local_symbols,
-       radial_matrix, _output_basis,
-       polar_m_operator_subaxis_dependence, polar_m_operator_subaxis_coupling,
-       init_polar_m_operator!,
-       # Curvilinear geometry operators (Group 1)
-       SphericalTrace, PolarTrace, DirectProductTrace,
-       StandardTransposeComponents, SphericalTransposeComponents,
-       CartesianSkew, SpinSkew, skew,
-       # Component operators (Group 2)
-       RadialComponent, AngularComponent, AzimuthalComponent,
-       radial_component, angular_component, azimuthal_component,
-       # Polar differential operators (Group 3)
-       MulCosine, PolarGradient, PolarDivergence, PolarLaplacian,
-       # S2 operators (Group 4)
-       SphereEllProduct,
-       # Sphere differential operators (Group 5)
-       SphereGradient, SphereDivergence, SphereLaplacian,
-       sphere_basis_k,
-       # 3D Spherical operators (Group 6)
-       SphericalEllOperator,
-       SphericalGradient, SphericalDivergence, SphericalCurl,
-       SphericalLaplacian, SphericalEllProduct,
-       regindex_out,
-       gradient, divergence, curl, laplacian,
-       trace_op, transpose_components, grid_op, coeff_op,
-       time_derivative, component,
-       OPERATOR_ALIASES, register_operator_alias!,
-       operator_operand, new_operand,
-       subproblem_matrix, expression_matrices,
-       subspace_matrix,
-       dt, lap
+    NonlinearOperator,
+    AbstractField,
+    Power, dedalus_power,
+    FieldCopy,
+    UnaryGridFunction, UFUNC_DERIVATIVES,
+    GridOperator, CoeffOperator,
+    TimeDerivative,
+    Convert, convert_operand,
+    Differentiate, differentiate,
+    Interpolate, interpolate,
+    Integrate, integrate,
+    Average, average,
+    Lift, lift,
+    CartesianGradient, CartesianDivergence, CartesianCurl, CartesianLaplacian,
+    CartesianTrace, CartesianTransposeComponents, CartesianComponent,
+    DirectProductGradient, DirectProductDivergence, DirectProductCurl,
+    DirectProductLaplacian, DirectProductComponent,
+    AdvectiveCFL,
+    SpectralOperatorS2, SeparableSphereOperator, PolarMOperator,
+    spinindex_out, l_matrix, m_matrix,
+    symbol, local_symbols,
+    radial_matrix, _output_basis,
+    polar_m_operator_subaxis_dependence, polar_m_operator_subaxis_coupling,
+    init_polar_m_operator!,
+    # Curvilinear geometry operators (Group 1)
+    SphericalTrace, PolarTrace, DirectProductTrace,
+    StandardTransposeComponents, SphericalTransposeComponents,
+    CartesianSkew, SpinSkew, skew,
+    # Component operators (Group 2)
+    RadialComponent, AngularComponent, AzimuthalComponent,
+    radial_component, angular_component, azimuthal_component,
+    # Polar differential operators (Group 3)
+    MulCosine, PolarGradient, PolarDivergence, PolarLaplacian,
+    # S2 operators (Group 4)
+    SphereEllProduct,
+    # Sphere differential operators (Group 5)
+    SphereGradient, SphereDivergence, SphereLaplacian,
+    sphere_basis_k,
+    # 3D Spherical operators (Group 6)
+    SphericalEllOperator,
+    SphericalGradient, SphericalDivergence, SphericalCurl,
+    SphericalLaplacian, SphericalEllProduct,
+    regindex_out,
+    gradient, divergence, curl, laplacian,
+    trace_op, transpose_components, grid_op, coeff_op,
+    time_derivative, component,
+    OPERATOR_ALIASES, register_operator_alias!,
+    operator_operand, new_operand,
+    subproblem_matrix, expression_matrices,
+    subspace_matrix,
+    dt, lap
 
 # ============================================================================
 # Convenience functions (re-added after duplicate removal)
@@ -2290,7 +2350,7 @@ differentiate(arg, coord) = Differentiate(arg, coord)
 # Stubs for subsystem/solver wiring
 # ============================================================================
 
-function local_groupset_slices(layout, group, domain; scales=1)
+function local_groupset_slices(layout, group, domain; scales = 1)
     return (Colon(),)
 end
 
@@ -2377,12 +2437,16 @@ function subproblem_matrix(op::SpectralOperatorS2, subproblem)
     m_coupled = (m === nothing)
     l_coupled = (l === nothing)
     if op.subaxis_coupling[1] && !m_coupled
-        error("SpectralOperatorS2: m must be coupled (group[m_axis] === nothing) " *
-              "when subaxis_coupling[1] is true.")
+        error(
+            "SpectralOperatorS2: m must be coupled (group[m_axis] === nothing) " *
+                "when subaxis_coupling[1] is true."
+        )
     end
     if op.subaxis_coupling[2] && !l_coupled
-        error("SpectralOperatorS2: ell must be coupled (group[ell_axis] === nothing) " *
-              "when subaxis_coupling[2] is true.")
+        error(
+            "SpectralOperatorS2: ell must be coupled (group[ell_axis] === nothing) " *
+                "when subaxis_coupling[2] is true."
+        )
     end
     m_dep = op.subaxis_dependence[1]
     l_dep = op.subaxis_dependence[2]
@@ -2404,7 +2468,7 @@ function subproblem_matrix(op::SpectralOperatorS2, subproblem)
                     matrix = m_matrix(op, Tuple(si_in), Tuple(si_out), m)
                 elseif l_coupled || (!m_dep)
                     if l_coupled
-                        local_groups = local_group_arrays(op.dist.coeff_layout, domain; scales=1)
+                        local_groups = local_group_arrays(op.dist.coeff_layout, domain; scales = 1)
                         local_m = local_groups[m_axis]
                         local_ell = local_groups[m_axis + 1]
                         ell_list = local_ell[local_m .== m][:]
@@ -2414,8 +2478,10 @@ function subproblem_matrix(op::SpectralOperatorS2, subproblem)
                     blocks = []
                     for ell in ell_list
                         if abs(spintotal_in) <= ell && abs(spintotal_out) <= ell
-                            block = l_matrix(op, op.input_basis, op.output_basis,
-                                             Tuple(si_in), Tuple(si_out), ell)
+                            block = l_matrix(
+                                op, op.input_basis, op.output_basis,
+                                Tuple(si_in), Tuple(si_out), ell
+                            )
                         else
                             block = spzeros(1, 1)  # HACK: placeholder for invalid ell
                         end
@@ -2426,7 +2492,7 @@ function subproblem_matrix(op::SpectralOperatorS2, subproblem)
                     error("SpectralOperatorS2: unsupported subaxis configuration")
                 end
                 factors[op.last_axis] = matrix
-                comp_matrix = reduce(kron, factors; init=sparse(ones(1, 1)))
+                comp_matrix = reduce(kron, factors; init = sparse(ones(1, 1)))
             else
                 # Build zero matrix
                 comp_matrix = spzeros(prod(subshape_out), prod(subshape_in))
@@ -2528,8 +2594,10 @@ end
 Return the scalar symbol for a given spin component at the given mode.
 Must be implemented by concrete subtypes.
 """
-function symbol(op::SeparableSphereOperator, spinindex_in, spinindex_out,
-                spintotal_in, spintotal_out, args...)
+function symbol(
+        op::SeparableSphereOperator, spinindex_in, spinindex_out,
+        spintotal_in, spintotal_out, args...
+    )
     error("symbol not implemented for type $(typeof(op))")
 end
 
@@ -2543,8 +2611,10 @@ Dispatches based on `subaxis_dependence`:
 - `[false, false]`: symbols are constant (depend only on spin indices and radius)
 - `[true, ...]`: not yet implemented
 """
-function local_symbols(op::SeparableSphereOperator, layout, spinindex_in, spinindex_out,
-                       spintotal_in, spintotal_out)
+function local_symbols(
+        op::SeparableSphereOperator, layout, spinindex_in, spinindex_out,
+        spintotal_in, spintotal_out
+    )
     operand = op.args[1]
     if op.input_basis === nothing
         domain = op.domain
@@ -2557,9 +2627,11 @@ function local_symbols(op::SeparableSphereOperator, layout, spinindex_in, spinin
         error("local_symbols not implemented for m-dependent SeparableSphereOperator")
     elseif op.subaxis_dependence[2]
         colat_axis = op.first_axis + 1
-        local_ell = local_group_arrays(layout, domain; scales=basis_dealias(domain))[colat_axis]
-        return symbol(op, spinindex_in, spinindex_out, spintotal_in, spintotal_out,
-                      local_ell, radius)
+        local_ell = local_group_arrays(layout, domain; scales = basis_dealias(domain))[colat_axis]
+        return symbol(
+            op, spinindex_in, spinindex_out, spintotal_in, spintotal_out,
+            local_ell, radius
+        )
     else
         return symbol(op, spinindex_in, spinindex_out, spintotal_in, spintotal_out, radius)
     end
@@ -2585,7 +2657,7 @@ function subproblem_matrix(op::SeparableSphereOperator, subproblem)
     layout = op.dist.coeff_layout
     S_in = spin_weights(basis, operand.tensorsig)
     S_out = spin_weights(basis, op.tensorsig)
-    groupset_slices_val = local_groupset_slices(op.dist.coeff_layout, subproblem.group, domain; scales=1)
+    groupset_slices_val = local_groupset_slices(op.dist.coeff_layout, subproblem.group, domain; scales = 1)
     # Select overlapping data
     subshape_in = coeff_shape(subproblem, operand.domain)
     subshape_out = coeff_shape(subproblem, op.domain)
@@ -2602,8 +2674,10 @@ function subproblem_matrix(op::SeparableSphereOperator, subproblem)
             spintotal_in = S_in[si_in]
             if prod(subshape) > 0 && (Tuple(si_out) in spinindex_out(op, Tuple(si_in)))
                 # Get symbols for overlapping data
-                symbols_val = local_symbols(op, layout, Tuple(si_in), Tuple(si_out),
-                                            spintotal_in, spintotal_out)
+                symbols_val = local_symbols(
+                    op, layout, Tuple(si_in), Tuple(si_out),
+                    spintotal_in, spintotal_out
+                )
                 if isa(symbols_val, Number)
                     symbols_vec = fill(symbols_val, prod(subshape))
                 else
@@ -2688,8 +2762,10 @@ function operate(op::SeparableSphereOperator, out)::Nothing
         for si_out_tuple in spinindex_out(op, Tuple(si_in))
             # Get symbols
             spintotal_out = spintotal(basis, out.tensorsig, si_out_tuple)
-            symbols_val = local_symbols(op, layout, Tuple(si_in), si_out_tuple,
-                                        spintotal_in, spintotal_out)
+            symbols_val = local_symbols(
+                op, layout, Tuple(si_in), si_out_tuple,
+                spintotal_in, spintotal_out
+            )
             if slices !== nothing && !isa(symbols_val, Number)
                 symbols_val = symbols_val[slices...]
             end
@@ -2837,10 +2913,14 @@ function operate(op::PolarMOperator, out)::Nothing
             for (m, mg_slice, mc_slice, n_slice_val) in m_maps(basis, op.dist)
                 # Build slice tuple: all colons except axis-1 gets mc_slice,
                 # axis gets n_slice_val (1-based indexing)
-                slices_in = ntuple(i -> i == (axis - 1) ? mc_slice :
-                                        i == axis ? n_slice_val : Colon(), ndim)
-                slices_out = ntuple(i -> i == (axis - 1) ? mc_slice :
-                                         i == axis ? n_slice_val : Colon(), ndim)
+                slices_in = ntuple(
+                    i -> i == (axis - 1) ? mc_slice :
+                        i == axis ? n_slice_val : Colon(), ndim
+                )
+                slices_out = ntuple(
+                    i -> i == (axis - 1) ? mc_slice :
+                        i == axis ? n_slice_val : Colon(), ndim
+                )
                 vec_in = view(comp_in, slices_in...)
                 vec_out = view(comp_out, slices_out...)
                 if length(vec_in) > 0 && length(vec_out) > 0
@@ -2883,7 +2963,7 @@ function subproblem_matrix(op::PolarMOperator, subproblem)
             subshape_in = coeff_shape(subproblem, operand.domain)
             subshape_out = coeff_shape(subproblem, op.domain)
             if (Tuple(si_out) in spinindex_out(op, Tuple(si_in))) &&
-               prod(subshape_out) > 0 && prod(subshape_in) > 0
+                    prod(subshape_out) > 0 && prod(subshape_in) > 0
                 # Build per-axis identity factors
                 factors = [sparse(1.0I, subshape_out[i], subshape_in[i]) for i in eachindex(subshape_out)]
                 # Get the radial matrix for this m
@@ -2896,7 +2976,7 @@ function subproblem_matrix(op::PolarMOperator, subproblem)
                     end
                 end
                 factors[op.last_axis] = sparse(rad_matrix)
-                comp_matrix = reduce(kron, factors; init=sparse(ones(1, 1)))
+                comp_matrix = reduce(kron, factors; init = sparse(ones(1, 1)))
             else
                 # Build zero matrix
                 comp_matrix = spzeros(prod(subshape_out), prod(subshape_in))
@@ -2949,7 +3029,7 @@ mutable struct SphericalTrace <: AbstractLinearOperator
     scales::Any
 end
 
-function SphericalTrace(operand; out=nothing)
+function SphericalTrace(operand; out = nothing)
     if isa(operand, Number)
         return 0
     end
@@ -2958,10 +3038,12 @@ function SphericalTrace(operand; out=nothing)
     input_basis = get_basis(operand.domain, coordsys)
     radius_axis = get_axis(operand.dist, coordsys.coords[3])
     radial_basis = get_radial_basis(input_basis)
-    SphericalTrace(Any[operand], (operand,), out, operand.dist, operand.domain,
-                   new_tensorsig, operand.dtype, "Trace", operand, coordsys,
-                   input_basis, radius_axis, radial_basis,
-                   nothing, nothing, false, 1)
+    return SphericalTrace(
+        Any[operand], (operand,), out, operand.dist, operand.domain,
+        new_tensorsig, operand.dtype, "Trace", operand, coordsys,
+        input_basis, radius_axis, radial_basis,
+        nothing, nothing, false, 1
+    )
 end
 
 function check_conditions(op::SphericalTrace)
@@ -2971,7 +3053,7 @@ end
 
 function enforce_conditions(op::SphericalTrace)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_grid_space!(arg)
     end
 end
@@ -3017,8 +3099,8 @@ function subproblem_matrix(op::SphericalTrace, subproblem)
     else
         ell_list = [ell]
     end
-    Q_in = radial_recombinations(radial_basis, op.operand.tensorsig; ell_list=Tuple(ell_list))
-    Q_out = radial_recombinations(radial_basis, op.tensorsig; ell_list=Tuple(ell_list))
+    Q_in = radial_recombinations(radial_basis, op.operand.tensorsig; ell_list = Tuple(ell_list))
+    Q_out = radial_recombinations(radial_basis, op.tensorsig; ell_list = Tuple(ell_list))
     # Apply Q's and interleave
     trace_list = [sparse(Q_out[ell_val]') * trace_mat * sparse(Q_in[ell_val]) for ell_val in ell_list]
     # Block-diag for sin/cos parts for real dtype
@@ -3065,7 +3147,7 @@ mutable struct PolarTrace <: AbstractLinearOperator
     scales::Any
 end
 
-function PolarTrace(operand; out=nothing)
+function PolarTrace(operand; out = nothing)
     if isa(operand, Number)
         return 0
     end
@@ -3073,10 +3155,12 @@ function PolarTrace(operand; out=nothing)
     new_tensorsig = operand.tensorsig[3:end]
     input_basis = get_basis(operand.domain, coordsys)
     radius_axis = get_axis(operand.dist, coordsys.coords[2])
-    PolarTrace(Any[operand], (operand,), out, operand.dist, operand.domain,
-               new_tensorsig, operand.dtype, "Trace", operand, coordsys,
-               input_basis, radius_axis,
-               nothing, nothing, false, 1)
+    return PolarTrace(
+        Any[operand], (operand,), out, operand.dist, operand.domain,
+        new_tensorsig, operand.dtype, "Trace", operand, coordsys,
+        input_basis, radius_axis,
+        nothing, nothing, false, 1
+    )
 end
 
 function check_conditions(op::PolarTrace)
@@ -3086,7 +3170,7 @@ end
 
 function enforce_conditions(op::PolarTrace)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_grid_space!(arg)
     end
 end
@@ -3115,7 +3199,7 @@ function subproblem_matrix(op::PolarTrace, subproblem)
     trace_spin = zeros(4)
     trace_spin[[2, 3]] .= 1
     # Kronecker up identity for remaining tensor components
-    n_eye = prod(cs_dim(cs) for cs in op.tensorsig; init=1)
+    n_eye = prod(cs_dim(cs) for cs in op.tensorsig; init = 1)
     # Kronecker up identity for coeff size
     n_eye *= coeff_size(subproblem, op.domain)
     eye = sparse(1.0I, n_eye, n_eye)
@@ -3149,15 +3233,17 @@ mutable struct DirectProductTrace <: AbstractLinearOperator
     scales::Any
 end
 
-function DirectProductTrace(operand; out=nothing)
+function DirectProductTrace(operand; out = nothing)
     if isa(operand, Number)
         return 0
     end
     coordsys = operand.tensorsig[1]
     new_tensorsig = operand.tensorsig[3:end]
-    DirectProductTrace(Any[operand], (operand,), out, operand.dist, operand.domain,
-                       new_tensorsig, operand.dtype, "Trace", operand, coordsys,
-                       nothing, nothing, false, 1)
+    return DirectProductTrace(
+        Any[operand], (operand,), out, operand.dist, operand.domain,
+        new_tensorsig, operand.dtype, "Trace", operand, coordsys,
+        nothing, nothing, false, 1
+    )
 end
 
 function check_conditions(op::DirectProductTrace)
@@ -3167,7 +3253,7 @@ end
 
 function enforce_conditions(op::DirectProductTrace)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_grid_space!(arg)
     end
 end
@@ -3191,8 +3277,10 @@ end
 
 function subproblem_matrix(op::DirectProductTrace, subproblem)
     # Delegate to sub-system traces: extract diagonal block for each sub-coordsys
-    comps = [DirectProductComponent(DirectProductComponent(op.operand, 1, cs), 2, cs)
-             for cs in op.coordsys.coordsystems]
+    comps = [
+        DirectProductComponent(DirectProductComponent(op.operand, 1, cs), 2, cs)
+            for cs in op.coordsys.coordsystems
+    ]
     fulltrace = sum(trace_op(comp) for comp in comps)
     return expression_matrices(fulltrace, subproblem, [op.operand])[op.operand]
 end
@@ -3220,7 +3308,7 @@ mutable struct StandardTransposeComponents <: AbstractLinearOperator
     operand::Any
     coordsys::Any
     input_basis::Any
-    indices::Tuple{Int,Int}
+    indices::Tuple{Int, Int}
     new_axis_order::Tuple
     _transpose_matrix_cache::Any
     last_id::Any
@@ -3229,7 +3317,7 @@ mutable struct StandardTransposeComponents <: AbstractLinearOperator
     scales::Any
 end
 
-function StandardTransposeComponents(operand; indices=(1,2), out=nothing)
+function StandardTransposeComponents(operand; indices = (1, 2), out = nothing)
     if isa(operand, Number)
         return 0
     end
@@ -3241,11 +3329,13 @@ function StandardTransposeComponents(operand; indices=(1,2), out=nothing)
     total_dims = length(ts) + get_dim(operand.dist)
     new_order = collect(1:total_dims)
     new_order[i0], new_order[i1] = new_order[i1], new_order[i0]
-    StandardTransposeComponents(Any[operand], (operand,), out, operand.dist,
-                                operand.domain, ts, operand.dtype,
-                                "Trans", operand, coordsys, input_basis,
-                                indices, Tuple(new_order), nothing,
-                                nothing, nothing, false, 1)
+    return StandardTransposeComponents(
+        Any[operand], (operand,), out, operand.dist,
+        operand.domain, ts, operand.dtype,
+        "Trans", operand, coordsys, input_basis,
+        indices, Tuple(new_order), nothing,
+        nothing, nothing, false, 1
+    )
 end
 
 check_conditions(::StandardTransposeComponents) = true
@@ -3264,7 +3354,7 @@ function _get_transpose_matrix(op::StandardTransposeComponents)
     I2 = permutedims(I1, perm_order)
     i2 = vec(I2)
     # Build permutation matrix
-    P = perm_matrix(i2; source_index=true, use_sparse=true)
+    P = perm_matrix(i2; source_index = true, use_sparse = true)
     op._transpose_matrix_cache = P
     return P
 end
@@ -3279,7 +3369,7 @@ function operate(op::StandardTransposeComponents, out)::Nothing
 end
 
 function new_operand(op::StandardTransposeComponents, operand; kw...)
-    return StandardTransposeComponents(operand; indices=op.indices, kw...)
+    return StandardTransposeComponents(operand; indices = op.indices, kw...)
 end
 
 function subproblem_matrix(op::StandardTransposeComponents, subproblem)
@@ -3310,7 +3400,7 @@ mutable struct SphericalTransposeComponents <: AbstractLinearOperator
     operand::Any
     coordsys::Any
     input_basis::Any
-    indices::Tuple{Int,Int}
+    indices::Tuple{Int, Int}
     new_axis_order::Tuple
     radius_axis::Int
     radial_basis::Any
@@ -3321,7 +3411,7 @@ mutable struct SphericalTransposeComponents <: AbstractLinearOperator
     scales::Any
 end
 
-function SphericalTransposeComponents(operand; indices=(1,2), out=nothing)
+function SphericalTransposeComponents(operand; indices = (1, 2), out = nothing)
     if isa(operand, Number)
         return 0
     end
@@ -3334,12 +3424,14 @@ function SphericalTransposeComponents(operand; indices=(1,2), out=nothing)
     total_dims = length(ts) + get_dim(operand.dist)
     new_order = collect(1:total_dims)
     new_order[i0], new_order[i1] = new_order[i1], new_order[i0]
-    SphericalTransposeComponents(Any[operand], (operand,), out, operand.dist,
-                                  operand.domain, ts, operand.dtype,
-                                  "Trans", operand, coordsys, input_basis,
-                                  indices, Tuple(new_order),
-                                  radius_axis, radial_basis, nothing,
-                                  nothing, nothing, false, 1)
+    return SphericalTransposeComponents(
+        Any[operand], (operand,), out, operand.dist,
+        operand.domain, ts, operand.dtype,
+        "Trans", operand, coordsys, input_basis,
+        indices, Tuple(new_order),
+        radius_axis, radial_basis, nothing,
+        nothing, nothing, false, 1
+    )
 end
 
 check_conditions(::SphericalTransposeComponents) = true
@@ -3356,7 +3448,7 @@ function _get_transpose_matrix(op::SphericalTransposeComponents)
     perm_order = collect(op.new_axis_order[1:rank])
     I2 = permutedims(I1, perm_order)
     i2 = vec(I2)
-    P = perm_matrix(i2; source_index=true, use_sparse=true)
+    P = perm_matrix(i2; source_index = true, use_sparse = true)
     op._transpose_matrix_cache = P
     return P
 end
@@ -3377,16 +3469,16 @@ function operate(op::SphericalTransposeComponents, out)::Nothing
             out.data .= operand.data
             radial_basis = op.radial_basis
             ell_maps_val = ell_maps(op.input_basis, op.dist)
-            backward_regularity_recombination!(radial_basis, operand.tensorsig, radius_axis, out.data; ell_maps=ell_maps_val)
+            backward_regularity_recombination!(radial_basis, operand.tensorsig, radius_axis, out.data; ell_maps = ell_maps_val)
             out.data .= permutedims(out.data, collect(op.new_axis_order))
-            forward_regularity_recombination!(radial_basis, operand.tensorsig, radius_axis, out.data; ell_maps=ell_maps_val)
+            forward_regularity_recombination!(radial_basis, operand.tensorsig, radius_axis, out.data; ell_maps = ell_maps_val)
         end
     end
     return nothing
 end
 
 function new_operand(op::SphericalTransposeComponents, operand; kw...)
-    return SphericalTransposeComponents(operand; indices=op.indices, kw...)
+    return SphericalTransposeComponents(operand; indices = op.indices, kw...)
 end
 
 function subproblem_matrix(op::SphericalTransposeComponents, subproblem)
@@ -3408,8 +3500,8 @@ function subproblem_matrix(op::SphericalTransposeComponents, subproblem)
     else
         ell_list = [ell]
     end
-    Q_in = radial_recombinations(radial_basis, op.operand.tensorsig; ell_list=Tuple(ell_list))
-    Q_out = radial_recombinations(radial_basis, op.tensorsig; ell_list=Tuple(ell_list))
+    Q_in = radial_recombinations(radial_basis, op.operand.tensorsig; ell_list = Tuple(ell_list))
+    Q_out = radial_recombinations(radial_basis, op.tensorsig; ell_list = Tuple(ell_list))
     # Apply Q's and interleave
     transpose_list = [sparse(Q_out[ell_val]') * transpose_mat * sparse(Q_in[ell_val]) for ell_val in ell_list]
     # Block-diag for sin/cos parts for real dtype
@@ -3455,7 +3547,7 @@ mutable struct CartesianSkew <: AbstractLinearOperator
     scales::Any
 end
 
-function CartesianSkew(operand; index=1, out=nothing)
+function CartesianSkew(operand; index = 1, out = nothing)
     if isa(operand, Number) || operand == 0
         return 0
     end
@@ -3463,9 +3555,11 @@ function CartesianSkew(operand; index=1, out=nothing)
     if cs_dim(coordsys) != 2
         throw(ArgumentError("Skew only valid on 2D coordsystems."))
     end
-    CartesianSkew(Any[operand], (operand,), out, operand.dist, operand.domain,
-                  operand.tensorsig, operand.dtype, "Skew", operand, coordsys, index,
-                  nothing, nothing, false, 1)
+    return CartesianSkew(
+        Any[operand], (operand,), out, operand.dist, operand.domain,
+        operand.tensorsig, operand.dtype, "Skew", operand, coordsys, index,
+        nothing, nothing, false, 1
+    )
 end
 
 check_conditions(::CartesianSkew) = true
@@ -3484,7 +3578,7 @@ function operate(op::CartesianSkew, out)::Nothing
 end
 
 function new_operand(op::CartesianSkew, operand; kw...)
-    return CartesianSkew(operand; index=op.index, kw...)
+    return CartesianSkew(operand; index = op.index, kw...)
 end
 
 function subproblem_matrix(op::CartesianSkew, subproblem)
@@ -3494,7 +3588,7 @@ function subproblem_matrix(op::CartesianSkew, subproblem)
     # Substitute skew matrix at the indexed position
     skew_mat = sparse([0.0 -1.0; 1.0 0.0])
     factors[op.index] = skew_mat
-    return reduce(kron, factors; init=sparse(ones(1, 1)))
+    return reduce(kron, factors; init = sparse(ones(1, 1)))
 end
 
 # --------------------------------------------------------------------------
@@ -3526,7 +3620,7 @@ mutable struct SpinSkew <: AbstractLinearOperator
     scales::Any
 end
 
-function SpinSkew(operand; index=1, out=nothing)
+function SpinSkew(operand; index = 1, out = nothing)
     if isa(operand, Number) || operand == 0
         return 0
     end
@@ -3535,10 +3629,12 @@ function SpinSkew(operand; index=1, out=nothing)
         throw(ArgumentError("Skew only valid on 2D coordsystems."))
     end
     azimuth_axis = get_axis(operand.dist, coordsys.coords[1])
-    SpinSkew(Any[operand], (operand,), out, operand.dist, operand.domain,
-             operand.tensorsig, operand.dtype, "Skew", operand, coordsys, index,
-             azimuth_axis,
-             nothing, nothing, false, 1)
+    return SpinSkew(
+        Any[operand], (operand,), out, operand.dist, operand.domain,
+        operand.tensorsig, operand.dtype, "Skew", operand, coordsys, index,
+        azimuth_axis,
+        nothing, nothing, false, 1
+    )
 end
 
 check_conditions(::SpinSkew) = true
@@ -3585,7 +3681,7 @@ function operate(op::SpinSkew, out)::Nothing
 end
 
 function new_operand(op::SpinSkew, operand; kw...)
-    return SpinSkew(operand; index=op.index, kw...)
+    return SpinSkew(operand; index = op.index, kw...)
 end
 
 function subproblem_matrix(op::SpinSkew, subproblem)
@@ -3603,7 +3699,7 @@ function subproblem_matrix(op::SpinSkew, subproblem)
         mul_1j = sparse([0.0 -1.0; 1.0 0.0])
         factors[azimuth_index] = kron(id_m, mul_1j)
     end
-    return reduce(kron, factors; init=sparse(ones(1, 1)))
+    return reduce(kron, factors; init = sparse(ones(1, 1)))
 end
 
 # --------------------------------------------------------------------------
@@ -3638,32 +3734,32 @@ end
 Transpose the `indices` components of a tensor field, dispatching to the
 geometry-specific operator for the field's coordinate system.
 """
-function transpose_components(field; indices=(1,2))
+function transpose_components(field; indices = (1, 2))
     if isa(field, Number) || field == 0
         return 0
     end
     i0, i1 = indices
     cs = field.tensorsig[i0]
     if isa(cs, SphericalCoordinates)
-        return SphericalTransposeComponents(field; indices=indices)
+        return SphericalTransposeComponents(field; indices = indices)
     else
         # Standard transpose works for Cartesian, Polar, S2, DirectProduct
-        return StandardTransposeComponents(field; indices=indices)
+        return StandardTransposeComponents(field; indices = indices)
     end
 end
 
 """Skew dispatch: selects CartesianSkew or SpinSkew based on coordinate system."""
-function skew(field; index=1)
+function skew(field; index = 1)
     if isa(field, Number) || field == 0
         return 0
     end
     cs = field.tensorsig[index]
     if isa(cs, CartesianCoordinates) || isa(cs, Coordinate)
-        return CartesianSkew(field; index=index)
+        return CartesianSkew(field; index = index)
     elseif isa(cs, PolarCoordinates) || isa(cs, S2Coordinates)
-        return SpinSkew(field; index=index)
+        return SpinSkew(field; index = index)
     else
-        return CartesianSkew(field; index=index)  # fallback
+        return CartesianSkew(field; index = index)  # fallback
     end
 end
 
@@ -3702,7 +3798,7 @@ mutable struct RadialComponent <: AbstractLinearOperator
     scales::Any
 end
 
-function RadialComponent(operand; index=1, out=nothing)
+function RadialComponent(operand; index = 1, out = nothing)
     if isa(operand, Number)
         return 0
     end
@@ -3711,11 +3807,13 @@ function RadialComponent(operand; index=1, out=nothing)
     end
     coordsys = operand.tensorsig[index]
     input_basis = get_basis(operand.domain, coordsys)
-    new_tensorsig = (operand.tensorsig[1:index-1]..., operand.tensorsig[index+1:end]...)
-    RadialComponent(Any[operand], (operand,), out, operand.dist, operand.domain,
-                    new_tensorsig, operand.dtype, "Radial", operand, coordsys,
-                    input_basis, index,
-                    nothing, nothing, false, 1)
+    new_tensorsig = (operand.tensorsig[1:(index - 1)]..., operand.tensorsig[(index + 1):end]...)
+    return RadialComponent(
+        Any[operand], (operand,), out, operand.dist, operand.domain,
+        new_tensorsig, operand.dtype, "Radial", operand, coordsys,
+        input_basis, index,
+        nothing, nothing, false, 1
+    )
 end
 
 check_conditions(::RadialComponent) = true
@@ -3740,7 +3838,7 @@ function operate(op::RadialComponent, out)::Nothing
 end
 
 function new_operand(op::RadialComponent, operand; kw...)
-    return RadialComponent(operand; index=op.index, kw...)
+    return RadialComponent(operand; index = op.index, kw...)
 end
 
 function subproblem_matrix(op::RadialComponent, subproblem)
@@ -3758,7 +3856,7 @@ function subproblem_matrix(op::RadialComponent, subproblem)
         for (j, si_in) in enumerate(CartesianIndices(size(S_in)))
             si_in_tuple = Tuple(si_in)
             if si_in_tuple[op.index] == 3  # 0-spin (radial) is index 3 in 1-based
-                si_check = (si_in_tuple[1:op.index-1]..., si_in_tuple[op.index+1:end]...)
+                si_check = (si_in_tuple[1:(op.index - 1)]..., si_in_tuple[(op.index + 1):end]...)
                 for (i, si_out) in enumerate(CartesianIndices(size(S_out)))
                     if Tuple(si_out) == si_check
                         matrix[i, j] = 1
@@ -3789,11 +3887,11 @@ function subproblem_matrix(op::RadialComponent, subproblem)
         n_out = 2^output_dim
         matrix = zeros(Int, n_out, n_in)
         for input_idx in 0:(n_in - 1)
-            index_in = reverse(digits(input_idx, base=2, pad=input_dim))
+            index_in = reverse(digits(input_idx, base = 2, pad = input_dim))
             for output_idx in 0:(n_out - 1)
-                index_out = reverse(digits(output_idx, base=2, pad=output_dim))
+                index_out = reverse(digits(output_idx, base = 2, pad = output_dim))
                 # Check: removing op.index from index_in gives index_out, and the removed value is 1 (radial)
-                idx_removed = (index_in[1:op.index-1]..., index_in[op.index+1:end]...)
+                idx_removed = (index_in[1:(op.index - 1)]..., index_in[(op.index + 1):end]...)
                 if collect(idx_removed) == index_out && index_in[op.index] == 1
                     matrix[output_idx + 1, input_idx + 1] = 1
                 end
@@ -3835,7 +3933,7 @@ mutable struct AngularComponent <: AbstractLinearOperator
     scales::Any
 end
 
-function AngularComponent(operand; index=1, out=nothing)
+function AngularComponent(operand; index = 1, out = nothing)
     if isa(operand, Number)
         return 0
     end
@@ -3846,17 +3944,19 @@ function AngularComponent(operand; index=1, out=nothing)
     input_basis = get_basis(operand.domain, coordsys)
     # Determine output tensorsig
     if isa(coordsys, PolarCoordinates)
-        new_tensorsig = (operand.tensorsig[1:index-1]..., operand.tensorsig[index+1:end]...)
+        new_tensorsig = (operand.tensorsig[1:(index - 1)]..., operand.tensorsig[(index + 1):end]...)
     elseif isa(coordsys, SphericalCoordinates)
         S2coordsys = coordsys.S2coordsys
-        new_tensorsig = (operand.tensorsig[1:index-1]..., S2coordsys, operand.tensorsig[index+1:end]...)
+        new_tensorsig = (operand.tensorsig[1:(index - 1)]..., S2coordsys, operand.tensorsig[(index + 1):end]...)
     else
         error("AngularComponent not supported for coordinate system type $(typeof(coordsys))")
     end
-    AngularComponent(Any[operand], (operand,), out, operand.dist, operand.domain,
-                     new_tensorsig, operand.dtype, "Angular", operand, coordsys,
-                     input_basis, index,
-                     nothing, nothing, false, 1)
+    return AngularComponent(
+        Any[operand], (operand,), out, operand.dist, operand.domain,
+        new_tensorsig, operand.dtype, "Angular", operand, coordsys,
+        input_basis, index,
+        nothing, nothing, false, 1
+    )
 end
 
 check_conditions(::AngularComponent) = true
@@ -3880,7 +3980,7 @@ function operate(op::AngularComponent, out)::Nothing
 end
 
 function new_operand(op::AngularComponent, operand; kw...)
-    return AngularComponent(operand; index=op.index, kw...)
+    return AngularComponent(operand; index = op.index, kw...)
 end
 
 function subproblem_matrix(op::AngularComponent, subproblem)
@@ -3952,7 +4052,7 @@ mutable struct AzimuthalComponent <: AbstractLinearOperator
     scales::Any
 end
 
-function AzimuthalComponent(operand; index=1, out=nothing)
+function AzimuthalComponent(operand; index = 1, out = nothing)
     if isa(operand, Number)
         return 0
     end
@@ -3964,11 +4064,13 @@ function AzimuthalComponent(operand; index=1, out=nothing)
         error("Can only take the AzimuthalComponent of a PolarCoordinate vector")
     end
     input_basis = get_basis(operand.domain, coordsys)
-    new_tensorsig = (operand.tensorsig[1:index-1]..., operand.tensorsig[index+1:end]...)
-    AzimuthalComponent(Any[operand], (operand,), out, operand.dist, operand.domain,
-                       new_tensorsig, operand.dtype, "Azimuthal", operand, coordsys,
-                       input_basis, index,
-                       nothing, nothing, false, 1)
+    new_tensorsig = (operand.tensorsig[1:(index - 1)]..., operand.tensorsig[(index + 1):end]...)
+    return AzimuthalComponent(
+        Any[operand], (operand,), out, operand.dist, operand.domain,
+        new_tensorsig, operand.dtype, "Azimuthal", operand, coordsys,
+        input_basis, index,
+        nothing, nothing, false, 1
+    )
 end
 
 check_conditions(::AzimuthalComponent) = true
@@ -3986,7 +4088,7 @@ function operate(op::AzimuthalComponent, out)::Nothing
 end
 
 function new_operand(op::AzimuthalComponent, operand; kw...)
-    return AzimuthalComponent(operand; index=op.index, kw...)
+    return AzimuthalComponent(operand; index = op.index, kw...)
 end
 
 function subproblem_matrix(op::AzimuthalComponent, subproblem)
@@ -3997,11 +4099,11 @@ function subproblem_matrix(op::AzimuthalComponent, subproblem)
     n_out = 2^output_dim
     matrix = zeros(Int, n_out, n_in)
     for input_idx in 0:(n_in - 1)
-        index_in = reverse(digits(input_idx, base=2, pad=input_dim))
+        index_in = reverse(digits(input_idx, base = 2, pad = input_dim))
         for output_idx in 0:(n_out - 1)
-            index_out = reverse(digits(output_idx, base=2, pad=output_dim))
+            index_out = reverse(digits(output_idx, base = 2, pad = output_dim))
             # Check: removing op.index from index_in gives index_out, and the removed value is 0 (azimuthal)
-            idx_removed = (index_in[1:op.index-1]..., index_in[op.index+1:end]...)
+            idx_removed = (index_in[1:(op.index - 1)]..., index_in[(op.index + 1):end]...)
             if collect(idx_removed) == index_out && index_in[op.index] == 0
                 matrix[output_idx + 1, input_idx + 1] = 1
             end
@@ -4019,13 +4121,13 @@ end
 # --------------------------------------------------------------------------
 
 """Extract the radial component from a vector/tensor field."""
-radial_component(field; index=1) = RadialComponent(field; index=index)
+radial_component(field; index = 1) = RadialComponent(field; index = index)
 
 """Extract the angular (meridional) component from a vector/tensor field."""
-angular_component(field; index=1) = AngularComponent(field; index=index)
+angular_component(field; index = 1) = AngularComponent(field; index = index)
 
 """Extract the azimuthal component from a polar vector/tensor field."""
-azimuthal_component(field; index=1) = AzimuthalComponent(field; index=index)
+azimuthal_component(field; index = 1) = AzimuthalComponent(field; index = index)
 
 register_operator_alias!("radial", radial_component)
 register_operator_alias!("angular", angular_component)
@@ -4063,14 +4165,14 @@ mutable struct MulCosine <: PolarMOperator
     radius_axis::Any
     subaxis_dependence::Vector{Bool}
     subaxis_coupling::Vector{Bool}
-    _radial_matrix_cache::Dict{Any,Any}
+    _radial_matrix_cache::Dict{Any, Any}
     last_id::Any
     last_out::Any
     store_last::Bool
     scales::Any
 end
 
-function MulCosine(operand, coordsys=nothing; out=nothing)
+function MulCosine(operand, coordsys = nothing; out = nothing)
     if isa(operand, Number) || operand == 0
         return 0
     end
@@ -4081,11 +4183,13 @@ function MulCosine(operand, coordsys=nothing; out=nothing)
         end
     end
     dist = operand.dist
-    op = MulCosine(Any[operand], (operand,), out, dist, operand.domain,
-                   operand.tensorsig, operand.dtype, "MulCos", operand,
-                   nothing, nothing, nothing, nothing, nothing, nothing,
-                   [true, true], [false, true], Dict{Any,Any}(),
-                   nothing, nothing, false, 1)
+    op = MulCosine(
+        Any[operand], (operand,), out, dist, operand.domain,
+        operand.tensorsig, operand.dtype, "MulCos", operand,
+        nothing, nothing, nothing, nothing, nothing, nothing,
+        [true, true], [false, true], Dict{Any, Any}(),
+        nothing, nothing, false, 1
+    )
     init_polar_m_operator!(op, operand, coordsys)
     op.domain = operand.domain
     op.tensorsig = operand.tensorsig
@@ -4115,7 +4219,7 @@ end
 
 function enforce_conditions(op::MulCosine)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_coeff_space!(arg, op.radius_axis)
         require_local!(arg, op.radius_axis)
     end
@@ -4178,23 +4282,25 @@ mutable struct PolarGradient <: PolarMOperator
     radius_axis::Any
     subaxis_dependence::Vector{Bool}
     subaxis_coupling::Vector{Bool}
-    _radial_matrix_cache::Dict{Any,Any}
+    _radial_matrix_cache::Dict{Any, Any}
     last_id::Any
     last_out::Any
     store_last::Bool
     scales::Any
 end
 
-function PolarGradient(operand, coordsys; out=nothing)
+function PolarGradient(operand, coordsys; out = nothing)
     if isa(operand, Number)
         return 0
     end
     dist = operand.dist
-    op = PolarGradient(Any[operand], (operand,), out, dist, operand.domain,
-                       (coordsys, operand.tensorsig...), operand.dtype, "Grad", operand,
-                       nothing, nothing, nothing, nothing, nothing, nothing,
-                       [true, true], [false, true], Dict{Any,Any}(),
-                       nothing, nothing, false, 1)
+    op = PolarGradient(
+        Any[operand], (operand,), out, dist, operand.domain,
+        (coordsys, operand.tensorsig...), operand.dtype, "Grad", operand,
+        nothing, nothing, nothing, nothing, nothing, nothing,
+        [true, true], [false, true], Dict{Any, Any}(),
+        nothing, nothing, false, 1
+    )
     init_polar_m_operator!(op, operand, coordsys)
     # Update domain and tensorsig after init
     op.domain = substitute_basis(operand.domain, op.input_basis, op.output_basis)
@@ -4216,7 +4322,7 @@ end
 
 function enforce_conditions(op::PolarGradient)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_coeff_space!(arg, op.radius_axis)
         require_local!(arg, op.radius_axis)
     end
@@ -4291,14 +4397,14 @@ mutable struct PolarDivergence <: PolarMOperator
     index::Int
     subaxis_dependence::Vector{Bool}
     subaxis_coupling::Vector{Bool}
-    _radial_matrix_cache::Dict{Any,Any}
+    _radial_matrix_cache::Dict{Any, Any}
     last_id::Any
     last_out::Any
     store_last::Bool
     scales::Any
 end
 
-function PolarDivergence(operand; index=1, out=nothing)
+function PolarDivergence(operand; index = 1, out = nothing)
     if isa(operand, Number) || operand == 0
         return 0
     end
@@ -4307,13 +4413,15 @@ function PolarDivergence(operand; index=1, out=nothing)
     end
     coordsys = operand.tensorsig[index]
     dist = operand.dist
-    new_tensorsig = (operand.tensorsig[1:index-1]..., operand.tensorsig[index+1:end]...)
-    op = PolarDivergence(Any[operand], (operand,), out, dist, operand.domain,
-                         new_tensorsig, operand.dtype, "Div", operand,
-                         nothing, nothing, nothing, nothing, nothing, nothing,
-                         index,
-                         [true, true], [false, true], Dict{Any,Any}(),
-                         nothing, nothing, false, 1)
+    new_tensorsig = (operand.tensorsig[1:(index - 1)]..., operand.tensorsig[(index + 1):end]...)
+    op = PolarDivergence(
+        Any[operand], (operand,), out, dist, operand.domain,
+        new_tensorsig, operand.dtype, "Div", operand,
+        nothing, nothing, nothing, nothing, nothing, nothing,
+        index,
+        [true, true], [false, true], Dict{Any, Any}(),
+        nothing, nothing, false, 1
+    )
     init_polar_m_operator!(op, operand, coordsys)
     op.domain = substitute_basis(operand.domain, op.input_basis, op.output_basis)
     op.tensorsig = new_tensorsig
@@ -4334,7 +4442,7 @@ end
 
 function enforce_conditions(op::PolarDivergence)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_coeff_space!(arg, op.radius_axis)
         require_local!(arg, op.radius_axis)
     end
@@ -4351,7 +4459,7 @@ function spinindex_out(op::PolarDivergence, spinindex_in)
 end
 
 function new_operand(op::PolarDivergence, operand; kw...)
-    return PolarDivergence(operand; index=op.index, kw...)
+    return PolarDivergence(operand; index = op.index, kw...)
 end
 
 function radial_matrix(op::PolarDivergence, spinindex_in, spinindex_out_val, m)
@@ -4412,23 +4520,25 @@ mutable struct PolarLaplacian <: PolarMOperator
     radius_axis::Any
     subaxis_dependence::Vector{Bool}
     subaxis_coupling::Vector{Bool}
-    _radial_matrix_cache::Dict{Any,Any}
+    _radial_matrix_cache::Dict{Any, Any}
     last_id::Any
     last_out::Any
     store_last::Bool
     scales::Any
 end
 
-function PolarLaplacian(operand, coordsys; out=nothing)
+function PolarLaplacian(operand, coordsys; out = nothing)
     if isa(operand, Number) || operand == 0
         return 0
     end
     dist = operand.dist
-    op = PolarLaplacian(Any[operand], (operand,), out, dist, operand.domain,
-                        operand.tensorsig, operand.dtype, "Lap", operand,
-                        nothing, nothing, nothing, nothing, nothing, nothing,
-                        [true, true], [false, true], Dict{Any,Any}(),
-                        nothing, nothing, false, 1)
+    op = PolarLaplacian(
+        Any[operand], (operand,), out, dist, operand.domain,
+        operand.tensorsig, operand.dtype, "Lap", operand,
+        nothing, nothing, nothing, nothing, nothing, nothing,
+        [true, true], [false, true], Dict{Any, Any}(),
+        nothing, nothing, false, 1
+    )
     init_polar_m_operator!(op, operand, coordsys)
     op.domain = substitute_basis(operand.domain, op.input_basis, op.output_basis)
     op.tensorsig = operand.tensorsig
@@ -4449,7 +4559,7 @@ end
 
 function enforce_conditions(op::PolarLaplacian)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_coeff_space!(arg, op.radius_axis)
         require_local!(arg, op.radius_axis)
     end
@@ -4494,23 +4604,23 @@ gradient(field, cs::SphericalCoordinates) = SphericalGradient(field, cs)
 Divergence of a tensor field contracted over component `index`, dispatching to
 the geometry-specific divergence operator for the field's coordinate system.
 """
-function divergence(field; index=1)
+function divergence(field; index = 1)
     if isa(field, Number) || field == 0
         return 0
     end
     cs = field.tensorsig[index]
     if isa(cs, SphericalCoordinates)
-        return SphericalDivergence(field; index=index)
+        return SphericalDivergence(field; index = index)
     elseif isa(cs, S2Coordinates)
-        return SphereDivergence(field; index=index)
+        return SphereDivergence(field; index = index)
     elseif isa(cs, PolarCoordinates)
-        return PolarDivergence(field; index=index)
+        return PolarDivergence(field; index = index)
     elseif isa(cs, CartesianCoordinates) || isa(cs, Coordinate)
-        return CartesianDivergence(field; index=index)
+        return CartesianDivergence(field; index = index)
     elseif isa(cs, DirectProduct)
-        return DirectProductDivergence(field; index=index)
+        return DirectProductDivergence(field; index = index)
     else
-        return CartesianDivergence(field; index=index)  # fallback
+        return CartesianDivergence(field; index = index)  # fallback
     end
 end
 
@@ -4576,7 +4686,7 @@ mutable struct SphereEllProduct <: SeparableSphereOperator
     scales::Any
 end
 
-function SphereEllProduct(operand, coordsys, ell_r_func; out=nothing)
+function SphereEllProduct(operand, coordsys, ell_r_func; out = nothing)
     if isa(operand, Number) || operand == 0
         return 0
     end
@@ -4585,16 +4695,20 @@ function SphereEllProduct(operand, coordsys, ell_r_func; out=nothing)
     output_basis = input_basis
     fa = first_axis(dist, input_basis)
     la = last_axis(dist, input_basis)
-    SphereEllProduct(Any[operand], (operand,), out, dist, operand.domain,
-                     operand.tensorsig, operand.dtype, "SphereEllProduct", operand,
-                     coordsys, input_basis, output_basis, fa, la,
-                     ell_r_func, false,
-                     [false, true], [false, false],
-                     nothing, nothing, false, 1)
+    return SphereEllProduct(
+        Any[operand], (operand,), out, dist, operand.domain,
+        operand.tensorsig, operand.dtype, "SphereEllProduct", operand,
+        coordsys, input_basis, output_basis, fa, la,
+        ell_r_func, false,
+        [false, true], [false, false],
+        nothing, nothing, false, 1
+    )
 end
 
-function symbol(op::SphereEllProduct, spinindex_in, spinindex_out_val,
-                spintotal_in, spintotal_out, local_ell, radius)
+function symbol(
+        op::SphereEllProduct, spinindex_in, spinindex_out_val,
+        spintotal_in, spintotal_out, local_ell, radius
+    )
     return op.ell_r_func(local_ell, radius)
 end
 
@@ -4618,7 +4732,7 @@ end
 
 function enforce_conditions(op::SphereEllProduct)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         colat_axis = op.first_axis + 1
         require_coeff_space!(arg, colat_axis)
     end
@@ -4679,7 +4793,7 @@ mutable struct SphereGradient <: SeparableSphereOperator
     scales::Any
 end
 
-function SphereGradient(operand, coordsys; out=nothing)
+function SphereGradient(operand, coordsys; out = nothing)
     if isa(operand, Number) || operand == 0
         return 0
     end
@@ -4689,12 +4803,14 @@ function SphereGradient(operand, coordsys; out=nothing)
     fa = first_axis(dist, input_basis)
     la = last_axis(dist, input_basis)
     new_tensorsig = (coordsys, operand.tensorsig...)
-    SphereGradient(Any[operand], (operand,), out, dist, operand.domain,
-                   new_tensorsig, operand.dtype, "Grad", operand,
-                   coordsys, input_basis, output_basis, fa, la,
-                   false,
-                   [false, true], [false, false],
-                   nothing, nothing, false, 1)
+    return SphereGradient(
+        Any[operand], (operand,), out, dist, operand.domain,
+        new_tensorsig, operand.dtype, "Grad", operand,
+        coordsys, input_basis, output_basis, fa, la,
+        false,
+        [false, true], [false, false],
+        nothing, nothing, false, 1
+    )
 end
 
 function spinindex_out(op::SphereGradient, spinindex_in)
@@ -4702,8 +4818,10 @@ function spinindex_out(op::SphereGradient, spinindex_in)
     return ((1, spinindex_in...), (2, spinindex_in...))
 end
 
-function symbol(op::SphereGradient, spinindex_in, spinindex_out_val,
-                spintotal_in, spintotal_out, local_ell, radius)
+function symbol(
+        op::SphereGradient, spinindex_in, spinindex_out_val,
+        spintotal_in, spintotal_out, local_ell, radius
+    )
     mu = spintotal_out - spintotal_in
     k_val = sphere_basis_k.(local_ell, spintotal_in, mu)
     # Zero out entries where |spintotal_in| > ell or |spintotal_out| > ell
@@ -4727,7 +4845,7 @@ end
 
 function enforce_conditions(op::SphereGradient)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         colat_axis = op.first_axis + 1
         require_coeff_space!(arg, colat_axis)
     end
@@ -4770,7 +4888,7 @@ mutable struct SphereDivergence <: SeparableSphereOperator
     scales::Any
 end
 
-function SphereDivergence(operand; index=1, out=nothing)
+function SphereDivergence(operand; index = 1, out = nothing)
     if isa(operand, Number) || operand == 0
         return 0
     end
@@ -4783,13 +4901,15 @@ function SphereDivergence(operand; index=1, out=nothing)
     output_basis = input_basis  # Divergence stays on the same basis
     fa = first_axis(dist, input_basis)
     la = last_axis(dist, input_basis)
-    new_tensorsig = (operand.tensorsig[1:index-1]..., operand.tensorsig[index+1:end]...)
-    SphereDivergence(Any[operand], (operand,), out, dist, operand.domain,
-                     new_tensorsig, operand.dtype, "Div", operand,
-                     coordsys, input_basis, output_basis, fa, la,
-                     index, false,
-                     [false, true], [false, false],
-                     nothing, nothing, false, 1)
+    new_tensorsig = (operand.tensorsig[1:(index - 1)]..., operand.tensorsig[(index + 1):end]...)
+    return SphereDivergence(
+        Any[operand], (operand,), out, dist, operand.domain,
+        new_tensorsig, operand.dtype, "Div", operand,
+        coordsys, input_basis, output_basis, fa, la,
+        index, false,
+        [false, true], [false, false],
+        nothing, nothing, false, 1
+    )
 end
 
 function spinindex_out(op::SphereDivergence, spinindex_in)
@@ -4801,8 +4921,10 @@ function spinindex_out(op::SphereDivergence, spinindex_in)
     end
 end
 
-function symbol(op::SphereDivergence, spinindex_in, spinindex_out_val,
-                spintotal_in, spintotal_out, local_ell, radius)
+function symbol(
+        op::SphereDivergence, spinindex_in, spinindex_out_val,
+        spintotal_in, spintotal_out, local_ell, radius
+    )
     # Divergence symbol is the same as gradient symbol (duality)
     mu = spintotal_out - spintotal_in
     k_val = sphere_basis_k.(local_ell, spintotal_in, mu)
@@ -4812,7 +4934,7 @@ function symbol(op::SphereDivergence, spinindex_in, spinindex_out_val,
 end
 
 function new_operand(op::SphereDivergence, operand; kw...)
-    return SphereDivergence(operand; index=op.index, kw...)
+    return SphereDivergence(operand; index = op.index, kw...)
 end
 
 function check_conditions(op::SphereDivergence)
@@ -4826,7 +4948,7 @@ end
 
 function enforce_conditions(op::SphereDivergence)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         colat_axis = op.first_axis + 1
         require_coeff_space!(arg, colat_axis)
     end
@@ -4868,7 +4990,7 @@ mutable struct SphereLaplacian <: SeparableSphereOperator
     scales::Any
 end
 
-function SphereLaplacian(operand, coordsys; out=nothing)
+function SphereLaplacian(operand, coordsys; out = nothing)
     if isa(operand, Number) || operand == 0
         return 0
     end
@@ -4877,12 +4999,14 @@ function SphereLaplacian(operand, coordsys; out=nothing)
     output_basis = input_basis  # Laplacian stays on the same basis
     fa = first_axis(dist, input_basis)
     la = last_axis(dist, input_basis)
-    SphereLaplacian(Any[operand], (operand,), out, dist, operand.domain,
-                    operand.tensorsig, operand.dtype, "Lap", operand,
-                    coordsys, input_basis, output_basis, fa, la,
-                    false,
-                    [false, true], [false, false],
-                    nothing, nothing, false, 1)
+    return SphereLaplacian(
+        Any[operand], (operand,), out, dist, operand.domain,
+        operand.tensorsig, operand.dtype, "Lap", operand,
+        coordsys, input_basis, output_basis, fa, la,
+        false,
+        [false, true], [false, false],
+        nothing, nothing, false, 1
+    )
 end
 
 function spinindex_out(op::SphereLaplacian, spinindex_in)
@@ -4890,8 +5014,10 @@ function spinindex_out(op::SphereLaplacian, spinindex_in)
     return (spinindex_in,)
 end
 
-function symbol(op::SphereLaplacian, spinindex_in, spinindex_out_val,
-                spintotal_in, spintotal_out, local_ell, radius)
+function symbol(
+        op::SphereLaplacian, spinindex_in, spinindex_out_val,
+        spintotal_in, spintotal_out, local_ell, radius
+    )
     # Laplacian = composition of eth-bar and eth:
     # k_lap = k(ell, s-1, +1) * k(ell, s, -1) + k(ell, s+1, -1) * k(ell, s, +1)
     kp = sphere_basis_k.(local_ell, spintotal_in, +1)   # spin-raise
@@ -4920,7 +5046,7 @@ end
 
 function enforce_conditions(op::SphereLaplacian)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         colat_axis = op.first_axis + 1
         require_coeff_space!(arg, colat_axis)
     end
@@ -5030,9 +5156,11 @@ function operate(op::SphericalEllOperator, out)::Nothing
                 if allowed_in && allowed_out
                     n_sl = n_slice(radial_basis, ell)
                     # Build slice tuple: axis-2 gets m_ind, axis-1 gets ell_ind, axis gets n_slice
-                    slices = ntuple(i -> i == (axis - 2) ? m_ind :
-                                        i == (axis - 1) ? ell_ind :
-                                        i == axis ? n_sl : Colon(), ndim)
+                    slices = ntuple(
+                        i -> i == (axis - 2) ? m_ind :
+                            i == (axis - 1) ? ell_ind :
+                            i == axis ? n_sl : Colon(), ndim
+                    )
                     vec_in = view(comp_in, slices...)
                     vec_out = view(comp_out, slices...)
                     if length(vec_in) > 0 && length(vec_out) > 0
@@ -5087,14 +5215,14 @@ function subproblem_matrix(op::SphericalEllOperator, subproblem)
             if ell_val === nothing
                 matrix = _coupled_ell_matrices(op, regindex_in, regindex_out_val, m_val)
             else
-                matrix = _wrap_radial_matrix(op, regindex_in, regindex_out_val, ell_val; return_zeros=false)
+                matrix = _wrap_radial_matrix(op, regindex_in, regindex_out_val, ell_val; return_zeros = false)
             end
             if matrix === nothing
                 block = zero_block
             else
                 factors = copy(factors_template)
                 factors[op.last_axis] = matrix
-                block = reduce(kron, factors; init=sparse(ones(1, 1)))
+                block = reduce(kron, factors; init = sparse(ones(1, 1)))
             end
             push!(block_row, block)
         end
@@ -5123,7 +5251,7 @@ function _coupled_ell_matrices(op::SphericalEllOperator, regindex_in, regindex_o
     if haskey(ell_rev, m_val) && ell_rev[m_val]
         reverse!(ell_list)
     end
-    ell_matrices = [_wrap_radial_matrix(op, regindex_in, regindex_out_val, ell; return_zeros=true) for ell in ell_list]
+    ell_matrices = [_wrap_radial_matrix(op, regindex_in, regindex_out_val, ell; return_zeros = true) for ell in ell_list]
     return sparse_block_diag(ell_matrices)
 end
 
@@ -5133,11 +5261,11 @@ end
 Get the radial matrix for a given (regindex_in, regindex_out, ell) triple,
 or return a zero matrix if the regularity is not allowed.
 """
-function _wrap_radial_matrix(op::SphericalEllOperator, regindex_in, regindex_out_val, ell; return_zeros=false)
+function _wrap_radial_matrix(op::SphericalEllOperator, regindex_in, regindex_out_val, ell; return_zeros = false)
     radial_basis = _spherical_ell_get_radial_basis(op)
     if (regindex_out_val in regindex_out(op, regindex_in)) &&
-       regularity_allowed(radial_basis, ell, regindex_in) &&
-       regularity_allowed(radial_basis, ell, regindex_out_val)
+            regularity_allowed(radial_basis, ell, regindex_in) &&
+            regularity_allowed(radial_basis, ell, regindex_out_val)
         return radial_matrix(op, regindex_in, regindex_out_val, ell)
     elseif return_zeros
         if basis_dim(op.input_basis) == 2
@@ -5190,10 +5318,10 @@ mutable struct SphericalGradient <: SphericalEllOperator
     last_out::Any
     store_last::Bool
     scales::Any
-    _radial_matrix_cache::Dict{Any,Any}
+    _radial_matrix_cache::Dict{Any, Any}
 end
 
-function SphericalGradient(operand, coordsys; out=nothing)
+function SphericalGradient(operand, coordsys; out = nothing)
     if isa(operand, Number) || operand == 0
         return 0
     end
@@ -5202,17 +5330,19 @@ function SphericalGradient(operand, coordsys; out=nothing)
     if input_basis === nothing
         input_basis = get_basis(operand.domain, coordsys.radius)
     end
-    output_basis = derivative_basis(input_basis; order=1)
+    output_basis = derivative_basis(input_basis; order = 1)
     fa = first_axis(dist, input_basis)
     la = last_axis(dist, input_basis)
     ra = get_axis(dist, coordsys) + 2  # radius is 3rd coordinate (1-based + 2)
     new_domain = substitute_basis(operand.domain, input_basis, output_basis)
     new_tensorsig = (coordsys, operand.tensorsig...)
-    SphericalGradient(Any[operand], (operand,), out, dist, new_domain,
-                      new_tensorsig, operand.dtype, "Grad", operand,
-                      coordsys, input_basis, output_basis, fa, la, ra,
-                      [false, true, true], [false, false, true],
-                      nothing, nothing, false, 1, Dict{Any,Any}())
+    return SphericalGradient(
+        Any[operand], (operand,), out, dist, new_domain,
+        new_tensorsig, operand.dtype, "Grad", operand,
+        coordsys, input_basis, output_basis, fa, la, ra,
+        [false, true, true], [false, false, true],
+        nothing, nothing, false, 1, Dict{Any, Any}()
+    )
 end
 
 function regindex_out(op::SphericalGradient, regindex_in)
@@ -5243,7 +5373,7 @@ function _spherical_gradient_radial_matrix(radial_basis, regindex_out0, regtotal
     # Python: regindex_out0 == 0 -> Julia: regindex_out0 == 1 (minus component)
     if regindex_out0 == 1
         return xi(radial_basis, -1, ell + regtotal_val) * operator_matrix(radial_basis, "D-", ell, regtotal_val)
-    # Python: regindex_out0 == 1 -> Julia: regindex_out0 == 2 (plus component)
+        # Python: regindex_out0 == 1 -> Julia: regindex_out0 == 2 (plus component)
     elseif regindex_out0 == 2
         return xi(radial_basis, +1, ell + regtotal_val) * operator_matrix(radial_basis, "D+", ell, regtotal_val)
     else
@@ -5261,7 +5391,7 @@ end
 
 function enforce_conditions(op::SphericalGradient)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_coeff_space!(arg, op.radius_axis)
         require_local!(arg, op.radius_axis)
     end
@@ -5306,10 +5436,10 @@ mutable struct SphericalDivergence <: SphericalEllOperator
     last_out::Any
     store_last::Bool
     scales::Any
-    _radial_matrix_cache::Dict{Any,Any}
+    _radial_matrix_cache::Dict{Any, Any}
 end
 
-function SphericalDivergence(operand; index=1, out=nothing)
+function SphericalDivergence(operand; index = 1, out = nothing)
     if isa(operand, Number) || operand == 0
         return 0
     end
@@ -5322,18 +5452,20 @@ function SphericalDivergence(operand; index=1, out=nothing)
     if input_basis === nothing
         input_basis = get_basis(operand.domain, coordsys.radius)
     end
-    output_basis = derivative_basis(input_basis; order=1)
+    output_basis = derivative_basis(input_basis; order = 1)
     fa = first_axis(dist, input_basis)
     la = last_axis(dist, input_basis)
     ra = get_axis(dist, coordsys) + 2
     new_domain = substitute_basis(operand.domain, input_basis, output_basis)
-    new_tensorsig = (operand.tensorsig[1:index-1]..., operand.tensorsig[index+1:end]...)
-    SphericalDivergence(Any[operand], (operand,), out, dist, new_domain,
-                        new_tensorsig, operand.dtype, "Div", operand,
-                        coordsys, input_basis, output_basis, fa, la, ra,
-                        index,
-                        [false, true, true], [false, false, true],
-                        nothing, nothing, false, 1, Dict{Any,Any}())
+    new_tensorsig = (operand.tensorsig[1:(index - 1)]..., operand.tensorsig[(index + 1):end]...)
+    return SphericalDivergence(
+        Any[operand], (operand,), out, dist, new_domain,
+        new_tensorsig, operand.dtype, "Div", operand,
+        coordsys, input_basis, output_basis, fa, la, ra,
+        index,
+        [false, true, true], [false, false, true],
+        nothing, nothing, false, 1, Dict{Any, Any}()
+    )
 end
 
 function regindex_out(op::SphericalDivergence, regindex_in)
@@ -5368,7 +5500,7 @@ function _spherical_divergence_radial_matrix(radial_basis, regindex_in0, regtota
     # Python: regindex_in0 == 0 -> Julia: regindex_in0 == 1 (minus component)
     if regindex_in0 == 1
         return xi(radial_basis, -1, ell + regtotal_val + 1) * operator_matrix(radial_basis, "D+", ell, regtotal_val)
-    # Python: regindex_in0 == 1 -> Julia: regindex_in0 == 2 (plus component)
+        # Python: regindex_in0 == 1 -> Julia: regindex_in0 == 2 (plus component)
     elseif regindex_in0 == 2
         return xi(radial_basis, +1, ell + regtotal_val - 1) * operator_matrix(radial_basis, "D-", ell, regtotal_val)
     else
@@ -5386,14 +5518,14 @@ end
 
 function enforce_conditions(op::SphericalDivergence)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_coeff_space!(arg, op.radius_axis)
         require_local!(arg, op.radius_axis)
     end
 end
 
 function new_operand(op::SphericalDivergence, operand; kw...)
-    return SphericalDivergence(operand; index=op.index, kw...)
+    return SphericalDivergence(operand; index = op.index, kw...)
 end
 
 # --------------------------------------------------------------------------
@@ -5435,10 +5567,10 @@ mutable struct SphericalCurl <: SphericalEllOperator
     last_out::Any
     store_last::Bool
     scales::Any
-    _radial_matrix_cache::Dict{Any,Any}
+    _radial_matrix_cache::Dict{Any, Any}
 end
 
-function SphericalCurl(operand; index=1, out=nothing)
+function SphericalCurl(operand; index = 1, out = nothing)
     if isa(operand, Number) || operand == 0
         return 0
     end
@@ -5451,19 +5583,21 @@ function SphericalCurl(operand; index=1, out=nothing)
     if input_basis === nothing
         input_basis = get_basis(operand.domain, coordsys.radius)
     end
-    output_basis = derivative_basis(input_basis; order=1)
+    output_basis = derivative_basis(input_basis; order = 1)
     fa = first_axis(dist, input_basis)
     la = last_axis(dist, input_basis)
     ra = get_axis(dist, coordsys) + 2
     new_domain = substitute_basis(operand.domain, input_basis, output_basis)
     # Curl: contracts index `index` and prepends coordsys
-    new_tensorsig = (coordsys, operand.tensorsig[1:index-1]..., operand.tensorsig[index+1:end]...)
-    SphericalCurl(Any[operand], (operand,), out, dist, new_domain,
-                  new_tensorsig, operand.dtype, "Curl", operand,
-                  coordsys, input_basis, output_basis, fa, la, ra,
-                  index,
-                  [false, true, true], [false, false, true],
-                  nothing, nothing, false, 1, Dict{Any,Any}())
+    new_tensorsig = (coordsys, operand.tensorsig[1:(index - 1)]..., operand.tensorsig[(index + 1):end]...)
+    return SphericalCurl(
+        Any[operand], (operand,), out, dist, new_domain,
+        new_tensorsig, operand.dtype, "Curl", operand,
+        coordsys, input_basis, output_basis, fa, la, ra,
+        index,
+        [false, true, true], [false, false, true],
+        nothing, nothing, false, 1, Dict{Any, Any}()
+    )
 end
 
 function regindex_out(op::SphericalCurl, regindex_in)
@@ -5471,7 +5605,7 @@ function regindex_out(op::SphericalCurl, regindex_in)
     # - (1) and + (2) map to 0 (3)
     if regindex_in[1] in (1, 2)
         return ((3, regindex_in[2:end]...),)
-    # 0 (3) maps to - (1) and + (2)
+        # 0 (3) maps to - (1) and + (2)
     else
         return ((1, regindex_in[2:end]...), (2, regindex_in[2:end]...))
     end
@@ -5487,8 +5621,10 @@ function radial_matrix(op::SphericalCurl, regindex_in, regindex_out_val, ell)
     regtotal_in = regtotal(regindex_in)
     regtotal_out = regtotal(regindex_out_val)
     if regindex_in[2:end] == regindex_out_val[2:end]
-        result = _spherical_curl_radial_matrix(radial_basis, regindex_in[1], regindex_out_val[1],
-                                                regtotal_in, regtotal_out, ell)
+        result = _spherical_curl_radial_matrix(
+            radial_basis, regindex_in[1], regindex_out_val[1],
+            regtotal_in, regtotal_out, ell
+        )
     else
         error("SphericalCurl: invalid regindex_in/regindex_out_val combination")
     end
@@ -5496,22 +5632,24 @@ function radial_matrix(op::SphericalCurl, regindex_in, regindex_out_val, ell)
     return result
 end
 
-function _spherical_curl_radial_matrix(radial_basis, regindex_in0, regindex_out0,
-                                        regtotal_in, regtotal_out, ell)
+function _spherical_curl_radial_matrix(
+        radial_basis, regindex_in0, regindex_out0,
+        regtotal_in, regtotal_out, ell
+    )
     # Python uses 0-based indices (0=-, 1=+, 2=0)
     # Julia uses 1-based indices (1=-, 2=+, 3=0)
     if regindex_in0 == 1 && regindex_out0 == 3     # - -> 0
         return -1im * xi(radial_basis, +1, ell + regtotal_in + 1) *
-               operator_matrix(radial_basis, "D+", ell, regtotal_in)
+            operator_matrix(radial_basis, "D+", ell, regtotal_in)
     elseif regindex_in0 == 2 && regindex_out0 == 3  # + -> 0
         return 1im * xi(radial_basis, -1, ell + regtotal_in - 1) *
-               operator_matrix(radial_basis, "D-", ell, regtotal_in)
+            operator_matrix(radial_basis, "D-", ell, regtotal_in)
     elseif regindex_in0 == 3 && regindex_out0 == 1  # 0 -> -
         return -1im * xi(radial_basis, +1, ell + regtotal_in) *
-               operator_matrix(radial_basis, "D-", ell, regtotal_in)
+            operator_matrix(radial_basis, "D-", ell, regtotal_in)
     elseif regindex_in0 == 3 && regindex_out0 == 2  # 0 -> +
         return 1im * xi(radial_basis, -1, ell + regtotal_in) *
-               operator_matrix(radial_basis, "D+", ell, regtotal_in)
+            operator_matrix(radial_basis, "D+", ell, regtotal_in)
     else
         error("SphericalCurl: invalid regindex_in0=$regindex_in0, regindex_out0=$regindex_out0")
     end
@@ -5527,14 +5665,14 @@ end
 
 function enforce_conditions(op::SphericalCurl)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_coeff_space!(arg, op.radius_axis)
         require_local!(arg, op.radius_axis)
     end
 end
 
 function new_operand(op::SphericalCurl, operand; kw...)
-    return SphericalCurl(operand; index=op.index, kw...)
+    return SphericalCurl(operand; index = op.index, kw...)
 end
 
 """
@@ -5567,20 +5705,20 @@ function subproblem_matrix(op::SphericalCurl, subproblem)
             subshape_in = coeff_shape(subproblem, operand.domain)
             subshape_out = coeff_shape(subproblem, op.domain)
             if (regindex_out_val in regindex_out(op, regindex_in)) &&
-               regularity_allowed(radial_basis, ell_val, regindex_in) &&
-               regularity_allowed(radial_basis, ell_val, regindex_out_val)
+                    regularity_allowed(radial_basis, ell_val, regindex_in) &&
+                    regularity_allowed(radial_basis, ell_val, regindex_out_val)
                 factors = [sparse(1.0I, subshape_out[i], subshape_in[i]) for i in eachindex(subshape_out)]
                 rad_matrix = radial_matrix(op, regindex_in, regindex_out_val, ell_val)
                 # Real part
                 factors[op.last_axis] = sparse(real(rad_matrix))
-                comp_matrix_real = reduce(kron, factors; init=sparse(ones(1, 1)))
+                comp_matrix_real = reduce(kron, factors; init = sparse(ones(1, 1)))
                 # Imaginary part — encode via 2x2 block structure [[0,-1],[1,0]]
                 m_size = subshape_in[op.first_axis]
                 mult_1j = [0.0 -1.0; 1.0 0.0]
                 m_blocks = sparse(1.0I, fld(m_size, 2), fld(m_size, 2))
                 factors[op.first_axis] = kron(sparse(mult_1j), m_blocks)
                 factors[op.last_axis] = sparse(imag(rad_matrix))
-                comp_matrix_imag = reduce(kron, factors; init=sparse(ones(1, 1)))
+                comp_matrix_imag = reduce(kron, factors; init = sparse(ones(1, 1)))
                 comp_matrix = comp_matrix_real + comp_matrix_imag
             else
                 comp_matrix = spzeros(prod(subshape_out), prod(subshape_in))
@@ -5633,9 +5771,11 @@ function operate(op::SphericalCurl, out)::Nothing
                 allowed_out = regularity_allowed(radial_basis, ell, regindex_out_val)
                 if allowed_in && allowed_out
                     n_sl = n_slice(radial_basis, ell)
-                    slices = ntuple(i -> i == (axis - 2) ? m_ind :
-                                        i == (axis - 1) ? ell_ind :
-                                        i == axis ? n_sl : Colon(), ndim)
+                    slices = ntuple(
+                        i -> i == (axis - 2) ? m_ind :
+                            i == (axis - 1) ? ell_ind :
+                            i == axis ? n_sl : Colon(), ndim
+                    )
                     # Extract cos and -sin components (even/odd m indices)
                     cos_sl = axslice(axis - 2, 1, size(comp_in, axis - 2), 2)
                     msin_sl = axslice(axis - 2, 2, size(comp_in, axis - 2), 2)
@@ -5691,10 +5831,10 @@ mutable struct SphericalLaplacian <: SphericalEllOperator
     last_out::Any
     store_last::Bool
     scales::Any
-    _radial_matrix_cache::Dict{Any,Any}
+    _radial_matrix_cache::Dict{Any, Any}
 end
 
-function SphericalLaplacian(operand, coordsys; out=nothing)
+function SphericalLaplacian(operand, coordsys; out = nothing)
     if isa(operand, Number) || operand == 0
         return 0
     end
@@ -5703,16 +5843,18 @@ function SphericalLaplacian(operand, coordsys; out=nothing)
     if input_basis === nothing
         input_basis = get_basis(operand.domain, coordsys.radius)
     end
-    output_basis = derivative_basis(input_basis; order=2)
+    output_basis = derivative_basis(input_basis; order = 2)
     fa = first_axis(dist, input_basis)
     la = last_axis(dist, input_basis)
     ra = get_axis(dist, coordsys) + 2
     new_domain = substitute_basis(operand.domain, input_basis, output_basis)
-    SphericalLaplacian(Any[operand], (operand,), out, dist, new_domain,
-                       operand.tensorsig, operand.dtype, "Lap", operand,
-                       coordsys, input_basis, output_basis, fa, la, ra,
-                       [false, true, true], [false, false, true],
-                       nothing, nothing, false, 1, Dict{Any,Any}())
+    return SphericalLaplacian(
+        Any[operand], (operand,), out, dist, new_domain,
+        operand.tensorsig, operand.dtype, "Lap", operand,
+        coordsys, input_basis, output_basis, fa, la, ra,
+        [false, true, true], [false, false, true],
+        nothing, nothing, false, 1, Dict{Any, Any}()
+    )
 end
 
 function regindex_out(op::SphericalLaplacian, regindex_in)
@@ -5747,7 +5889,7 @@ end
 
 function enforce_conditions(op::SphericalLaplacian)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_coeff_space!(arg, op.radius_axis)
         require_local!(arg, op.radius_axis)
     end
@@ -5793,10 +5935,10 @@ mutable struct SphericalEllProduct <: SphericalEllOperator
     last_out::Any
     store_last::Bool
     scales::Any
-    _radial_matrix_cache::Dict{Any,Any}
+    _radial_matrix_cache::Dict{Any, Any}
 end
 
-function SphericalEllProduct(operand, coordsys, ell_func; out=nothing)
+function SphericalEllProduct(operand, coordsys, ell_func; out = nothing)
     if isa(operand, Number) || operand == 0
         return 0
     end
@@ -5809,12 +5951,14 @@ function SphericalEllProduct(operand, coordsys, ell_func; out=nothing)
     fa = first_axis(dist, input_basis)
     la = last_axis(dist, input_basis)
     ra = get_axis(dist, coordsys) + 2
-    SphericalEllProduct(Any[operand], (operand,), out, dist, operand.domain,
-                        operand.tensorsig, operand.dtype, "SphericalEllProduct", operand,
-                        coordsys, input_basis, output_basis, fa, la, ra,
-                        ell_func,
-                        [false, true, true], [false, false, true],
-                        nothing, nothing, false, 1, Dict{Any,Any}())
+    return SphericalEllProduct(
+        Any[operand], (operand,), out, dist, operand.domain,
+        operand.tensorsig, operand.dtype, "SphericalEllProduct", operand,
+        coordsys, input_basis, output_basis, fa, la, ra,
+        ell_func,
+        [false, true, true], [false, false, true],
+        nothing, nothing, false, 1, Dict{Any, Any}()
+    )
 end
 
 function regindex_out(op::SphericalEllProduct, regindex_in)
@@ -5849,7 +5993,7 @@ end
 
 function enforce_conditions(op::SphericalEllProduct)
     arg = op.args[1]
-    if isa(arg, Field)
+    return if isa(arg, Field)
         require_coeff_space!(arg, op.radius_axis)
         require_local!(arg, op.radius_axis)
     end
@@ -5863,18 +6007,20 @@ end
 # Display methods for new operator types
 # ============================================================================
 
-for T in [SphericalTrace, PolarTrace, DirectProductTrace,
-          StandardTransposeComponents, SphericalTransposeComponents,
-          CartesianSkew, SpinSkew,
-          RadialComponent, AngularComponent, AzimuthalComponent,
-          MulCosine, PolarGradient, PolarDivergence, PolarLaplacian,
-          SphereEllProduct,
-          SphereGradient, SphereDivergence, SphereLaplacian,
-          SphericalGradient, SphericalDivergence, SphericalCurl,
-          SphericalLaplacian, SphericalEllProduct]
+for T in [
+        SphericalTrace, PolarTrace, DirectProductTrace,
+        StandardTransposeComponents, SphericalTransposeComponents,
+        CartesianSkew, SpinSkew,
+        RadialComponent, AngularComponent, AzimuthalComponent,
+        MulCosine, PolarGradient, PolarDivergence, PolarLaplacian,
+        SphereEllProduct,
+        SphereGradient, SphereDivergence, SphereLaplacian,
+        SphericalGradient, SphericalDivergence, SphericalCurl,
+        SphericalLaplacian, SphericalEllProduct,
+    ]
     @eval begin
         function Base.show(io::IO, op::$T)
-            print(io, op.name, "(", join(map(string, op.args), ", "), ")")
+            return print(io, op.name, "(", join(map(string, op.args), ", "), ")")
         end
     end
 end
@@ -5921,9 +6067,9 @@ function get_radial_basis(basis)
     error("get_radial_basis not implemented for basis type $(typeof(basis))")
 end
 
-function radial_recombinations(basis, tensorsig; ell_list=())
+function radial_recombinations(basis, tensorsig; ell_list = ())
     if hasproperty(basis, :radial_recombinations)
-        return basis.radial_recombinations(tensorsig; ell_list=ell_list)
+        return basis.radial_recombinations(tensorsig; ell_list = ell_list)
     end
     error("radial_recombinations not implemented for basis type $(typeof(basis))")
 end
@@ -5949,12 +6095,12 @@ function ell_maps(basis, dist)
     error("ell_maps not implemented for basis type $(typeof(basis))")
 end
 
-function backward_regularity_recombination!(basis, tensorsig, axis, data; ell_maps=nothing)
-    backward_regularity_recombination(basis, tensorsig, axis, data, ell_maps)
+function backward_regularity_recombination!(basis, tensorsig, axis, data; ell_maps = nothing)
+    return backward_regularity_recombination(basis, tensorsig, axis, data, ell_maps)
 end
 
-function forward_regularity_recombination!(basis, tensorsig, axis, data; ell_maps=nothing)
-    forward_regularity_recombination(basis, tensorsig, axis, data; ell_maps=ell_maps)
+function forward_regularity_recombination!(basis, tensorsig, axis, data; ell_maps = nothing)
+    return forward_regularity_recombination(basis, tensorsig, axis, data; ell_maps = ell_maps)
 end
 
 function field_shape(subproblem, op)
@@ -5991,7 +6137,7 @@ function coeff_size(subproblem, domain)
         return subproblem.coeff_size(domain)
     end
     shape = coeff_shape(subproblem, domain)
-    return prod(shape; init=1)
+    return prod(shape; init = 1)
 end
 
 
