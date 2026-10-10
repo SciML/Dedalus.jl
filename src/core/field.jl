@@ -882,8 +882,9 @@ end
 Change to the next layout towards grid space.
 """
 function towards_grid_space!(f::Field)::Nothing
+    # Layout indices are 0-based; `dist.paths[i]` connects layouts `i - 1` and `i`.
     index = _get_layout(f).index
-    increment(f.dist.paths[index], [f])
+    increment(f.dist.paths[index + 1], [f])
     return nothing
 end
 
@@ -894,7 +895,7 @@ Change to the next layout towards coefficient space.
 """
 function towards_coeff_space!(f::Field)::Nothing
     index = _get_layout(f).index
-    decrement(f.dist.paths[index - 1], [f])
+    decrement(f.dist.paths[index], [f])
     return nothing
 end
 
@@ -941,11 +942,11 @@ Require an axis to be local.
 """
 function require_local!(f::Field, axis::Int)
     if _get_layout(f).grid_space[axis]
-        while !_get_layout(f).local[axis]
+        while !_get_layout(f).local_flags[axis]
             towards_coeff_space!(f)
         end
     else
-        while !_get_layout(f).local[axis]
+        while !_get_layout(f).local_flags[axis]
             towards_grid_space!(f)
         end
     end
@@ -1106,7 +1107,7 @@ function fill_random!(
     if is_complex_operand(f)
         shape = (shape..., 2)
     end
-    global_data = ChunkedRandomArray(shape, seed, chunk_size, distribution)
+    global_data = ChunkedRandomArray(shape; seed = seed, chunk_size = chunk_size, distribution = distribution)
     # Extract local data
     component_slices = ntuple(_ -> Colon(), length(f.tensorsig))
     spatial_slices = slices(_get_layout(f), f.domain, f.scales)
@@ -1115,7 +1116,8 @@ function fill_random!(
     if is_real_operand(f)
         f.data .= local_data
     else
-        f.data .= complex.(local_data[.., 1], local_data[.., 2])
+        nd = ndims(local_data)
+        f.data .= complex.(selectdim(local_data, nd, 1), selectdim(local_data, nd, 2))
     end
     return nothing
 end
@@ -1263,7 +1265,7 @@ Copy data over constant distributed dimensions for arithmetic broadcasting.
 """
 function broadcast_ghosts(f::Field, output_nonconst_dims)
     self_const_dims = collect(domain_constant(f.domain))
-    distributed = .!_get_layout(f).local
+    distributed = .!_get_layout(f).local_flags
     broadcast_dims = output_nonconst_dims .& self_const_dims
     deploy_dims_ext = broadcast_dims .& distributed
     deploy_dims = deploy_dims_ext[distributed]
@@ -1389,10 +1391,9 @@ Override: only allowed if the target layout is in `allowed_layouts`.
 """
 function towards_grid_space!(f::LockedField)::Nothing
     index = _get_layout(f).index
-    new_layout = f.dist.layouts[index + 1]
+    new_layout = f.dist.layouts[index + 2]
     if new_layout in f.allowed_layouts
-        # Delegate to the standard Field logic via the dist paths
-        increment(f.dist.paths[index], [f])
+        increment(f.dist.paths[index + 1], [f])
     else
         throw(ArgumentError("Cannot change locked layout."))
     end
@@ -1406,9 +1407,9 @@ Override: only allowed if the target layout is in `allowed_layouts`.
 """
 function towards_coeff_space!(f::LockedField)::Nothing
     index = _get_layout(f).index
-    new_layout = f.dist.layouts[index - 1]
+    new_layout = f.dist.layouts[index]
     if new_layout in f.allowed_layouts
-        decrement(f.dist.paths[index - 1], [f])
+        decrement(f.dist.paths[index], [f])
     else
         throw(ArgumentError("Cannot change locked layout."))
     end
