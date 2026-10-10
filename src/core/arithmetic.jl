@@ -224,13 +224,13 @@ function new_operands(op::Add, arg0, arg1; kw...)
 end
 
 """
-    split(op::Add, vars...)
+    split_expr(op::Add, vars...)
 
 Split into expressions containing and not containing specified operands/operators.
 """
-function split(op::Add, vars...)
+function split_expr(op::Add, vars...)
     # Sum over argument splittings
-    split_results = [split(arg, vars...) for arg in op.args]
+    split_results = [split_expr(arg, vars...) for arg in op.args]
     # split_results is a list of (containing, not_containing) pairs
     containing = sum(s[1] for s in split_results)
     not_containing = sum(s[2] for s in split_results)
@@ -512,16 +512,16 @@ function new_operands(op::Product, args...; kw...)
 end
 
 """
-    split(op::Product, vars...)
+    split_expr(op::Product, vars...)
 
 Split into expressions containing and not containing specified operands/operators.
 """
-function split(op::Product, vars...)
+function split_expr(op::Product, vars...)
     # Take cartesian product of argument splittings
     split_args = []
     for arg in op.args
         if arg isa AbstractOperand
-            push!(split_args, split(arg, vars...))
+            push!(split_args, split_expr(arg, vars...))
         else
             push!(split_args, (0, arg))
         end
