@@ -2217,7 +2217,7 @@ function spin_recombination_factors(basis, tensorsig)
         if idx !== nothing
             # subaxis is 0-based in Python; forward_intertwiner uses it directly
             subaxis = idx - 1
-            factors[i] = forward_intertwiner(tcs, subaxis; order = 1, group = nothing)
+            factors[i] = forward_intertwiner(tcs, subaxis, 1, nothing)
         else
             factors[i] = nothing
         end
@@ -2469,7 +2469,7 @@ function spin_weights(basis::SpinBasis, tensorsig)
         tcoords = get_coords(tcs)
         idx = findfirst(c -> c == coord1, tcoords)
         if idx !== nothing
-            start = idx - 1  # 0-based start for axslice compatibility
+            start = idx - 2  # Python's 0-based start: index(coord1) - 1
             cs_dim = get_dim(cs)
             # Slice spin_order to match the coordinate system dimension of this tensor index
             # (hack for 2-vectors on S2 with 3D spherical coords)
@@ -2786,13 +2786,8 @@ Convert element indices to group indices (m, n pairs).
 In coeff-coeff space, elements below `_nmin(m)` are masked.
 """
 function elements_to_groups(b::PolarBasis, grid_space, elements)
-    s1_groups = elements_to_groups(b.azimuth_basis, grid_space, elements[1:1])
-    radial_groups = elements[2]
-    if isa(s1_groups, Tuple)
-        groups = [s1_groups..., radial_groups]
-    else
-        groups = [s1_groups, radial_groups]
-    end
+    s1_groups = elements_to_groups(b.azimuth_basis, grid_space, elements[1])
+    groups = [s1_groups, elements[2]]
     if !grid_space[2]
         # coeff-coeff space: mask invalid elements
         m = groups[1]
@@ -2850,8 +2845,8 @@ Forward azimuth transform when mmax == 0 (copy the single m=0 slice).
 """
 function forward_transform_azimuth_Mmax0(b::PolarBasis, field, axis, gdata, cdata)
     slice_axis = axis + length(field.tensorsig)
-    idx = axslice(slice_axis, 1, 1)  # 1-based: first element only
-    copyto!(view(cdata, idx...), gdata)
+    fill!(cdata, zero(eltype(cdata)))
+    copyto!(selectdim(cdata, slice_axis, 1:1), gdata)
     return nothing
 end
 
@@ -2873,8 +2868,7 @@ Backward azimuth transform when mmax == 0 (copy from the single m=0 slice).
 """
 function backward_transform_azimuth_Mmax0(b::PolarBasis, field, axis, cdata, gdata)
     slice_axis = axis + length(field.tensorsig)
-    idx = axslice(slice_axis, 1, 1)
-    copyto!(gdata, view(cdata, idx...))
+    copyto!(gdata, selectdim(cdata, slice_axis, 1:1))
     return nothing
 end
 
@@ -2938,8 +2932,11 @@ function local_grid_radius end
 Compute a tuple of `(m, mg_slice, mc_slice, n_slice)` entries for all
 local m values.  Used for radial transforms and local element iteration.
 
-Must be implemented by concrete subtypes or overridden once the
-distribution infrastructure is in place.
+`mg_slice` and `mc_slice` are the 1-based ranges of azimuthal coefficient
+positions holding wavenumber `m` (identical in serial, where the azimuthal
+axis is fully local), and `n_slice` is the range of valid radial modes.
+The ranges span the full coefficient-space azimuthal extent, so for real
+bases the `m = 0` entry covers both the cos and msin slots.
 """
 function m_maps(b::PolarBasis, dist)
     cache_key = (:m_maps, dist)
@@ -2947,9 +2944,26 @@ function m_maps(b::PolarBasis, dist)
     if cached !== nothing
         return cached
     end
-    # Placeholder: will be implemented when distributor infrastructure is complete.
-    # For serial (non-distributed) usage, iterate over all m values.
-    error("m_maps not yet implemented for $(typeof(b)); requires distributor infrastructure")
+    any(>(1), dist.mesh) &&
+        error("m_maps for $(typeof(b)) is only implemented for serial distributors")
+    # Real m = 0 occupies both the cos and msin slots, even when Nphi == 1;
+    # spin recombination moves u_phi into the msin slot.
+    Nc = global_shape(b, (false, false), (1, 1))[1]
+    groups = elements_to_groups(b.azimuth_basis, [false], collect(0:(Nc - 1)))
+    maps = Tuple{Int, UnitRange{Int}, UnitRange{Int}, UnitRange{Int}}[]
+    i = 1
+    while i <= Nc
+        m = groups[i]
+        j = i
+        while j < Nc && groups[j + 1] == m
+            j += 1
+        end
+        push!(maps, (m, i:j, i:j, n_slice(b, abs(m))))
+        i = j + 1
+    end
+    result = Tuple(maps)
+    b._cache[cache_key] = result
+    return result
 end
 
 """
@@ -3457,15 +3471,21 @@ function transform_plan(b::AnnulusBasis, dist, grid_size, k)
     bparam = b.alpha[2] + k
     a0 = b.alpha[1]
     b0 = b.alpha[2]
-    # Build matrix transform plan using Jacobi polynomials
-    N = b.Nmax + 1
-    z, w = jacobi_quadrature(grid_size, a0, b0)
-    P = jacobi_polynomials(N, a, bparam, z)
-    fwd = transpose(P) * Diagonal(w)
-    bwd = P
-    plan = MatrixTransformPlan(Matrix{Float64}(fwd), Matrix{Float64}(bwd))
+    plan = JacobiMMT(grid_size, b.Nmax + 1, a, bparam, a0, b0)
     b._cache[cache_key] = plan
     return plan
+end
+
+"""
+    _expands_real_m0(b::PolarBasis, field, axis, gdata)
+
+Whether the coefficient-grid data of a real `mmax == 0` polar basis has a
+single azimuthal slot and must be padded with the msin slot of `m = 0`
+for spin recombination.  For `Nphi == 2` that slot is already stored.
+"""
+function _expands_real_m0(b::PolarBasis, field, axis, gdata)
+    b.mmax == 0 && b.dtype === Float64 || return false
+    return size(gdata, length(field.tensorsig) + axis - 1) == 1
 end
 
 """
@@ -3483,7 +3503,7 @@ function forward_transform_radius(b::AnnulusBasis, field, axis, gdata, cdata)
         gdata = gdata .* rfactor
     end
     # Expand gdata if mmax=0 and dtype=float for spin recombination
-    if b.mmax == 0 && b.dtype === Float64
+    if _expands_real_m0(b, field, axis, gdata)
         m_axis = length(field.tensorsig) + axis - 1
         gdata = cat(gdata, zeros(eltype(gdata), size(gdata)); dims = m_axis)
     end
@@ -3495,7 +3515,7 @@ function forward_transform_radius(b::AnnulusBasis, field, axis, gdata, cdata)
     S = spin_weights(b, field.tensorsig)
     plan = transform_plan(b, field.dist, grid_size, b.k)
     for i in CartesianIndices(S)
-        forward!(plan, view(temp, i), view(cdata, i), axis)
+        forward!(plan, component_view(temp, i), component_view(cdata, i), axis)
     end
     return nothing
 end
@@ -3509,7 +3529,8 @@ function backward_transform_radius(b::AnnulusBasis, field, axis, cdata, gdata)
     data_axis = length(field.tensorsig) + axis
     grid_size = size(gdata, data_axis)
     # Handle mmax=0 float expansion
-    if b.mmax == 0 && b.dtype === Float64
+    expanded = _expands_real_m0(b, field, axis, gdata)
+    if expanded
         m_axis = length(field.tensorsig) + axis - 1
         shp = collect(size(gdata))
         shp[m_axis] = 2
@@ -3523,7 +3544,7 @@ function backward_transform_radius(b::AnnulusBasis, field, axis, cdata, gdata)
     S = spin_weights(b, field.tensorsig)
     plan = transform_plan(b, field.dist, grid_size, b.k)
     for i in CartesianIndices(S)
-        backward!(plan, view(cdata, i), view(temp, i), axis)
+        backward!(plan, component_view(cdata, i), component_view(temp, i), axis)
     end
     # Apply backward spin recombination
     fill!(gdata, zero(eltype(gdata)))
@@ -3534,10 +3555,9 @@ function backward_transform_radius(b::AnnulusBasis, field, axis, cdata, gdata)
         gdata .*= rfactor
     end
     # Collapse expanded gdata back
-    if b.mmax == 0 && b.dtype === Float64
+    if expanded
         m_axis = length(field.tensorsig) + axis - 1
-        idx = axslice(m_axis, 1, 1)
-        copyto!(gdata_orig, view(gdata, idx...))
+        copyto!(gdata_orig, selectdim(gdata, m_axis, 1:1))
     end
     return nothing
 end
@@ -3553,7 +3573,7 @@ function _radial_transform_factor(b::AnnulusBasis, scale, data_axis, dk)
     if cached !== nothing
         return cached
     end
-    r = reshape_vector(_radius_grid(b, scale), data_axis, data_axis - 1)
+    r = reshape_vector(_radius_grid(b, scale), data_axis, data_axis)
     result = (b.dR ./ r) .^ dk
     b._cache[cache_key] = result
     return result
@@ -3596,9 +3616,25 @@ function operator_matrix(b::AnnulusBasis, op, m, spintotal; size = nothing)
     if size === nothing
         size = n_size(b, m)
     end
-    result = Float64.(resize_matrix(mat, size, b.k))
+    result = Float64.(square(mat(size, b.k)))
     b._cache[cache_key] = result
     return result
+end
+
+"""
+    _check_conversion_power(dk)
+
+Polar conversions raise `k` by applying a conversion operator `dk` times.
+Lowering `k` is not a conversion, so negative powers are rejected.
+"""
+function _check_conversion_power(dk)
+    dk < 0 && throw(
+        ArgumentError(
+            "conversion power must be non-negative (got dk = $dk); " *
+                "polar conversions only raise k"
+        )
+    )
+    return nothing
 end
 
 """
@@ -3612,13 +3648,14 @@ function conversion_matrix(b::AnnulusBasis, m, spintotal, dk)
     if cached !== nothing
         return cached
     end
-    E = shell_operator(2, b.radii, "E"; alpha = b.alpha)
-    # Apply dk-fold conversion
-    op = E
-    for _ in 2:dk
-        op = compose(op, E)
+    _check_conversion_power(dk)
+    if dk == 0
+        result = sparse(1.0I, n_size(b, m), n_size(b, m))
+        b._cache[cache_key] = result
+        return result
     end
-    result = Float64.(resize_matrix(op, n_size(b, m), b.k))
+    E = shell_operator(2, b.radii, "E"; alpha = b.alpha)
+    result = Float64.(square((E^dk)(n_size(b, m), b.k)))
     b._cache[cache_key] = result
     return result
 end
@@ -3634,15 +3671,16 @@ function jacobi_conversion(b::AnnulusBasis, m, dk; size = nothing)
     if cached !== nothing
         return cached
     end
-    AB = shell_operator(2, b.radii, "AB"; alpha = b.alpha)
-    op = AB
-    for _ in 2:dk
-        op = compose(op, AB)
-    end
+    _check_conversion_power(dk)
     if size === nothing
         size = n_size(b, m)
     end
-    result = Float64.(resize_matrix(op, size, b.k))
+    if dk == 0
+        result = sparse(1.0I, size, size)
+    else
+        AB = shell_operator(2, b.radii, "AB"; alpha = b.alpha)
+        result = Float64.(square((AB^dk)(size, b.k)))
+    end
     b._cache[cache_key] = result
     return result
 end
@@ -3717,6 +3755,52 @@ function _interpolation(b::AnnulusBasis, position)
     b._cache[cache_key] = result
     return result
 end
+
+"""
+    polar_integration_vector(b::AnnulusBasis)
+
+Row vector mapping the `m = 0` radial coefficients of a scalar to its integral
+over the annulus.
+
+The radial factor `(r / dR)^(-k)` makes the integrand rational in `r`, with a
+pole at `r = 0` that approaches the interval as the inner radius shrinks.  In
+`s = log(r / r_inner)` the integrand `r^2 (r / dR)^(-k) Q_n` is entire, so
+Gauss-Legendre in `s` is doubled until successive rules agree to rounding.
+Relative radii computed with `log1p` and `expm1` keep the native coordinate
+accurate for thin annuli.
+"""
+function polar_integration_vector(b::AnnulusBasis)
+    cached = get(b._cache, :polar_integration_vector, nothing)
+    if cached !== nothing
+        return cached
+    end
+    n = n_size(b, 0)
+    r0 = b.radii[1]
+    ds = log1p(b.dR / r0)
+    function rule(N)
+        t, w = jacobi_quadrature(N, 0.0, 0.0)
+        dr = r0 .* expm1.((ds / 2) .* (t .+ 1))
+        r = r0 .+ dr
+        z = (2 / b.dR) .* dr .- 1
+        Qk = jacobi_polynomials(n, b.alpha[1] + b.k, b.alpha[2] + b.k, z)
+        w_geom = (ds / 2) .* w .* r .^ 2 .* (r ./ b.dR) .^ (-b.k)
+        return (reshape(w_geom, 1, :) * transpose(Qk)) .* (2 * pi)
+    end
+    N = 2 * b.shape[2]
+    result = rule(N)
+    while true
+        N *= 2
+        N > 2^16 && error("annulus integration rule did not converge for $b")
+        refined = rule(N)
+        converged = maximum(abs, refined .- result) <= 1.0e-14 * maximum(abs, refined)
+        result = refined
+        converged && break
+    end
+    b._cache[:polar_integration_vector] = result
+    return result
+end
+
+polar_area(b::AnnulusBasis) = pi * b.dR * (b.radii[2] + b.radii[1])
 
 function Base.show(io::IO, b::AnnulusBasis)
     return print(io, "AnnulusBasis($(b.coordsys), shape=$(b.shape), radii=$(b.radii), k=$(b.k), alpha=$(b.alpha))")
@@ -4023,7 +4107,7 @@ Forward radial transform for disk basis.
 """
 function forward_transform_radius_disk(b::DiskBasis, field, axis, gdata, cdata)
     # Expand gdata if mmax=0 and dtype=float for spin recombination
-    if b.mmax == 0 && b.dtype === Float64
+    if _expands_real_m0(b, field, axis, gdata)
         m_axis = length(field.tensorsig) + axis - 1
         gdata = cat(gdata, zeros(eltype(gdata), size(gdata)); dims = m_axis)
     end
@@ -4035,9 +4119,9 @@ function forward_transform_radius_disk(b::DiskBasis, field, axis, gdata, cdata)
     S = spin_weights(b, field.tensorsig)
     for i in CartesianIndices(S)
         s = S[i]
-        grid_shp = size(gdata[i])
+        grid_shp = size(component_view(gdata, i))
         plan = transform_plan(b, field.dist, grid_shp, axis, s)
-        forward!(plan, view(temp, i), view(cdata, i), axis)
+        forward!(plan, component_view(temp, i), component_view(cdata, i), axis)
     end
     return nothing
 end
@@ -4049,7 +4133,8 @@ Backward radial transform for disk basis.
 """
 function backward_transform_radius_disk(b::DiskBasis, field, axis, cdata, gdata)
     # Handle mmax=0 float expansion
-    if b.mmax == 0 && b.dtype === Float64
+    expanded = _expands_real_m0(b, field, axis, gdata)
+    if expanded
         m_axis = length(field.tensorsig) + axis - 1
         shp = collect(size(gdata))
         shp[m_axis] = 2
@@ -4063,18 +4148,17 @@ function backward_transform_radius_disk(b::DiskBasis, field, axis, cdata, gdata)
     S = spin_weights(b, field.tensorsig)
     for i in CartesianIndices(S)
         s = S[i]
-        grid_shp = size(gdata[i])
+        grid_shp = size(component_view(gdata, i))
         plan = transform_plan(b, field.dist, grid_shp, axis, s)
-        backward!(plan, view(cdata, i), view(temp, i), axis)
+        backward!(plan, component_view(cdata, i), component_view(temp, i), axis)
     end
     # Apply backward spin recombination
     fill!(gdata, zero(eltype(gdata)))
     backward_spin_recombination!(b, field.tensorsig, axis, temp, gdata)
     # Collapse expanded gdata
-    if b.mmax == 0 && b.dtype === Float64
+    if expanded
         m_axis = length(field.tensorsig) + axis - 1
-        idx = axslice(m_axis, 1, 1)
-        copyto!(gdata_orig, view(gdata, idx...))
+        copyto!(gdata_orig, selectdim(gdata, m_axis, 1:1))
     end
     return nothing
 end
@@ -4115,7 +4199,7 @@ function operator_matrix(b::DiskBasis, op, m, spin; size = nothing)
     if size === nothing
         size = n_size(b, m)
     end
-    result = Float64.(resize_matrix(mat, size, b.alpha + b.k, abs(ms)))
+    result = Float64.(square(mat(size, b.alpha + b.k, abs(ms))))
     b._cache[cache_key] = result
     return result
 end
@@ -4131,12 +4215,14 @@ function conversion_matrix(b::DiskBasis, m, spintotal, dk)
     if cached !== nothing
         return cached
     end
-    E = zernike_operator(2, "E"; radius = b.radius)
-    op = E(+1)
-    for _ in 2:dk
-        op = compose(op, E(+1))
+    _check_conversion_power(dk)
+    if dk == 0
+        result = sparse(1.0I, n_size(b, m), n_size(b, m))
+        b._cache[cache_key] = result
+        return result
     end
-    result = Float64.(resize_matrix(op, n_size(b, m), b.alpha + b.k, abs(m + spintotal)))
+    E = zernike_operator(2, "E"; radius = b.radius)
+    result = Float64.(square((E(+1)^dk)(n_size(b, m), b.alpha + b.k, abs(m + spintotal))))
     b._cache[cache_key] = result
     return result
 end
@@ -4158,6 +4244,26 @@ function interpolation(b::DiskBasis, m, spintotal, position)
     b._cache[cache_key] = result
     return result
 end
+
+"""
+    polar_integration_vector(b::DiskBasis)
+
+Row vector mapping the `m = 0` radial coefficients of a scalar to its integral
+over the disk.
+"""
+function polar_integration_vector(b::DiskBasis)
+    cached = get(b._cache, :polar_integration_vector, nothing)
+    if cached !== nothing
+        return cached
+    end
+    z0, w0 = zernike_quadrature(2, b.shape[2]; k = 0)
+    Qk = zernike_polynomials(2, n_size(b, 0), b.alpha + b.k, 0, z0)
+    result = (reshape(w0, 1, :) * transpose(Qk)) .* (b.radius^2 * 2 * pi)
+    b._cache[:polar_integration_vector] = result
+    return result
+end
+
+polar_area(b::DiskBasis) = pi * b.radius^2
 
 """
     radius_multiplication_matrix(b::DiskBasis, m, spintotal, order, d)
@@ -4195,7 +4301,7 @@ function radius_multiplication_matrix(b::DiskBasis, m, spintotal, order, d)
             operator = compose(R2, operator)
         end
     end
-    result = Float64.(resize_matrix(operator, n_size(b, m), b.alpha + b.k, abs(m + spintotal)))
+    result = Float64.(square(operator(n_size(b, m), b.alpha + b.k, abs(m + spintotal))))
     b._cache[cache_key] = result
     return result
 end

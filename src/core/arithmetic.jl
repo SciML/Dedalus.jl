@@ -117,10 +117,9 @@ end
 """
     cs_dim(cs)
 
-Return the dimension of a coordinate system. Dispatches to the `dim` field
-or property of the coordinate system object.
+Return the dimension of a coordinate system (see `get_dim`).
 """
-cs_dim(cs) = hasproperty(cs, :_dim) ? cs._dim : (hasproperty(cs, :dim) ? cs.dim : 1)
+cs_dim(cs) = get_dim(cs)
 
 # ============================================================================
 # Add — Abstract addition operator
@@ -475,21 +474,24 @@ function product_build_bases(arg0, arg1; ncc::Bool = false, ncc_vars = nothing, 
     arg1_bases = bases_by_coord(arg1.domain)
     for coord in keys(arg0_bases)
         b0 = arg0_bases[coord]
-        b1 = arg1_bases[coord]
+        b1 = get(arg1_bases, coord, nothing)
         # All constant bases yields constant basis
         if b0 === nothing && b1 === nothing
             continue
-            # Multiply all bases
         elseif ncc && has_operand(arg0, ncc_vars...)
-            push!(bases, b1 * b0)  # matmul order: b1 @ b0
+            push!(bases, _product_basis_matmul(b1, b0))
         elseif ncc && has_operand(arg1, ncc_vars...)
-            push!(bases, b0 * b1)  # matmul order: b0 @ b1
+            push!(bases, _product_basis_matmul(b0, b1))
         else
-            push!(bases, b0 * b1)
+            push!(bases, _product_basis_mul(b0, b1))
         end
     end
     return Tuple(bases)
 end
+
+# Output bases of `b0 * b1` and `b0 @ b1`, where either side may be constant (`nothing`).
+_product_basis_mul(b0, b1) = b0 === nothing ? basis_rmul(b1, nothing) : basis_mul(b0, b1)
+_product_basis_matmul(b0, b1) = b0 === nothing ? basis_rmatmul(b1, nothing) : basis_matmul(b0, b1)
 
 """
     reinitialize(op::Product; kw...)
@@ -1504,7 +1506,7 @@ struct GhostBroadcaster
         # Determine deployment dimensions: broadcast AND constant
         deploy_dims_ext = broadcast_arr .& constant_arr
         # Filter to non-local (distributed) dimensions
-        local_arr = collect(Bool, layout.local)
+        local_arr = collect(Bool, layout.local_flags)
         deploy_dims = deploy_dims_ext[.!local_arr]
         # Build subcomm or skip casting
         if any(deploy_dims)

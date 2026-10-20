@@ -83,6 +83,15 @@ function new_operand(op::AbstractLinearOperator, operand; kw...)
 end
 
 """
+    require_linearity(op::AbstractLinearOperator, vars...; kw...)
+
+Require the operand to be linear in `vars`.
+"""
+function require_linearity(op::AbstractLinearOperator, vars...; kw...)
+    return require_linearity(operator_operand(op), vars...; kw...)
+end
+
+"""
     matrix_dependence(op::AbstractLinearOperator, vars...)
 
 Determine dimension-by-dimension matrix dependence.
@@ -152,7 +161,7 @@ Reinitialize with reinitialized operand.
 """
 function reinitialize(op::AbstractLinearOperator; kw...)
     operand = reinitialize(operator_operand(op); kw...)
-    return new_operand(op, operand; kw...)
+    return new_operand(op, operand)
 end
 
 """
@@ -684,7 +693,7 @@ function check_conditions(op::Convert)
     arg = op.args[1]
     last_axis = op.last_axis
     last_is_coeff = !arg.layout.grid_space[last_axis]
-    last_is_local = arg.layout.local[last_axis]
+    last_is_local = arg.layout.local_flags[last_axis]
     if last_is_coeff && op.subaxis_coupling[end]
         return last_is_local
     end
@@ -711,6 +720,9 @@ function operate(op::Convert, out)::Nothing
         end
     else
         # Coefficient space: apply conversion matrix
+        if op.input_basis isa PolarBasis && op.output_basis isa PolarBasis
+            return _operate_polar_m!(op, out)
+        end
         preset_layout!(out, layout)
         if length(arg.data) > 0 && length(out.data) > 0
             data_axis = op.last_axis + length(arg.tensorsig)
@@ -720,6 +732,16 @@ function operate(op::Convert, out)::Nothing
         end
     end
     return nothing
+end
+
+spinindex_out(op::Convert, spinindex_in) = (spinindex_in,)
+
+function radial_matrix(op::Convert, spinindex_in, spinindex_out_val, m)
+    spinindex_in == spinindex_out_val || error("Convert does not couple spin components")
+    radial_basis = op.input_basis
+    spintotal_in = spintotal(radial_basis, op.operand.tensorsig, spinindex_in)
+    dk = op.output_basis.k - radial_basis.k
+    return conversion_matrix(radial_basis, m, spintotal_in, dk)
 end
 
 function new_operand(op::Convert, operand; kw...)
@@ -878,40 +900,146 @@ function Interpolate(arg, coord, position; out = nothing)
         return arg
     end
     dist = arg.dist
-    input_basis = get_basis(arg.domain, coord)
-    output_basis = if input_basis !== nothing && hasmethod(interpolate_basis, Tuple{typeof(input_basis), typeof(position)})
-        interpolate_basis(input_basis, position)
-    else
-        nothing
+    if coord isa Union{Symbol, AbstractString}
+        coord = _coordinate_by_name(dist, coord)
     end
-    first_axis = get_axis(dist, coord)
-    last_axis = first_axis
+    input_basis = get_basis(arg.domain, coord)
+    if input_basis isa PolarBasis
+        azimuth = get_coords(input_basis.coordsys)[1]
+        output_basis = if coord == azimuth
+            radial_basis(input_basis)
+        else
+            _is_azimuth_locked(arg) && throw(
+                ArgumentError(
+                    "cannot interpolate along the radius after the azimuth: values at a fixed " *
+                        "azimuth have no polar coefficients; interpolate along the radius first"
+                )
+            )
+            S1_basis(input_basis; radius = position)
+        end
+        first_axis = get_basis_axis(dist, input_basis)
+        last_axis = first_axis + 1
+        subaxis_dep, subaxis_coup = [true, true], [false, true]
+    else
+        output_basis = nothing
+        first_axis = get_axis(dist, coord)
+        last_axis = first_axis
+        subaxis_dep, subaxis_coup = [true], [true]
+    end
     new_domain = substitute_basis(arg.domain, input_basis, output_basis)
     return Interpolate(
         Any[arg], (arg,), out, dist, new_domain, arg.tensorsig,
         arg.dtype, "interp", arg, coord, position,
         input_basis, output_basis, first_axis, last_axis,
-        [true], [true],
+        subaxis_dep, subaxis_coup,
         nothing, nothing, false, 1
     )
 end
+
+function _coordinate_by_name(dist, name)
+    idx = findfirst(c -> c.name == String(name), dist.coords)
+    idx === nothing && throw(ArgumentError("Coordinate $name not found in distributor."))
+    return dist.coords[idx]
+end
+
+_is_azimuth_locked(arg) = arg isa LockedField || (arg isa AbstractFuture && future_type(arg) === LockedField)
+
+_interpolates_polar_azimuth(op::Interpolate) =
+    op.input_basis isa PolarBasis && op.coord == get_coords(op.input_basis.coordsys)[1]
+
+# Values at a fixed azimuth are not an axisymmetric field, so they stay in grid space.
+future_type(op::Interpolate) = _interpolates_polar_azimuth(op) ? LockedField : Field
 
 function check_conditions(op::Interpolate)
     arg = op.args[1]
     if !isa(arg, AbstractCurrent)
         return false
     end
+    _interpolates_polar_azimuth(op) && return arg.layout.grid_space[op.first_axis]
     return !arg.layout.grid_space[op.last_axis]
 end
 
 function enforce_conditions(op::Interpolate)
     arg = op.args[1]
-    return if isa(arg, Field)
+    isa(arg, AbstractCurrent) || return nothing
+    if _interpolates_polar_azimuth(op)
+        require_grid_space!(arg, op.first_axis)
+    else
         require_coeff_space!(arg, op.last_axis)
     end
+    return nothing
+end
+
+"""
+    _operate_polar_radial_interpolate!(op, out)
+
+Evaluate each spin component of a polar field at radius `op.position`,
+one azimuthal wavenumber at a time, then recombine the spin components into
+polar vector components on the output `S1` basis.
+"""
+function _operate_polar_radial_interpolate!(op, out)::Nothing
+    operand = op.args[1]
+    basis = op.input_basis
+    axis = op.last_axis
+    preset_layout!(out, operand.layout)
+    out.data .= 0
+    if length(operand.data) == 0 || length(out.data) == 0
+        return nothing
+    end
+    temp = zeros(eltype(out.data), size(out.data))
+    S = spin_weights(basis, operand.tensorsig)
+    nd = ndims(operand.data) - length(operand.tensorsig)
+    for si in CartesianIndices(size(S))
+        comp_in = component_view(operand.data, si)
+        comp_out = component_view(temp, si)
+        for (m, mg_slice, mc_slice, n_slice_val) in m_maps(basis, op.dist)
+            slices_in = ntuple(i -> i == axis - 1 ? mc_slice : i == axis ? n_slice_val : Colon(), nd)
+            slices_out = ntuple(i -> i == axis - 1 ? mc_slice : Colon(), nd)
+            A = reshape(interpolation(basis, m, S[si], op.position), 1, :)
+            view(comp_out, slices_out...) .= apply_matrix(A, comp_in[slices_in...], axis)
+        end
+    end
+    backward_spin_recombination!(basis, operand.tensorsig, axis, temp, out.data)
+    return nothing
+end
+
+"""
+    _polar_azimuth_interpolation_vector(basis, dist, scale, position)
+
+Row vector evaluating the band-limited (`|m| <= mmax`) trigonometric
+interpolant of azimuthal grid values at angle `position`.
+"""
+function _polar_azimuth_interpolation_vector(basis, dist, scale, position)
+    cache_key = (:azimuth_interpolation_vector, dist, scale, position)
+    cached = get(basis._cache, cache_key, nothing)
+    cached !== nothing && return cached
+    phi = basis.mmax == 0 ? [0.0] : vec(global_grid(basis.azimuth_basis, dist, scale))
+    N = length(phi)
+    result = reshape(
+        [(1 + 2 * sum(cos(m * (position - p)) for m in 1:(basis.mmax); init = 0.0)) / N for p in phi],
+        1, N
+    )
+    basis._cache[cache_key] = result
+    return result
+end
+
+function _operate_polar_azimuth_interpolate!(op, out)::Nothing
+    arg = op.args[1]
+    preset_layout!(out, arg.layout)
+    out isa LockedField && lock_axis_to_grid!(out, op.first_axis)
+    data_axis = op.first_axis + length(arg.tensorsig)
+    A = _polar_azimuth_interpolation_vector(
+        op.input_basis, op.dist, arg.scales[op.first_axis], op.position
+    )
+    out.data .= apply_matrix(A, arg.data, data_axis)
+    return nothing
 end
 
 function operate(op::Interpolate, out)::Nothing
+    if op.input_basis isa PolarBasis
+        _interpolates_polar_azimuth(op) && return _operate_polar_azimuth_interpolate!(op, out)
+        return _operate_polar_radial_interpolate!(op, out)
+    end
     arg = op.args[1]
     layout = arg.layout
     preset_layout!(out, layout)
@@ -931,13 +1059,26 @@ end
 """
     interpolate(arg; positions...)
 
-Apply Interpolate iteratively for each coord=position pair.
+Apply Interpolate iteratively for each coord=position pair. Polar azimuths are
+interpolated last, since radial interpolation needs the polar coefficients
+that a fixed-azimuth result no longer has.
 """
 function interpolate(arg; positions...)
-    for (coord, position) in positions
+    entries = collect(positions)
+    is_az = [_is_polar_azimuth(arg, coord) for (coord, position) in entries]
+    for (coord, position) in vcat(entries[.!is_az], entries[is_az])
         arg = Interpolate(arg, coord, position)
     end
     return arg
+end
+
+function _is_polar_azimuth(arg, coord)
+    arg isa Number && return false
+    if coord isa Union{Symbol, AbstractString}
+        coord = _coordinate_by_name(arg.dist, coord)
+    end
+    basis = get_basis(arg.domain, coord)
+    return basis isa PolarBasis && coord == get_coords(basis.coordsys)[1]
 end
 
 function interpolate(arg, coord, position)
@@ -983,15 +1124,65 @@ function Integrate(arg, coord; out = nothing)
     dist = arg.dist
     input_basis = get_basis(arg.domain, coord)
     output_basis = nothing  # Integration removes the basis
-    first_axis = get_axis(dist, coord)
-    last_axis = first_axis
+    if input_basis isa PolarBasis
+        _check_polar_integrand(input_basis, arg, coord, "integrate")
+        first_axis = get_basis_axis(dist, input_basis)
+        last_axis = first_axis + 1
+        subaxis_dep, subaxis_coup = [true, true], [false, true]
+    else
+        first_axis = get_axis(dist, coord)
+        last_axis = first_axis
+        subaxis_dep, subaxis_coup = [true], [false]
+    end
     new_domain = substitute_basis(arg.domain, input_basis, output_basis)
     return Integrate(
         Any[arg], (arg,), out, dist, new_domain, arg.tensorsig,
         arg.dtype, "Integrate", arg, coord, input_basis, output_basis,
-        first_axis, last_axis, [true], [false],
+        first_axis, last_axis, subaxis_dep, subaxis_coup,
         nothing, nothing, false, 1
     )
+end
+
+"""
+    _check_polar_integrand(basis, arg, coord, name)
+
+Polar integrals and full averages act on scalar fields over the whole
+coordinate system of `basis`.
+"""
+function _check_polar_integrand(basis, arg, coord, name)
+    coord == basis.coordsys || throw(
+        ArgumentError("$name over a $(nameof(typeof(basis))) requires its full coordinate system")
+    )
+    isempty(arg.tensorsig) || throw(
+        ArgumentError("$name over a $(nameof(typeof(basis))) is only implemented for scalar fields")
+    )
+    return nothing
+end
+
+"""
+    _operate_polar_integrate!(op, out, scale)
+
+Integrate a scalar over a polar basis from its `m = 0` cosine coefficients
+and multiply the result by `scale`.
+"""
+function _operate_polar_integrate!(op, out, scale)::Nothing
+    operand = op.args[1]
+    axis = op.last_axis
+    preset_layout!(out, operand.layout)
+    out.data .= 0
+    if length(operand.data) == 0 || length(out.data) == 0
+        return nothing
+    end
+    A = polar_integration_vector(op.input_basis) .* scale
+    nd = ndims(operand.data)
+    for (m, mg_slice, mc_slice, n_slice_val) in m_maps(op.input_basis, op.dist)
+        m == 0 || continue
+        m0 = first(mc_slice):first(mc_slice)
+        slices_in = ntuple(i -> i == axis - 1 ? m0 : i == axis ? n_slice_val : Colon(), nd)
+        slices_out = ntuple(i -> i == axis - 1 || i == axis ? (1:1) : Colon(), nd)
+        view(out.data, slices_out...) .+= apply_matrix(A, operand.data[slices_in...], axis)
+    end
+    return nothing
 end
 
 function check_conditions(op::Integrate)
@@ -1010,6 +1201,7 @@ function enforce_conditions(op::Integrate)
 end
 
 function operate(op::Integrate, out)::Nothing
+    op.input_basis isa PolarBasis && return _operate_polar_integrate!(op, out, 1)
     arg = op.args[1]
     layout = arg.layout
     preset_layout!(out, layout)
@@ -1088,15 +1280,53 @@ function Average(arg, coord; out = nothing)
     dist = arg.dist
     input_basis = get_basis(arg.domain, coord)
     output_basis = nothing  # Averaging removes the basis
-    first_axis = get_axis(dist, coord)
-    last_axis = first_axis
+    if input_basis isa PolarBasis
+        if coord == get_coords(input_basis.coordsys)[1]
+            output_basis = radial_basis(input_basis)
+        else
+            _check_polar_integrand(input_basis, arg, coord, "average")
+        end
+        first_axis = get_basis_axis(dist, input_basis)
+        last_axis = first_axis + 1
+        subaxis_dep, subaxis_coup = [true, true], [false, true]
+    else
+        first_axis = get_axis(dist, coord)
+        last_axis = first_axis
+        subaxis_dep, subaxis_coup = [true], [false]
+    end
     new_domain = substitute_basis(arg.domain, input_basis, output_basis)
     return Average(
         Any[arg], (arg,), out, dist, new_domain, arg.tensorsig,
         arg.dtype, "Average", arg, coord, input_basis, output_basis,
-        first_axis, last_axis, [true], [false],
+        first_axis, last_axis, subaxis_dep, subaxis_coup,
         nothing, nothing, false, 1
     )
+end
+
+"""
+    _operate_polar_azimuthal_average!(op, out)
+
+Average over the azimuth of a polar basis by copying the `m = 0`
+coefficients of every spin component onto the radial basis.
+"""
+function _operate_polar_azimuthal_average!(op, out)::Nothing
+    operand = op.args[1]
+    axis = op.last_axis + length(operand.tensorsig)
+    preset_layout!(out, operand.layout)
+    out.data .= 0
+    if length(operand.data) == 0 || length(out.data) == 0
+        return nothing
+    end
+    nd = ndims(operand.data)
+    mc_out = only(mc for (m, mg, mc, ns) in m_maps(op.output_basis, op.dist) if m == 0)
+    for (m, mg_slice, mc_in, n_slice_val) in m_maps(op.input_basis, op.dist)
+        m == 0 || continue
+        n = min(length(mc_in), length(mc_out))
+        slices_in = ntuple(i -> i == axis - 1 ? mc_in[1:n] : i == axis ? n_slice_val : Colon(), nd)
+        slices_out = ntuple(i -> i == axis - 1 ? mc_out[1:n] : i == axis ? n_slice_val : Colon(), nd)
+        view(out.data, slices_out...) .= view(operand.data, slices_in...)
+    end
+    return nothing
 end
 
 function check_conditions(op::Average)
@@ -1115,6 +1345,11 @@ function enforce_conditions(op::Average)
 end
 
 function operate(op::Average, out)::Nothing
+    if op.input_basis isa PolarBasis
+        op.output_basis === nothing &&
+            return _operate_polar_integrate!(op, out, 1 / polar_area(op.input_basis))
+        return _operate_polar_azimuthal_average!(op, out)
+    end
     arg = op.args[1]
     layout = arg.layout
     preset_layout!(out, layout)
@@ -2354,10 +2589,6 @@ function local_groupset_slices(layout, group, domain; scales = 1)
     return (Colon(),)
 end
 
-function basis_matrix_dependence(basis, axis)
-    return false
-end
-
 # ============================================================================
 # SpectralOperatorS2 — abstract base for linear operators on the 2-sphere
 # ============================================================================
@@ -2886,7 +3117,17 @@ Explicit evaluation of a polar m-dependent operator.
 Loops over spin components and m-maps, applying the per-m radial matrix
 to each azimuthal slice of the operand data.
 """
-function operate(op::PolarMOperator, out)::Nothing
+operate(op::PolarMOperator, out)::Nothing = _operate_polar_m!(op, out)
+
+"""
+    _operate_polar_m!(op, out)
+
+Apply an operator that acts on each azimuthal wavenumber `m` of a polar basis
+through `radial_matrix(op, spinindex_in, spinindex_out, m)`, for every output
+spin component listed by `spinindex_out(op, spinindex_in)`.  The operand must
+be in coefficient space along the radial axis `op.last_axis`.
+"""
+function _operate_polar_m!(op, out)::Nothing
     operand = op.args[1]
     if hasfield(typeof(op.output_basis), :m_maps) || hasmethod(m_maps, Tuple{typeof(op.output_basis), Any})
         basis = op.output_basis
@@ -2908,8 +3149,8 @@ function operate(op::PolarMOperator, out)::Nothing
     for si_in in CartesianIndices(size(S_in))
         spintotal_in = S_in[si_in]
         for si_out_tuple in spinindex_out(op, Tuple(si_in))
-            @inbounds comp_in = operand.data[Tuple(si_in)...]
-            @inbounds comp_out = out.data[si_out_tuple...]
+            comp_in = component_view(operand.data, si_in)
+            comp_out = component_view(out.data, CartesianIndex(Tuple(si_out_tuple)))
             for (m, mg_slice, mc_slice, n_slice_val) in m_maps(basis, op.dist)
                 # Build slice tuple: all colons except axis-1 gets mc_slice,
                 # axis gets n_slice_val (1-based indexing)
@@ -3649,18 +3890,14 @@ function operate(op::SpinSkew, out)::Nothing
     if length(arg.data) > 0
         if arg.layout.grid_space[azimuth_axis + 1]
             # Grid space: left-handed rotation
-            sx = axslice(index, 1, 1)
-            sy = axslice(index, 2, 2)
-            out.data[sx...] .= arg.data[sy...]
-            out.data[sy...] .= -(arg.data[sx...])
+            selectdim(out.data, index, 1) .= selectdim(arg.data, index, 2)
+            selectdim(out.data, index, 2) .= .-selectdim(arg.data, index, 1)
         else
             # Coefficient space: spinorder -, +
-            minus = axslice(index, 1, 1)
-            plus = axslice(index, 2, 2)
-            arg_plus = arg.data[plus...]
-            arg_minus = arg.data[minus...]
-            out_plus = view(out.data, plus...)
-            out_minus = view(out.data, minus...)
+            arg_minus = selectdim(arg.data, index, 1)
+            arg_plus = selectdim(arg.data, index, 2)
+            out_minus = selectdim(out.data, index, 1)
+            out_plus = selectdim(out.data, index, 2)
             if is_complex_dtype(op.dtype)
                 # out = 1j * s * arg; s=-1 for minus, s=+1 for plus
                 out_plus .= 1im .* arg_plus
@@ -3668,12 +3905,14 @@ function operate(op::SpinSkew, out)::Nothing
             else
                 # Real: (1j * s) * (arg_cos + 1j * arg_msin)
                 # = -s * arg_msin + 1j * s * arg_cos
-                cos_sl = axslice(rank + azimuth_axis, 1, nothing, 2)
-                msin_sl = axslice(rank + azimuth_axis, 2, nothing, 2)
-                out_plus[cos_sl...] .= -(arg_plus[msin_sl...])
-                out_plus[msin_sl...] .= arg_plus[cos_sl...]
-                out_minus[cos_sl...] .= arg_minus[msin_sl...]
-                out_minus[msin_sl...] .= -(arg_minus[cos_sl...])
+                # (selectdim on the tensor index drops one leading dimension)
+                az = rank - 1 + azimuth_axis
+                naz = size(arg_plus, az)
+                cos_sl, msin_sl = 1:2:naz, 2:2:naz
+                selectdim(out_plus, az, cos_sl) .= .-selectdim(arg_plus, az, msin_sl)
+                selectdim(out_plus, az, msin_sl) .= selectdim(arg_plus, az, cos_sl)
+                selectdim(out_minus, az, cos_sl) .= selectdim(arg_minus, az, msin_sl)
+                selectdim(out_minus, az, msin_sl) .= .-selectdim(arg_minus, az, cos_sl)
             end
         end
     end
@@ -3831,8 +4070,7 @@ function operate(op::RadialComponent, out)::Nothing
             # Polar: radius is second coord -> spin index 2
             comp_idx = 2
         end
-        idx = axindex(op.index, comp_idx)
-        out.data .= operand.data[idx...]
+        out.data .= selectdim(operand.data, op.index, comp_idx)
     end
     return nothing
 end
@@ -4081,8 +4319,7 @@ function operate(op::AzimuthalComponent, out)::Nothing
     preset_layout!(out, operand.layout)
     if length(out.data) > 0
         # Azimuthal = spin index 1 (the - component, 1-based)
-        idx = axindex(op.index, 1)
-        out.data .= operand.data[idx...]
+        out.data .= selectdim(operand.data, op.index, 1)
     end
     return nothing
 end
@@ -4214,7 +4451,7 @@ function check_conditions(op::MulCosine)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local[op.radius_axis]
+    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local_flags[op.radius_axis]
 end
 
 function enforce_conditions(op::MulCosine)
@@ -4317,7 +4554,7 @@ function check_conditions(op::PolarGradient)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local[op.radius_axis]
+    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local_flags[op.radius_axis]
 end
 
 function enforce_conditions(op::PolarGradient)
@@ -4437,7 +4674,7 @@ function check_conditions(op::PolarDivergence)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local[op.radius_axis]
+    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local_flags[op.radius_axis]
 end
 
 function enforce_conditions(op::PolarDivergence)
@@ -4554,7 +4791,7 @@ function check_conditions(op::PolarLaplacian)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local[op.radius_axis]
+    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local_flags[op.radius_axis]
 end
 
 function enforce_conditions(op::PolarLaplacian)
@@ -5386,7 +5623,7 @@ function check_conditions(op::SphericalGradient)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local[op.radius_axis]
+    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local_flags[op.radius_axis]
 end
 
 function enforce_conditions(op::SphericalGradient)
@@ -5513,7 +5750,7 @@ function check_conditions(op::SphericalDivergence)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local[op.radius_axis]
+    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local_flags[op.radius_axis]
 end
 
 function enforce_conditions(op::SphericalDivergence)
@@ -5660,7 +5897,7 @@ function check_conditions(op::SphericalCurl)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local[op.radius_axis]
+    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local_flags[op.radius_axis]
 end
 
 function enforce_conditions(op::SphericalCurl)
@@ -5884,7 +6121,7 @@ function check_conditions(op::SphericalLaplacian)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local[op.radius_axis]
+    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local_flags[op.radius_axis]
 end
 
 function enforce_conditions(op::SphericalLaplacian)
@@ -5988,7 +6225,7 @@ function check_conditions(op::SphericalEllProduct)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local[op.radius_axis]
+    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local_flags[op.radius_axis]
 end
 
 function enforce_conditions(op::SphericalEllProduct)
@@ -6053,6 +6290,9 @@ end
 
 # Stub for derivative_basis with order argument
 function derivative_basis(basis, order)
+    if hasmethod(derivative_basis, Tuple{typeof(basis)}, (:order,))
+        return derivative_basis(basis; order = order)
+    end
     if order == 1 && hasmethod(derivative_basis, Tuple{typeof(basis)})
         return derivative_basis(basis)
     end

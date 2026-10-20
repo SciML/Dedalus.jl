@@ -749,22 +749,22 @@ end
 # ============================================================================
 
 """
-    _dealias_buffer_size(f::Field) -> Int
+    _dealias_buffer_size(f) -> Int
 
 Compute and cache the buffer size needed for dealias-scale data.
 """
-function _dealias_buffer_size(f::Field)
+function _dealias_buffer_size(f::AbstractCurrent)
     return get!(f._cache, :dealias_buffer_size) do
         buffer_size(f.dist, f.domain, domain_dealias(f.domain), f.dtype)
     end
 end
 
 """
-    _dealias_buffer(f::Field) -> Vector{Float64}
+    _dealias_buffer(f) -> Vector{Float64}
 
 Build and cache a buffer large enough for dealias-scale data.
 """
-function _dealias_buffer(f::Field)
+function _dealias_buffer(f::AbstractCurrent)
     return get!(f._cache, :dealias_buffer) do
         bs = _dealias_buffer_size(f)
         ncomp = prod(get_dim(vs) for vs in f.tensorsig; init = 1)
@@ -942,11 +942,11 @@ Require an axis to be local.
 """
 function require_local!(f::Field, axis::Int)
     if _get_layout(f).grid_space[axis]
-        while !_get_layout(f).local[axis]
+        while !_get_layout(f).local_flags[axis]
             towards_coeff_space!(f)
         end
     else
-        while !_get_layout(f).local[axis]
+        while !_get_layout(f).local_flags[axis]
             towards_grid_space!(f)
         end
     end
@@ -1107,7 +1107,7 @@ function fill_random!(
     if is_complex_operand(f)
         shape = (shape..., 2)
     end
-    global_data = ChunkedRandomArray(shape, seed, chunk_size, distribution)
+    global_data = ChunkedRandomArray(shape; seed = seed, chunk_size = chunk_size, distribution = distribution)
     # Extract local data
     component_slices = ntuple(_ -> Colon(), length(f.tensorsig))
     spatial_slices = slices(_get_layout(f), f.domain, f.scales)
@@ -1116,7 +1116,8 @@ function fill_random!(
     if is_real_operand(f)
         f.data .= local_data
     else
-        f.data .= complex.(local_data[.., 1], local_data[.., 2])
+        nd = ndims(local_data)
+        f.data .= complex.(selectdim(local_data, nd, 1), selectdim(local_data, nd, 2))
     end
     return nothing
 end
@@ -1264,7 +1265,7 @@ Copy data over constant distributed dimensions for arithmetic broadcasting.
 """
 function broadcast_ghosts(f::Field, output_nonconst_dims)
     self_const_dims = collect(domain_constant(f.domain))
-    distributed = .!_get_layout(f).local
+    distributed = .!_get_layout(f).local_flags
     broadcast_dims = output_nonconst_dims .& self_const_dims
     deploy_dims_ext = broadcast_dims .& distributed
     deploy_dims = deploy_dims_ext[distributed]

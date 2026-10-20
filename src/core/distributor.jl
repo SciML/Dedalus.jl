@@ -1509,6 +1509,11 @@ function valid_elements(
     tensor_shape = [get_dim(cs) for cs in tensorsig]
     vshape = (tensor_shape..., grid_shape_sizes...)
     valid = trues(vshape...)
+    # Dense (meshgrid) element arrays over all local axes, as the basis methods expect
+    meshgrid = [
+        reshape(collect(elements[ax]), ntuple(i -> i == ax ? length(elements[ax]) : 1, dim)) .+
+            zeros(Int, grid_shape_sizes...) for ax in 1:dim
+    ]
 
     # Check validity basis-by-basis
     gs = layout.grid_space
@@ -1518,8 +1523,7 @@ function valid_elements(
         basis_axes = fa:la
         # Get grid_space and elements for this basis's axes
         basis_gs = gs[basis_axes]
-        basis_elements = [elements[ax] for ax in basis_axes]
-        # Create meshgrid of basis elements
+        basis_elements = [meshgrid[ax] for ax in basis_axes]
         basis_valid = valid_elements(basis, tensorsig, basis_gs, basis_elements)
         valid .&= basis_valid
     end
@@ -1905,8 +1909,10 @@ function increment_single(transform::DistTransform, field)
     preset_layout!(field, transform.layout1)
     gdata = field.data
 
-    # Transform non-constant bases with data
-    return if basis !== nothing && prod(size(cdata)) > 0
+    # `field.data` is a fresh array per layout, so constant axes copy their data
+    return if basis === nothing
+        copyto!(gdata, cdata)
+    elseif prod(size(cdata)) > 0
         backward_transform(basis, field, ax, cdata, gdata)
     end
 end
@@ -1927,8 +1933,10 @@ function decrement_single(transform::DistTransform, field)
     preset_layout!(field, transform.layout0)
     cdata = field.data
 
-    # Transform non-constant bases with data
-    return if basis !== nothing && prod(size(gdata)) > 0
+    # `field.data` is a fresh array per layout, so constant axes copy their data
+    return if basis === nothing
+        copyto!(cdata, gdata)
+    elseif prod(size(gdata)) > 0
         forward_transform(basis, field, ax, gdata, cdata)
     end
 end
