@@ -315,11 +315,11 @@ function bases_by_coord(dom::Domain)
                     result[cs] = nothing
                 end
             end
-            # Fill in with bases — keyed by the basis's `coords` attribute,
-            # which is the coordinate or coordinate system the basis spans
-            # (matches Python: `bases_by_coord[basis.coords] = basis`).
+            # Fill in with bases — keyed by the coordinate or coordinate
+            # system the basis spans (matches Python:
+            # `bases_by_coord[basis.coords] = basis`).
             for basis in dom.bases
-                result[basis.coords] = basis
+                result[basis_coordsys(basis)] = basis
             end
             result
         end
@@ -423,23 +423,13 @@ end
 """
     get_coord(dom::Domain, name::AbstractString)
 
-Retrieve a `Coordinate` from the domain by name.  Searches all bases.
+Retrieve a `Coordinate` from the domain by name.  Searches the distributor's
+coordinates, so names resolve even on basis-free (constant) fields.
 """
 function get_coord(dom::Domain, name::AbstractString)
-    for basis in dom.bases
-        bc = get_coords(basis)
-        # If the basis coords is a single Coordinate
-        if bc isa CoordinateOrAzimuthal
-            if bc.name == name
-                return bc
-            end
-        else
-            # It's a coordinate system — iterate its coords
-            for basis_coord in get_coords(bc)
-                if basis_coord.name == name
-                    return basis_coord
-                end
-            end
+    for coord in get_coords(dom.dist)
+        if coord.name == name
+            return coord
         end
     end
     throw(ArgumentError("Coordinate name '$name' not in domain."))
