@@ -31,6 +31,10 @@ abstract type SpectralOperator1D <: SpectralOperator end
 """Abstract base for nonlinear operators."""
 abstract type NonlinearOperator <: AbstractOperator end
 
+# Operators evaluate to plain fields, except layout-locking operators.
+future_type(::AbstractOperator) = Field
+
+
 # ============================================================================
 # AbstractField (requested by code review)
 # ============================================================================
@@ -80,6 +84,71 @@ Subtypes should override this.
 """
 function new_operand(op::AbstractLinearOperator, operand; kw...)
     error("$(typeof(op)) has not implemented new_operand")
+end
+
+"""
+    replace_operand(op::AbstractLinearOperator, old, new_val)
+
+Replace `old` within the operator's operand and rebuild via `new_operand`,
+keeping `args` consistent with the original operand. If `old` is a type
+matching the operator itself, `new_val` is applied to the replaced operand.
+"""
+function replace_operand(op::AbstractLinearOperator, old, new_val)
+    op == old && return new_val
+    operand = replace_operand(operator_operand(op), old, new_val)
+    isa(old, DataType) && isa(op, old) && return new_val(operand)
+    return new_operand(op, operand)
+end
+
+"""
+    replace_dict(op::AbstractLinearOperator, subs::AbstractDict)
+
+Replace operands within the operator's operand according to `subs` and
+rebuild via `new_operand`.
+"""
+function replace_dict(op::AbstractLinearOperator, subs::AbstractDict)
+    op in keys(subs) && return subs[op]
+    operand = replace_dict(operator_operand(op), subs)
+    typeof(op) in keys(subs) && return subs[typeof(op)](operand)
+    return new_operand(op, operand)
+end
+
+"""
+    require_linearity(op::AbstractLinearOperator, vars...; kw...)
+
+Require the expression to be linear in the specified variables.
+A linear operator is linear exactly when its operand is.
+"""
+function require_linearity(op::AbstractLinearOperator, vars...; kw...)
+    return require_linearity(operator_operand(op), vars...; kw...)
+end
+
+"""
+    require_first_order(op::AbstractLinearOperator, ops...; kw...)
+
+Require the expression to be maximally first order in the specified
+operators. If the operator itself is one of `ops`, its operand must not
+contain `ops`.
+"""
+function require_first_order(
+        op::AbstractLinearOperator, ops...;
+        self_name = nothing, ops_name = nothing,
+        error_type = AssertionError
+    )
+    operand = operator_operand(op)
+    if any(T -> isa(T, DataType) && isa(op, T), ops)
+        if has_operand(operand, ops...)
+            self_name === nothing && (self_name = string(op))
+            ops_name === nothing && (ops_name = [string(o) for o in ops])
+            throw(error_type("$(self_name) must be first-order in $(ops_name)."))
+        end
+    else
+        require_first_order(
+            operand, ops...;
+            self_name = self_name, ops_name = ops_name, error_type = error_type
+        )
+    end
+    return nothing
 end
 
 """
@@ -167,7 +236,7 @@ function split_op(op::AbstractLinearOperator, vars...)
         end
     end
     operand = operator_operand(op)
-    s = split_operand(operand, vars...)
+    s = split(operand, vars...)
     return (new_operand(op, s[1]), new_operand(op, s[2]))
 end
 
@@ -190,6 +259,28 @@ function split_op(op::NonlinearOperator, vars...)
     else
         return (0, op)
     end
+end
+
+function require_linearity(
+        op::NonlinearOperator, vars...;
+        allow_affine::Bool = false, self_name = nothing,
+        vars_name = nothing, error_type = AssertionError
+    )
+    self_name === nothing && (self_name = string(op))
+    vars_name === nothing && (vars_name = [string(v) for v in vars])
+    if has_operand(op, vars...)
+        throw(error_type("$(self_name) is nonlinear in $(vars_name)."))
+    elseif !allow_affine
+        throw(error_type("$(self_name) must be strictly linear in $(vars_name)."))
+    end
+    return nothing
+end
+
+function require_first_order(op::NonlinearOperator, ops...; kw...)
+    for arg in op.args
+        isa(arg, AbstractOperand) && require_first_order(arg, ops...; kw...)
+    end
+    return nothing
 end
 
 function expand_operand(op::NonlinearOperator, vars...)
@@ -666,6 +757,9 @@ function Convert(arg, output_basis; out = nothing)
     dist = arg.dist
     coords = basis_coordsys(output_basis)
     input_basis = get_basis(arg.domain, coords)
+    if input_basis === output_basis
+        return arg
+    end
     first_axis = get_basis_axis(dist, output_basis)
     last_axis = first_axis + get_dim(output_basis) - 1
     new_domain = substitute_basis(arg.domain, input_basis, output_basis)
@@ -684,7 +778,7 @@ function check_conditions(op::Convert)
     arg = op.args[1]
     last_axis = op.last_axis
     last_is_coeff = !arg.layout.grid_space[last_axis]
-    last_is_local = arg.layout.local[last_axis]
+    last_is_local = arg.layout.local_flags[last_axis]
     if last_is_coeff && op.subaxis_coupling[end]
         return last_is_local
     end
@@ -809,7 +903,9 @@ function check_conditions(op::Differentiate)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.last_axis]
+    last = op.last_axis
+    return !arg.layout.grid_space[last] &&
+        (!op.subaxis_coupling[end] || arg.layout.local_flags[last])
 end
 
 function enforce_conditions(op::Differentiate)
@@ -878,6 +974,9 @@ function Interpolate(arg, coord, position; out = nothing)
         return arg
     end
     dist = arg.dist
+    if coord isa Symbol || coord isa AbstractString
+        coord = get_coord(arg.domain, String(coord))
+    end
     input_basis = get_basis(arg.domain, coord)
     output_basis = if input_basis !== nothing && hasmethod(interpolate_basis, Tuple{typeof(input_basis), typeof(position)})
         interpolate_basis(input_basis, position)
@@ -896,12 +995,29 @@ function Interpolate(arg, coord, position; out = nothing)
     )
 end
 
+"""
+    (f::AbstractOperand)(; coord=position, ...)
+
+Interpolate an operand at fixed coordinate positions, e.g. `u(x = 0)`
+or `u(x = 0, y = 0)`. Each keyword names a coordinate and gives the
+position at which to evaluate along it.
+"""
+function (f::AbstractOperand)(; kw...)
+    result = f
+    for (coord, position) in kw
+        result = Interpolate(result, coord, position)
+    end
+    return result
+end
+
 function check_conditions(op::Interpolate)
     arg = op.args[1]
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.last_axis]
+    last = op.last_axis
+    return !arg.layout.grid_space[last] &&
+        (!op.subaxis_coupling[end] || arg.layout.local_flags[last])
 end
 
 function enforce_conditions(op::Interpolate)
@@ -999,7 +1115,9 @@ function check_conditions(op::Integrate)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.last_axis]
+    last = op.last_axis
+    return !arg.layout.grid_space[last] &&
+        (!op.subaxis_coupling[end] || arg.layout.local_flags[last])
 end
 
 function enforce_conditions(op::Integrate)
@@ -1104,7 +1222,9 @@ function check_conditions(op::Average)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.last_axis]
+    last = op.last_axis
+    return !arg.layout.grid_space[last] &&
+        (!op.subaxis_coupling[end] || arg.layout.local_flags[last])
 end
 
 function enforce_conditions(op::Average)
@@ -1212,7 +1332,9 @@ function check_conditions(op::Lift)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.last_axis]
+    last = op.last_axis
+    return !arg.layout.grid_space[last] &&
+        (!op.subaxis_coupling[end] || arg.layout.local_flags[last])
 end
 
 function enforce_conditions(op::Lift)
@@ -2195,6 +2317,9 @@ end
 
 # Laplacian dispatch moved to end of file (after all operator types defined)
 
+future_type(::GridOperator) = LockedField
+future_type(::CoeffOperator) = LockedField
+
 """Lock field to grid space."""
 grid_op(field) = GridOperator(field)
 
@@ -2350,12 +2475,9 @@ differentiate(arg, coord) = Differentiate(arg, coord)
 # Stubs for subsystem/solver wiring
 # ============================================================================
 
-function local_groupset_slices(layout, group, domain; scales = 1)
-    return (Colon(),)
-end
 
 function basis_matrix_dependence(basis, axis)
-    return false
+    return matrix_dependence(basis, axis)
 end
 
 # ============================================================================
@@ -4214,7 +4336,7 @@ function check_conditions(op::MulCosine)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local[op.radius_axis]
+    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local_flags[op.radius_axis]
 end
 
 function enforce_conditions(op::MulCosine)
@@ -4317,7 +4439,7 @@ function check_conditions(op::PolarGradient)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local[op.radius_axis]
+    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local_flags[op.radius_axis]
 end
 
 function enforce_conditions(op::PolarGradient)
@@ -4437,7 +4559,7 @@ function check_conditions(op::PolarDivergence)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local[op.radius_axis]
+    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local_flags[op.radius_axis]
 end
 
 function enforce_conditions(op::PolarDivergence)
@@ -4554,7 +4676,7 @@ function check_conditions(op::PolarLaplacian)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local[op.radius_axis]
+    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local_flags[op.radius_axis]
 end
 
 function enforce_conditions(op::PolarLaplacian)
@@ -5386,7 +5508,7 @@ function check_conditions(op::SphericalGradient)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local[op.radius_axis]
+    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local_flags[op.radius_axis]
 end
 
 function enforce_conditions(op::SphericalGradient)
@@ -5513,7 +5635,7 @@ function check_conditions(op::SphericalDivergence)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local[op.radius_axis]
+    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local_flags[op.radius_axis]
 end
 
 function enforce_conditions(op::SphericalDivergence)
@@ -5660,7 +5782,7 @@ function check_conditions(op::SphericalCurl)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local[op.radius_axis]
+    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local_flags[op.radius_axis]
 end
 
 function enforce_conditions(op::SphericalCurl)
@@ -5884,7 +6006,7 @@ function check_conditions(op::SphericalLaplacian)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local[op.radius_axis]
+    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local_flags[op.radius_axis]
 end
 
 function enforce_conditions(op::SphericalLaplacian)
@@ -5988,7 +6110,7 @@ function check_conditions(op::SphericalEllProduct)
     if !isa(arg, AbstractCurrent)
         return false
     end
-    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local[op.radius_axis]
+    return !arg.layout.grid_space[op.radius_axis] && arg.layout.local_flags[op.radius_axis]
 end
 
 function enforce_conditions(op::SphericalEllProduct)
