@@ -481,11 +481,11 @@ function product_build_bases(arg0, arg1; ncc::Bool = false, ncc_vars = nothing, 
             continue
             # Multiply all bases
         elseif ncc && has_operand(arg0, ncc_vars...)
-            push!(bases, b1 * b0)  # matmul order: b1 @ b0
+            push!(bases, basis_matmul(b1, b0))  # matmul order: b1 @ b0
         elseif ncc && has_operand(arg1, ncc_vars...)
-            push!(bases, b0 * b1)  # matmul order: b0 @ b1
+            push!(bases, basis_matmul(b0, b1))  # matmul order: b0 @ b1
         else
-            push!(bases, b0 * b1)
+            push!(bases, basis_mul(b0, b1))
         end
     end
     return Tuple(bases)
@@ -1504,7 +1504,7 @@ struct GhostBroadcaster
         # Determine deployment dimensions: broadcast AND constant
         deploy_dims_ext = broadcast_arr .& constant_arr
         # Filter to non-local (distributed) dimensions
-        local_arr = collect(Bool, layout.local)
+        local_arr = collect(Bool, layout.local_flags)
         deploy_dims = deploy_dims_ext[.!local_arr]
         # Build subcomm or skip casting
         if any(deploy_dims)

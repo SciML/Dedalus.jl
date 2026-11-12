@@ -1518,10 +1518,24 @@ function valid_elements(
         basis_axes = fa:la
         # Get grid_space and elements for this basis's axes
         basis_gs = gs[basis_axes]
-        basis_elements = [elements[ax] for ax in basis_axes]
-        # Create meshgrid of basis elements
+        # Meshgrid of basis elements: one dense array per basis axis,
+        # each shaped by the basis axis lengths and varying along its axis
+        basis_lengths = [length(elements[ax]) for ax in basis_axes]
+        basis_elements = Any[]
+        for (j, ax) in enumerate(basis_axes)
+            shp = ones(Int, length(basis_axes))
+            shp[j] = basis_lengths[j]
+            reps = copy(basis_lengths)
+            reps[j] = 1
+            push!(basis_elements, repeat(reshape(elements[ax], shp...); outer = reps))
+        end
         basis_valid = valid_elements(basis, tensorsig, basis_gs, basis_elements)
-        valid .&= basis_valid
+        # Reshape to the full shape, with singletons on non-basis axes
+        full_shape = (
+            tensor_shape...,
+            ntuple(ax -> ax in basis_axes ? basis_lengths[ax - fa + 1] : 1, dim)...,
+        )
+        valid .&= reshape(basis_valid, full_shape)
     end
 
     layout._valid_elements_cache[cache_key] = valid
@@ -1609,6 +1623,7 @@ function local_group_arrays(
         layout::Layout, domain, scales;
         rank = nothing, broadcast::Bool = false
     )
+    scales = remedy_scales(layout.dist, scales)
     cache_key = (objectid(domain), Tuple(scales), rank, broadcast)
     cached = get(layout._local_group_arrays_cache, cache_key, nothing)
     if cached !== nothing
@@ -1691,6 +1706,7 @@ function local_groupsets(
         layout::Layout, group_coupling, domain, scales;
         rank = nothing, broadcast::Bool = false
     )
+    scales = remedy_scales(layout.dist, scales)
     cache_key = (Tuple(group_coupling), objectid(domain), Tuple(scales), rank, broadcast)
     cached = get(layout._local_groupsets_cache, cache_key, nothing)
     if cached !== nothing
@@ -1726,8 +1742,63 @@ function local_groupsets(
         end
     end
 
-    result = OrderedSet{Tuple}(groupset_list)
+    result = OrderedSet(groupset_list)
     layout._local_groupsets_cache[cache_key] = result
+    return result
+end
+
+"""
+    local_groupset_slices(layout::Layout, groupset, domain; scales=1)
+
+Slices of local data belonging to `groupset`, as a vector of per-axis
+index tuples (one tuple per contiguous block). Axes whose groupset entry
+is `nothing` (coupled axes) are sliced with `Colon()`.
+"""
+function local_groupset_slices(layout::Layout, groupset, domain; scales = 1)
+    scales = remedy_scales(layout.dist, scales)
+    cache_key = (groupset, objectid(domain), Tuple(scales))
+    cached = get(layout._local_groupset_slices_cache, cache_key, nothing)
+    if cached !== nothing
+        return cached
+    end
+    groups = local_group_arrays(layout, domain, scales)
+    dim = length(groups)
+    per_axis = Vector{Any}(undef, dim)
+    for d in 1:dim
+        g = groupset[d]
+        if g === nothing
+            per_axis[d] = Any[Colon()]
+            continue
+        end
+        gd = groups[d]
+        idxs = Int[]
+        for i in axes(gd, d)
+            if any(x -> x == g, selectdim(gd, d, i))
+                push!(idxs, i)
+            end
+        end
+        ranges = Any[]
+        if !isempty(idxs)
+            start = prev = idxs[1]
+            for i in idxs[2:end]
+                if i == prev + 1
+                    prev = i
+                else
+                    push!(ranges, start:prev)
+                    start = prev = i
+                end
+            end
+            push!(ranges, start:prev)
+        end
+        per_axis[d] = ranges
+    end
+    result = Any[]
+    if all(!isempty, per_axis)
+        for combo in Base.Iterators.product(per_axis...)
+            push!(result, Tuple(combo))
+        end
+    end
+    layout._local_groupset_slices_cache[cache_key] = result
     return result
 end
 
@@ -2052,7 +2123,7 @@ end
 Build a transpose plan for a single field.
 """
 function _single_plan(transpose_obj::Transpose, field)
-    ncomp = prod([get_dim(cs) for cs in field.tensorsig])
+    ncomp = prod([get_dim(cs) for cs in field.tensorsig]; init = 1)
     sub_shape_val = _sub_shape(transpose_obj, field.domain, field.scales)
     chunk_shape_val = Tuple(chunk_shape(field.domain, transpose_obj.layout0))
     return _get_plan(transpose_obj, ncomp, sub_shape_val, chunk_shape_val, field.dtype)
@@ -2080,7 +2151,7 @@ function _group_plans(transpose_obj::Transpose, fields)
     for ((sub_shape_val, chunk_shape_val), grp_fields) in field_groups
         ncomp = 0
         for f in grp_fields
-            ncomp += prod([get_dim(cs) for cs in f.tensorsig])
+            ncomp += prod([get_dim(cs) for cs in f.tensorsig]; init = 1)
         end
         plan = _get_plan(
             transpose_obj, ncomp, sub_shape_val, chunk_shape_val,

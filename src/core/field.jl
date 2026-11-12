@@ -942,11 +942,11 @@ Require an axis to be local.
 """
 function require_local!(f::Field, axis::Int)
     if _get_layout(f).grid_space[axis]
-        while !_get_layout(f).local[axis]
+        while !_get_layout(f).local_flags[axis]
             towards_coeff_space!(f)
         end
     else
-        while !_get_layout(f).local[axis]
+        while !_get_layout(f).local_flags[axis]
             towards_grid_space!(f)
         end
     end

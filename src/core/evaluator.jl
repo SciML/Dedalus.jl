@@ -1150,7 +1150,7 @@ function setup_file(h::H5FileHandlerBase, file)
         # Spatial scale metadata as attributes
         _rank = length(op.tensorsig)
         for axis in 1:h.dist.dim
-            basis = op.domain.full_bases[axis]
+            basis = full_bases(op.domain)[axis]
             if basis === nothing
                 attrs(dset)["scale_name_$(axis)"] = "constant"
             else
@@ -1679,7 +1679,7 @@ function _virtual_setup_joint_file(h::H5FileHandlerBase, file)
         attrs(dset)["scales"] = collect(Float64, scales)
         _rank = length(op.tensorsig)
         for axis in 1:h.dist.dim
-            basis = op.domain.full_bases[axis]
+            basis = full_bases(op.domain)[axis]
             if basis === nothing
                 attrs(dset)["scale_name_$(axis)"] = "constant"
             else
@@ -2162,7 +2162,10 @@ end
 Get the coordinate name for a given basis and sub-axis index.
 """
 function get_coord_name(basis, subaxis)
-    cs = basis.coordsys
+    cs = basis_coordsys(basis)
+    if cs isa CoordinateOrAzimuthal
+        return string(cs.name)
+    end
     coords = get_coords(cs)
     if subaxis isa Integer && 1 <= subaxis <= length(coords)
         return string(coords[subaxis].name)
@@ -2210,6 +2213,9 @@ Alias for [`H5FileHandlerBase`](@ref), the default file-output handler.
 const FileHandler = H5FileHandlerBase
 
 export Evaluator,
+    add_file_handler,
+    add_task!,
+    evaluate_handlers,
     FileHandler,
     H5FileHandlerBase,
     H5GatherFileHandler,

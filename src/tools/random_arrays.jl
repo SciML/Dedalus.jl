@@ -51,7 +51,7 @@ idx, data = take!(ch)   # (0, [...])
 ```
 """
 function chunked_rng(seed, chunk_size::Int, distribution::AbstractString)
-    return Channel{Tuple{Int, Vector{Float64}}}(; csize = 1) do ch
+    return Channel{Tuple{Int, Vector{Float64}}}(1) do ch
         rng = Xoshiro(seed)
         chunk_index = 0
         while true
@@ -81,12 +81,9 @@ function rng_element(index::Int, seed, chunk_size::Int, distribution::AbstractSt
     cs = min(1 + index, chunk_size)
     rng = chunked_rng(seed, cs, distribution)
     d, m = divrem(index, cs)
-    local data
-    for (chunk, chunk_data) in rng
-        if chunk == d
-            data = chunk_data
-            break
-        end
+    data = last(take!(rng))
+    for _ in 1:d
+        data = last(take!(rng))
     end
     close(rng)
     return data[m + 1]  # 1-based array indexing

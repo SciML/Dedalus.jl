@@ -973,8 +973,8 @@ function ball_grad(B::BallWrapper, ell::Int, rank::Int, data_in)
     data_dtype = eltype(data_in)
     data_out = zeros(data_dtype, Tuple(shape))
 
+    i_LU = ell - B.ell_min + 1  # 1-based index; only used when store_lu
     if B.store_lu
-        i_LU = ell - B.ell_min + 1  # 1-based index
         if !B.LU_grad_initialized[i_LU][rank + 1]
             @debug "LU_grad not initialized l=$ell, rank=$rank"
             B.LU_grad[i_LU][rank + 1] = Vector{Any}(nothing, 4 * (3^rank))
@@ -1041,8 +1041,8 @@ Operates on rank-1 fields (vectors).
 function ball_curl(B::BallWrapper, ell::Int, rank::Int, data_in, data_out)
     data_dtype = eltype(data_in)
 
+    i_LU = ell - B.ell_min + 1  # 1-based; only used when store_lu
     if B.store_lu
-        i_LU = ell - B.ell_min + 1  # 1-based
         if !B.LU_curl_initialized[i_LU][rank + 1]
             @debug "LU_curl not initialized l=$ell, rank=$rank"
             B.LU_curl[i_LU][rank + 1] = Vector{Any}(nothing, 3)
@@ -1060,11 +1060,10 @@ function ball_curl(B::BallWrapper, ell::Int, rank::Int, data_in, data_out)
         src = data_in[(N + 2):(2 * (N + 1))]  # Python: data_in[(N+1):2*(N+1)]
         rhs = -1im * xip * Dm * src
         if B.store_lu
-            index = 1
             if !B.LU_curl_initialized[i_LU][rank + 1]
-                B.LU_curl[i_LU][rank + 1][index] = lu(Matrix(Cm))
+                B.LU_curl[i_LU][rank + 1][1] = lu(Matrix(Cm))
             end
-            data_out[1:(N + 1)] .= B.LU_curl[i_LU][rank + 1][index] \ rhs
+            data_out[1:(N + 1)] .= B.LU_curl[i_LU][rank + 1][1] \ rhs
         else
             data_out[1:(N + 1)] .= Matrix(Cm) \ rhs
         end
@@ -1076,11 +1075,8 @@ function ball_curl(B::BallWrapper, ell::Int, rank::Int, data_in, data_out)
     C0 = ball_op(B, "E", N, 0, ell, dtype = data_dtype)
     Dm_1 = ball_op(B, "D-", N, 0, ell + 1, dtype = data_dtype)
 
-    if B.store_lu
-        index = 2
-        if !B.LU_curl_initialized[i_LU][rank + 1]
-            B.LU_curl[i_LU][rank + 1][index] = lu(Matrix(C0))
-        end
+    if B.store_lu && !B.LU_curl_initialized[i_LU][rank + 1]
+        B.LU_curl[i_LU][rank + 1][2] = lu(Matrix(C0))
     end
 
     if ell >= 1
@@ -1089,7 +1085,7 @@ function ball_curl(B::BallWrapper, ell::Int, rank::Int, data_in, data_out)
         src_bot = data_in[(2 * (N + 1) + 1):end]
         rhs = 1im * xim * Dm_1 * src_bot - 1im * xip * Dp_1 * src_top
         if B.store_lu
-            data_out[(N + 2):(2 * (N + 1))] .= B.LU_curl[i_LU][rank + 1][index] \ rhs
+            data_out[(N + 2):(2 * (N + 1))] .= B.LU_curl[i_LU][rank + 1][2] \ rhs
         else
             data_out[(N + 2):(2 * (N + 1))] .= Matrix(C0) \ rhs
         end
@@ -1097,7 +1093,7 @@ function ball_curl(B::BallWrapper, ell::Int, rank::Int, data_in, data_out)
         src_bot = data_in[(2 * (N + 1) + 1):end]
         rhs = 1im * xim * Dm_1 * src_bot
         if B.store_lu
-            data_out[(N + 2):(2 * (N + 1))] .= B.LU_curl[i_LU][rank + 1][index] \ rhs
+            data_out[(N + 2):(2 * (N + 1))] .= B.LU_curl[i_LU][rank + 1][2] \ rhs
         else
             data_out[(N + 2):(2 * (N + 1))] .= Matrix(C0) \ rhs
         end
@@ -1110,11 +1106,10 @@ function ball_curl(B::BallWrapper, ell::Int, rank::Int, data_in, data_out)
     rhs = 1im * xim * Dp_2 * src_mid
 
     if B.store_lu
-        index = 3
         if !B.LU_curl_initialized[i_LU][rank + 1]
-            B.LU_curl[i_LU][rank + 1][index] = lu(Matrix(Cp))
+            B.LU_curl[i_LU][rank + 1][3] = lu(Matrix(Cp))
         end
-        data_out[(2 * (N + 1) + 1):end] .= B.LU_curl[i_LU][rank + 1][index] \ rhs
+        data_out[(2 * (N + 1) + 1):end] .= B.LU_curl[i_LU][rank + 1][3] \ rhs
     else
         data_out[(2 * (N + 1) + 1):end] .= Matrix(Cp) \ rhs
     end
