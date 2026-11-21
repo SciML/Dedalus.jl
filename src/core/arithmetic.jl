@@ -224,13 +224,13 @@ function new_operands(op::Add, arg0, arg1; kw...)
 end
 
 """
-    split_expr(op::Add, vars...)
+    split(op::Add, vars...)
 
 Split into expressions containing and not containing specified operands/operators.
 """
-function split_expr(op::Add, vars...)
+function split(op::Add, vars...)
     # Sum over argument splittings
-    split_results = [split_expr(arg, vars...) for arg in op.args]
+    split_results = [split(arg, vars...) for arg in op.args]
     # split_results is a list of (containing, not_containing) pairs
     containing = sum(s[1] for s in split_results)
     not_containing = sum(s[2] for s in split_results)
@@ -395,7 +395,7 @@ function AddFields(args...; out = nothing, kw...)
     arg_list = collect(Any, converted_args)
     original = copy(arg_list)
     dist = unify_attributes(converted_args, :dist)
-    domain = Domain(dist, _bases)
+    domain = make_domain(dist, _bases)
     tensorsig = unify_attributes(converted_args, :tensorsig)
     dtype = promote_type([arg.dtype for arg in converted_args]...)
     return AddFields(
@@ -512,16 +512,16 @@ function new_operands(op::Product, args...; kw...)
 end
 
 """
-    split_expr(op::Product, vars...)
+    split(op::Product, vars...)
 
 Split into expressions containing and not containing specified operands/operators.
 """
-function split_expr(op::Product, vars...)
+function split(op::Product, vars...)
     # Take cartesian product of argument splittings
     split_args = []
     for arg in op.args
         if arg isa AbstractOperand
-            push!(split_args, split_expr(arg, vars...))
+            push!(split_args, split(arg, vars...))
         else
             push!(split_args, (0, arg))
         end
@@ -996,7 +996,7 @@ mutable struct DotProduct <: Product
         # FutureField requirements
         dist = unify_attributes((arg0, arg1), :dist)
         bases = product_build_bases(arg0, arg1; kw...)
-        domain = Domain(dist, bases)
+        domain = make_domain(dist, bases)
         dtype = promote_type(arg0.dtype, arg1.dtype)
         # Setup ghost broadcasting
         broadcast_dims = collect(domain_nonconstant(domain))
@@ -1233,7 +1233,7 @@ mutable struct CrossProduct <: Product
         # FutureField requirements
         dist = unify_attributes((arg0, arg1), :dist)
         bases = product_build_bases(arg0, arg1; kw...)
-        domain = Domain(dist, bases)
+        domain = make_domain(dist, bases)
         tensorsig = arg0.tensorsig
         dtype = promote_type(arg0.dtype, arg1.dtype)
         # Setup ghost broadcasting
@@ -1427,7 +1427,7 @@ mutable struct MultiplyFields <: Multiply
     function MultiplyFields(arg0, arg1; out = nothing, kw...)
         dist = unify_attributes((arg0, arg1), :dist)
         bases = product_build_bases(arg0, arg1; kw...)
-        domain = Domain(dist, bases)
+        domain = make_domain(dist, bases)
         tensorsig = (arg0.tensorsig..., arg1.tensorsig...)
         dtype = promote_type(arg0.dtype, arg1.dtype)
         # Setup ghost broadcasting
@@ -1606,6 +1606,8 @@ mutable struct MultiplyNumberField <: Multiply
 end
 
 is_future_field(::MultiplyNumberField) = true
+
+future_type(::Union{AddFields, DotProduct, CrossProduct, MultiplyFields, MultiplyNumberField}) = Field
 
 """
     check_conditions(op::MultiplyNumberField)

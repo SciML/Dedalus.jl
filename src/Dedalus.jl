@@ -6,6 +6,7 @@ const VERSION = "3.0.5"
 # ============================================================
 # Standard library imports
 # ============================================================
+import Base: split
 import TOML
 using Dates: Dates
 using LinearAlgebra: LinearAlgebra, Diagonal, SymTridiagonal, Symmetric,
