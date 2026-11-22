@@ -18,6 +18,7 @@ using Dedalus
     dist = Distributor(coords, Float64; mesh = (2, 2))
     bases = Tuple(RealFourier(coord, 8, (0, 2pi)) for coord in coords.coords)
     field = Field(dist; bases, name = "u")
+    @test evaluate(field) === field
     @test length(unique(string.((field(x = 0, z = 0), field(y = 0, z = 0))))) == 2
 
     ev = Dedalus.Evaluator(dist, Dict())
