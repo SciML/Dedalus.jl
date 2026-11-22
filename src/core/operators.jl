@@ -995,6 +995,11 @@ function Interpolate(arg, coord, position; out = nothing)
     )
 end
 
+function Base.string(op::Interpolate)
+    operand = string(only(op.original_args))
+    return "$operand($(op.coord)=$(op.position))"
+end
+
 """
     (f::AbstractOperand)(; coord=position, ...)
 
@@ -1024,6 +1029,7 @@ function enforce_conditions(op::Interpolate)
     arg = op.args[1]
     return if isa(arg, Field)
         require_coeff_space!(arg, op.last_axis)
+        require_local!(arg, op.last_axis)
     end
 end
 

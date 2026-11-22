@@ -10,6 +10,41 @@ using MPI
 using HDF5
 using Dedalus
 
+@testset "Virtual output across writes" begin
+    comm = MPI.COMM_WORLD
+    rank = MPI.Comm_rank(comm)
+    dir = MPI.bcast(rank == 0 ? mktempdir() : "", 0, comm)
+    coords = CartesianCoordinates("x", "y", "z")
+    dist = Distributor(coords, Float64; mesh = (2, 2))
+    bases = Tuple(RealFourier(coord, 8, (0, 2pi)) for coord in coords.coords)
+    field = Field(dist; bases, name = "u")
+    @test length(unique(string.((field(x = 0, z = 0), field(y = 0, z = 0))))) == 2
+
+    ev = Dedalus.Evaluator(dist, Dict())
+    output = add_file_handler(ev, joinpath(dir, "snapshots"); parallel = "virtual")
+    add_task!(output, field; name = "u")
+    x, y, z = local_grids(dist, bases...)
+    for write in 1:2
+        field["g"] = @. write * cos(x) * cos(y) * cos(z)
+        evaluate_handlers(ev, [output])
+    end
+
+    MPI.Barrier(comm)
+    h5open(joinpath(dir, "snapshots", "snapshots_s1.h5"), "r") do file
+        sl = Dedalus.slices(dist.grid_layout, field.domain, field.scales)
+        dset = file["tasks/u"]
+        @test size(dset) == (2, 8, 8, 8)
+        for write in 1:2
+            @test dset[write, sl...] ≈ (@. write * cos(x) * cos(y) * cos(z)) atol = 1.0e-12
+        end
+    end
+    sync() do
+        if rank == 0
+            rm(dir; recursive = true)
+        end
+    end
+end
+
 @testset "Output Parallel" begin
 
     comm = MPI.COMM_WORLD
@@ -83,15 +118,18 @@ using Dedalus
             test_dir, "$(basename(test_dir))_s1",
             "$(basename(test_dir))_s1_p$(rank).h5"
         )
+        @test isfile(h5_path)
         if isfile(h5_path)
             h5open(h5_path, "r") do file
                 for task in tasks
-                    task_saved = read(file["tasks"][string(task)])
                     task_eval = evaluate(task)
                     change_scales!(task_eval, output_scales)
-                    local_error = task_eval["g"] .- task_saved
-                    if length(local_error) > 0
-                        push!(errors, maximum(abs.(local_error)))
+                    data = task_eval["g"]
+                    if !isempty(data)
+                        dset = file["tasks"][string(task)]
+                        task_saved = dset[1, ntuple(_ -> Colon(), ndims(data))...]
+                        @test size(task_saved) == size(data)
+                        push!(errors, maximum(abs, data .- task_saved))
                     end
                 end
             end
@@ -154,6 +192,7 @@ using Dedalus
         errors = Float64[]
         MPI.Barrier(comm)
         joint_path = joinpath(test_dir, "$(basename(test_dir))_s1.h5")
+        @test isfile(joint_path)
         if isfile(joint_path)
             h5open(joint_path, "r") do file
                 for task in tasks
@@ -165,8 +204,7 @@ using Dedalus
                     local_sl = Dedalus.slices(gl, task_eval.domain, task_eval.scales)
                     tensor_dims = ntuple(i -> Colon(), length(task_eval.tensorsig))
                     full_slices = (tensor_dims..., local_sl...)
-                    task_saved = read(file["tasks"][task_name])
-                    task_local = task_saved[full_slices...]
+                    task_local = file["tasks"][task_name][1, full_slices...]
                     local_error = task_eval["g"] .- task_local
                     if length(local_error) > 0
                         push!(errors, maximum(abs.(local_error)))
@@ -236,6 +274,7 @@ using Dedalus
         # Check solution -- read from merged joint file
         errors = Float64[]
         joint_path = joinpath(test_dir, "$(basename(test_dir))_s1.h5")
+        @test isfile(joint_path)
         if isfile(joint_path)
             h5open(joint_path, "r") do file
                 for task in tasks
@@ -247,8 +286,7 @@ using Dedalus
                     local_sl = Dedalus.slices(gl, task_eval.domain, task_eval.scales)
                     tensor_dims = ntuple(i -> Colon(), length(task_eval.tensorsig))
                     full_slices = (tensor_dims..., local_sl...)
-                    task_saved = read(file["tasks"][task_name])
-                    task_local = task_saved[full_slices...]
+                    task_local = file["tasks"][task_name][1, full_slices...]
                     local_error = task_eval["g"] .- task_local
                     if length(local_error) > 0
                         push!(errors, maximum(abs.(local_error)))
@@ -318,6 +356,7 @@ using Dedalus
         # Check solution -- read from merged file
         errors = Float64[]
         merged_path = joinpath(test_dir, "$(basename(test_dir))_s1.h5")
+        @test isfile(merged_path)
         if isfile(merged_path)
             h5open(merged_path, "r") do file
                 for task in tasks
@@ -329,8 +368,7 @@ using Dedalus
                     local_sl = Dedalus.slices(gl, task_eval.domain, task_eval.scales)
                     tensor_dims = ntuple(i -> Colon(), length(task_eval.tensorsig))
                     full_slices = (tensor_dims..., local_sl...)
-                    task_saved = read(file["tasks"][task_name])
-                    task_local = task_saved[full_slices...]
+                    task_local = file["tasks"][task_name][1, full_slices...]
                     local_error = task_eval["g"] .- task_local
                     if length(local_error) > 0
                         push!(errors, maximum(abs.(local_error)))
