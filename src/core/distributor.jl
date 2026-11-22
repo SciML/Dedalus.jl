@@ -1412,16 +1412,15 @@ function local_chunks(
     end
 
     # Get chunks axis by axis
-    fb = full_bases(domain)
-    for ax in 1:length(fb)
-        basis = fb[ax]
+    constant = broadcast ? domain_constant(domain) : nothing
+    for ax in eachindex(chunk_nums)
         if layout.local_flags[ax]
             # All chunks for local dimensions (0-based chunk indices)
             push!(lc, collect(0:(chunk_nums[ax] - 1)))
         else
             # Block distribution
             m = layout.ext_mesh[ax]
-            if broadcast && basis === nothing
+            if broadcast && constant[ax]
                 coord = 0
             else
                 coord = ext_c[ax]
@@ -1974,8 +1973,9 @@ function increment_single(transform::DistTransform, field)
     preset_layout!(field, transform.layout1)
     gdata = field.data
 
-    # Transform non-constant bases with data
-    return if basis !== nothing && prod(size(cdata)) > 0
+    return if basis === nothing
+        copyto!(gdata, cdata)
+    elseif !isempty(cdata)
         backward_transform(basis, field, ax, cdata, gdata)
     end
 end
@@ -1996,8 +1996,9 @@ function decrement_single(transform::DistTransform, field)
     preset_layout!(field, transform.layout0)
     cdata = field.data
 
-    # Transform non-constant bases with data
-    return if basis !== nothing && prod(size(gdata)) > 0
+    return if basis === nothing
+        copyto!(cdata, gdata)
+    elseif !isempty(gdata)
         forward_transform(basis, field, ax, gdata, cdata)
     end
 end

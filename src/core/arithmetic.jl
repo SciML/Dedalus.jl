@@ -1507,19 +1507,9 @@ struct GhostBroadcaster
         local_arr = collect(Bool, layout.local_flags)
         deploy_dims = deploy_dims_ext[.!local_arr]
         # Build subcomm or skip casting
-        if any(deploy_dims)
-            # In MPI mode, create subcommunicator for broadcasting
-            # For now, use domain.dist.comm_cart if available
-            subcomm = nothing
-            try
-                remain_dims = Int.(deploy_dims)
-                subcomm = domain.dist.comm_cart.Sub(remain_dims = remain_dims)
-            catch
-                # No MPI; fall through to skip
-            end
-            if subcomm !== nothing
-                return new(domain, layout, broadcast_arr, deploy_dims, subcomm, false)
-            end
+        if any(deploy_dims) && !(domain.dist.comm_cart isa SerialCommCart)
+            subcomm = cart_sub(domain.dist.comm_cart, deploy_dims)
+            return new(domain, layout, broadcast_arr, deploy_dims, subcomm, false)
         end
         # No deployment needed; skip casting
         return new(domain, layout, broadcast_arr, deploy_dims, nothing, true)
@@ -1537,17 +1527,22 @@ function ghost_cast(gb::GhostBroadcaster, field)
         return field.data
     end
     # MPI broadcasting path
-    shape = size(field.data)
-    dtype = field.dtype
-    # Get or create ghost data buffer
-    if gb.subcomm.rank == 0
+    if comm_rank(gb.subcomm) == 0
         ghost_data = field.data
     else
-        ghost_data = zeros(dtype, shape...)
+        elements = local_elements(gb.layout, gb.domain, field.scales; broadcast = true)
+        spatial_shape = ntuple(length(elements)) do ax
+            if gb.broadcast_dims[ax] && domain_constant(gb.domain)[ax]
+                return length(elements[ax])
+            end
+            return size(field.data, length(field.tensorsig) + ax)
+        end
+        tensor_shape = map(get_dim, field.tensorsig)
+        ghost_data = Array{field.dtype}(undef, tensor_shape..., spatial_shape...)
     end
     # Broadcast data from rank 0 of subcomm
     if length(ghost_data) > 0
-        gb.subcomm.Bcast(ghost_data, root = 0)
+        get_mpi().Bcast!(ghost_data, 0, gb.subcomm)
     end
     return ghost_data
 end
