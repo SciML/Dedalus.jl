@@ -174,8 +174,8 @@ natural_sort(["item10", "item2", "item1"])  # ["item1", "item2", "item10"]
 """
 function natural_sort(iterable; reverse::Bool = false)
     function _natural_key(item)
-        parts = split(string(item), r"([0-9]+)"; keepempty = false)
-        raw = split(string(item), r"[^0-9]+"; keepempty = false)
+        parts = Base.split(string(item), r"([0-9]+)"; keepempty = false)
+        raw = Base.split(string(item), r"[^0-9]+"; keepempty = false)
         # Rebuild interleaved key: split on digit groups, convert digits to Int.
         key = Any[]
         for m in eachmatch(r"([0-9]+)|([^0-9]+)", string(item))
