@@ -159,6 +159,10 @@ Construct an Alltoallv transpose planner.
 - `comm_sub` -- MPI sub-communicator for this transpose axis.
 """
 function AlltoallvTranspose(global_shape_in, dtype, axis::Integer, comm_sub)
+    return _alltoallv_transpose(global_shape_in, dtype, axis, comm_sub, (1, 1))
+end
+
+function _alltoallv_transpose(global_shape_in, dtype, axis, comm_sub, chunks)
     gs = Int32.(collect(global_shape_in))
     datasize = dtype == ComplexF64 ? 2 : 1
 
@@ -170,15 +174,15 @@ function AlltoallvTranspose(global_shape_in, dtype, axis::Integer, comm_sub)
     # Dimensions before the transpose axis, the two transpose axes, and after.
     # axis is 1-based: axes 1..axis-1 are "before", axis and axis+1 are transposed,
     # axis+2..end are "after".
-    N0 = axis > 1 ? prod(gs[1:(axis - 1)]) : 1
-    N1 = gs[axis]
-    N2 = gs[axis + 1]
-    N3_raw = axis + 2 <= length(gs) ? prod(gs[(axis + 2):end]) : 1
-    N3 = N3_raw * datasize
+    # Reinterpreted complex values occupy adjacent doubles on the first axis.
+    N0 = prod(gs[1:(axis - 1)]; init = 1) * datasize
+    N1 = cld(gs[axis], chunks[1]) * chunks[1]
+    N2 = cld(gs[axis + 1], chunks[2]) * chunks[2]
+    N3 = prod(gs[(axis + 2):end]; init = 1)
 
     # Block sizes (ceiling division)
-    B1 = cld(Int(N1), nprocs)
-    B2 = cld(Int(N2), nprocs)
+    B1 = cld(N1 ÷ chunks[1], nprocs) * chunks[1]
+    B2 = cld(N2 ÷ chunks[2], nprocs) * chunks[2]
 
     # Per-rank start/end/count arrays
     ranks = Int32.(collect(0:(nprocs - 1)))
@@ -348,18 +352,12 @@ end
 """
     _make_reduced_view(data, shape::Vector{Int32})
 
-Reshape `data` (treated as a flat Float64 buffer via `reinterpret`) into
-a 4D array view of the given shape. If `data` is a complex array, it is
-first reinterpreted as Float64 (doubling the last dimension).
+Reshape `data` into a 4D view of doubles. Complex data occupies twice as
+many entries on the first dimension.
 """
 function _make_reduced_view(data::AbstractArray, shape::Vector{Int32})
     s = Tuple(Int.(shape))
-    if eltype(data) <: Complex
-        flat = reinterpret(Float64, vec(data))
-    else
-        flat = reinterpret(Float64, vec(data))
-    end
-    return reshape(flat, s)
+    return reshape(reinterpret(Float64, vec(data)), s)
 end
 
 """
@@ -2084,8 +2082,8 @@ end
 """
     _get_plan(transpose_obj::Transpose, ncomp, sub_shape, chunk_shape_val, dtype)
 
-Build or retrieve a cached transpose plan. Returns `nothing` if no
-communication is needed (serial mode or identity shapes).
+Build or retrieve a cached transpose plan. Returns `nothing` in serial
+mode or for a subgrid with no data on any rank.
 """
 function _get_plan(
         transpose_obj::Transpose, ncomp::Integer, sub_shape::Tuple,
@@ -2100,17 +2098,15 @@ function _get_plan(
     ax = transpose_obj.axis
     if prod(sub_shape) == 0
         plan = nothing  # no data
-    elseif sub_shape[ax] == chunk_shape_val[ax] && (ax + 1 <= length(sub_shape) ? sub_shape[ax + 1] == chunk_shape_val[ax + 1] : true)
-        plan = nothing  # no change needed
     elseif transpose_obj.comm_sub === nothing
         plan = nothing  # serial mode
     else
         # Build AlltoallvTranspose plan
         # Prepend ncomp to sub_shape (matching Python's (ncomp,) + sub_shape)
         full_sub_shape = (ncomp, sub_shape...)
-        full_chunk_shape = (ncomp, chunk_shape_val...)
+        chunks = (chunk_shape_val[ax], chunk_shape_val[ax + 1])
         # axis+1 because we prepended ncomp dimension
-        plan = AlltoallvTranspose(full_sub_shape, dtype, ax + 1, transpose_obj.comm_sub)
+        plan = _alltoallv_transpose(full_sub_shape, dtype, ax + 1, transpose_obj.comm_sub, chunks)
     end
 
     transpose_obj._plan_cache[cache_key] = plan

@@ -315,9 +315,8 @@ function require_coeff_space(ev::Evaluator, fields)::Nothing
     isempty(layouts) && return
     # Decrement all fields down to coeff layout
     current_fields = Any[]
-    for index in sort(collect(keys(layouts)); rev = true)
-        index <= coeff_layout.index && continue
-        append!(current_fields, layouts[index])
+    for index in maximum(keys(layouts)):-1:(coeff_layout.index + 1)
+        haskey(layouts, index) && append!(current_fields, layouts[index])
         path = ev.dist.paths[index]  # path at index connects index-1 <-> index
         decrement(path, current_fields)
     end
@@ -346,9 +345,8 @@ function require_grid_space(ev::Evaluator, fields)
     isempty(layouts) && return
     # Increment all fields up to grid layout
     current_fields = Any[]
-    for index in sort(collect(keys(layouts)))
-        index >= grid_layout.index && continue
-        append!(current_fields, layouts[index])
+    for index in minimum(keys(layouts)):(grid_layout.index - 1)
+        haskey(layouts, index) && append!(current_fields, layouts[index])
         path = ev.dist.paths[index + 1]  # path at index+1 connects index <-> index+1
         increment(path, current_fields)
     end
