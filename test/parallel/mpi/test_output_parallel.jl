@@ -10,7 +10,17 @@ using MPI
 using HDF5
 using Dedalus
 
-@testset "Virtual output across writes" begin
+@testset "Handler sync raises on every rank" begin
+    comm = MPI.COMM_WORLD
+    rank = MPI.Comm_rank(comm)
+    @test_throws ErrorException Dedalus._handler_sync(comm) do
+        rank == 0 && error("rank 0 failed")
+    end
+    @test Dedalus._handler_sync(() -> rank, comm) == rank
+end
+
+@testset "Virtual output across writes (max_writes = $max_writes)" for (max_writes, nwrites) in
+    ((nothing, 2), (2, 3))
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
     dir = MPI.bcast(rank == 0 ? mktempdir() : "", 0, comm)
@@ -22,21 +32,24 @@ using Dedalus
     @test length(unique(string.((field(x = 0, z = 0), field(y = 0, z = 0))))) == 2
 
     ev = Dedalus.Evaluator(dist, Dict())
-    output = add_file_handler(ev, joinpath(dir, "snapshots"); parallel = "virtual")
+    output = add_file_handler(ev, joinpath(dir, "snapshots"); parallel = "virtual", max_writes)
     add_task!(output, field; name = "u")
     x, y, z = local_grids(dist, bases...)
-    for write in 1:2
+    for write in 1:nwrites
         field["g"] = @. write * cos(x) * cos(y) * cos(z)
         evaluate_handlers(ev, [output])
     end
 
     MPI.Barrier(comm)
-    h5open(joinpath(dir, "snapshots", "snapshots_s1.h5"), "r") do file
-        sl = Dedalus.slices(dist.grid_layout, field.domain, field.scales)
-        dset = file["tasks/u"]
-        @test size(dset) == (2, 8, 8, 8)
-        for write in 1:2
-            @test dset[write, sl...] ≈ (@. write * cos(x) * cos(y) * cos(z)) atol = 1.0e-12
+    sl = Dedalus.slices(dist.grid_layout, field.domain, field.scales)
+    set_writes = Iterators.partition(1:nwrites, something(max_writes, nwrites))
+    for (set, writes) in enumerate(set_writes)
+        h5open(joinpath(dir, "snapshots", "snapshots_s$set.h5"), "r") do file
+            dset = file["tasks/u"]
+            @test size(dset) == (length(writes), 8, 8, 8)
+            for (i, write) in enumerate(writes)
+                @test dset[i, sl...] ≈ (@. write * cos(x) * cos(y) * cos(z)) atol = 1.0e-12
+            end
         end
     end
     sync() do

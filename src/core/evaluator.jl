@@ -771,16 +771,36 @@ end
 """
     _handler_sync(f::Function, comm)
 
-Execute f() with entry+exit barriers on a handler communicator.
-No-ops for SerialCommCart or serial mode.
+Execute f() between an entry barrier and an exit reduction on a handler
+communicator. If f() throws on any rank, every rank throws. No-ops for
+SerialCommCart or serial mode.
 """
 function _handler_sync(f::Function, comm)
     _handler_barrier(comm)
-    return try
+    result = try
         f()
-    finally
-        _handler_barrier(comm)
+    catch
+        _handler_any_failed(comm, true)
+        rethrow()
     end
+    _handler_any_failed(comm, false) &&
+        error("HDF5 file handler operation failed on another MPI rank")
+    return result
+end
+
+"""
+    _handler_any_failed(comm, failed::Bool) -> Bool
+
+Return whether `failed` is true on any rank of a handler communicator, so that
+an error on one rank reaches every rank instead of leaving the others blocked
+in a later collective.
+"""
+function _handler_any_failed(comm, failed::Bool)
+    if comm === nothing || comm isa SerialCommCart || !MPI_ENABLED[]
+        return failed
+    end
+    mpi = get_mpi()
+    return mpi.Allreduce(Int(failed), max, comm) > 0
 end
 
 # ============================================================================
@@ -1697,11 +1717,9 @@ end
 """
     _virtual_create_task_dataset(h, file, task) -> HDF5.Dataset
 
-Create a virtual dataset that maps to per-process files.
-
-Note: HDF5.jl virtual dataset support varies. If VDS API is not available,
-falls back to a regular dataset with a warning (data must then be merged
-manually post-run).
+Create a virtual dataset that maps to per-process files. Without MPI, or if
+the loaded HDF5.jl lacks virtual dataset support, create a regular resizable
+dataset instead.
 """
 function _virtual_create_task_dataset(h::H5FileHandlerBase, file, task)
     g_shape = task["global_shape"]
@@ -1714,8 +1732,6 @@ function _virtual_create_task_dataset(h::H5FileHandlerBase, file, task)
     jl_dtype = task["dtype"]
     comm_sz = _handler_comm_size(h.comm)
 
-    # Try to create a virtual dataset linking per-process files.
-    # HDF5.jl virtual dataset support requires the low-level API.
     if _hdf5_has_vds_support() && comm_sz > 1
         dset = _create_vds_dataset(h, file, task, shape, maxshape, jl_dtype, comm_sz)
     else
@@ -1749,15 +1765,18 @@ per-process files.
 function _create_vds_dataset(h, file, task, shape, maxshape, dtype, comm_sz)
     dset_name = task["name"]
     mappings = HDF5.VirtualMapping[]
-    time = HDF5.BlockRange(1; count = maxshape[1])
+    # The time axis is mapped as an unlimited selection even when max_writes is
+    # finite: HDF5 rejects a limited selection longer than the dataset's current
+    # extent, and the process files bound the number of writes anyway.
+    time = HDF5.BlockRange(1; count = -1)
     try
         for rank in 0:(comm_sz - 1)
             _, start, local_size = get_data_distribution(h, task; rank)
             prod(local_size) == 0 && continue
 
             src_path = relpath(_virtual_current_process_file(h, rank), h.base_path)
-            vspace = HDF5.dataspace(shape; max_dims = maxshape)
-            src_space = HDF5.dataspace((1, local_size...); max_dims = (maxshape[1], local_size...))
+            vspace = HDF5.dataspace(shape; max_dims = (-1, maxshape[2:end]...))
+            src_space = HDF5.dataspace((1, local_size...); max_dims = (-1, local_size...))
             push!(mappings, HDF5.VirtualMapping(vspace, src_path, "/tasks/$dset_name", src_space))
             spatial = map((offset, n) -> (offset + 1):(offset + n), start, local_size)
             HDF5.select_hyperslab!(vspace, (time, spatial...))
