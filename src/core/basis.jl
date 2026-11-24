@@ -5076,8 +5076,8 @@ function m_maps(b::SphereBasis, dist)
     scales = domain_dealias(domain)
     m_coeff, _ = _local_sphere_groups(b, coeff_layout, domain, scales, az)
     m_grid, _ = _local_sphere_groups(b, grid_layout, domain, scales, az)
-    gs_coeff = group_shape(coeff_layout, domain)[az]
-    gs_grid = group_shape(grid_layout, domain)[az]
+    gs_coeff = group_shape(domain, coeff_layout)[az]
+    gs_grid = group_shape(domain, grid_layout)[az]
     maps = Tuple{Int, UnitRange{Int}, UnitRange{Int}, OrdinalRange{Int, Int}}[]
     for m in unique(vec(permutedims(m_coeff)))
         mc_slice, ell_slice = _sphere_group_block(m_coeff, m, gs_coeff)
