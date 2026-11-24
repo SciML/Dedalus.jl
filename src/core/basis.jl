@@ -6051,13 +6051,7 @@ function transform_plan(b::ShellRadialBasis, dist, grid_size, k)
     bp = b.alpha[2] + k
     a0 = b.alpha[1]
     b0 = b.alpha[2]
-    # Build matrix transform plan using Jacobi polynomials
-    N = b.Nmax + 1
-    z, w = jacobi_quadrature(grid_size, a0, b0)
-    P = jacobi_polynomials(N, a, bp, z)
-    fwd = transpose(P) * Diagonal(w)
-    bwd = P
-    plan = MatrixTransformPlan(Matrix{Float64}(fwd), Matrix{Float64}(bwd))
+    plan = JacobiMMT(grid_size, b.Nmax + 1, a, bp, a0, b0)
     b._cache[cache_key] = plan
     return plan
 end
@@ -6574,7 +6568,7 @@ function forward_transform_radius_ball(b::BallRadialBasis, field, axis, gdata, c
     R = regularity_classes(b, field.tensorsig)
     temp = copy(gdata)
     for (regindex, regtotal_val) in pairs(R)
-        grid_shape_val = size(gdata[regindex])
+        grid_shape_val = size(component_view(gdata, regindex))
         plan = transform_plan(b, field.dist, grid_shape_val, regindex, axis, regtotal_val, b.k, b.alpha)
         forward!(plan, component_view(temp, regindex), component_view(cdata, regindex), axis)
     end
@@ -6591,7 +6585,7 @@ function backward_transform_radius_ball(b::BallRadialBasis, field, axis, cdata, 
     R = regularity_classes(b, field.tensorsig)
     temp = zeros(eltype(gdata), size(gdata))
     for (regindex, regtotal_val) in pairs(R)
-        grid_shape_val = size(gdata[regindex])
+        grid_shape_val = size(component_view(gdata, regindex))
         plan = transform_plan(b, field.dist, grid_shape_val, regindex, axis, regtotal_val, b.k, b.alpha)
         backward!(plan, component_view(cdata, regindex), component_view(temp, regindex), axis)
     end
@@ -8234,7 +8228,7 @@ function forward_transform_radius_ball_3d(b::BallBasis, field, axis, gdata, cdat
     R = regularity_classes(radial_basis, field.tensorsig)
     temp = zeros(eltype(cdata), size(cdata))
     for (regindex, regtotal_val) in pairs(R)
-        gs = size(gdata[regindex])
+        gs = size(component_view(gdata, regindex))
         plan = transform_plan(
             b, field.dist, gs, regindex, axis, regtotal_val,
             radial_basis.k, radial_basis.alpha
@@ -8256,7 +8250,7 @@ function backward_transform_radius_ball_3d(b::BallBasis, field, axis, cdata, gda
     R = regularity_classes(radial_basis, field.tensorsig)
     temp = zeros(eltype(gdata), size(gdata))
     for (regindex, regtotal_val) in pairs(R)
-        gs = size(gdata[regindex])
+        gs = size(component_view(gdata, regindex))
         plan = transform_plan(
             b, field.dist, gs, regindex, axis, regtotal_val,
             radial_basis.k, radial_basis.alpha
