@@ -4289,6 +4289,7 @@ end
 # -- Class constants --
 basis_dim(::SphereBasis) = 2
 basis_subaxis_dependence(::SphereBasis) = (true, true)
+basis_group_shape(b::SphereBasis) = b.group_shape_val
 const SPHERE_CONSTANT_MODE_VALUE = 1.0 / sqrt(2.0)
 
 # -- Constructor caching --
@@ -5054,7 +5055,12 @@ end
 """
     m_maps(b::SphereBasis, dist)
 
-Compute a tuple of (m, mg_slice, mc_slice, ell_slice) for all local m values.
+Compute a tuple of `(m, mg_slice, mc_slice, ell_slice)` for all local m values
+in the layouts on either side of the colatitude transform. `mg_slice` and
+`mc_slice` index the local azimuth axis of the grid-side and coefficient-side
+data, and `ell_slice` indexes the local colatitude coefficients of `m` in
+increasing ell order. Modes folded into the start of a coefficient column hold
+their ells in reverse and get a reversed `ell_slice`.
 """
 function m_maps(b::SphereBasis, dist)
     cache_key = (:m_maps, dist)
@@ -5062,7 +5068,55 @@ function m_maps(b::SphereBasis, dist)
     if cached !== nothing
         return cached
     end
-    error("SphereBasis m_maps: requires distributor infrastructure not yet available")
+    az = first_axis(dist, b)
+    colat_transform = get_transform_object(dist, az + 1)
+    coeff_layout = colat_transform.layout0
+    grid_layout = colat_transform.layout1
+    domain = make_domain(dist, (b,))
+    scales = domain_dealias(domain)
+    m_coeff, _ = _local_sphere_groups(b, coeff_layout, domain, scales, az)
+    m_grid, _ = _local_sphere_groups(b, grid_layout, domain, scales, az)
+    gs_coeff = group_shape(coeff_layout, domain)[az]
+    gs_grid = group_shape(grid_layout, domain)[az]
+    maps = Tuple{Int, UnitRange{Int}, UnitRange{Int}, OrdinalRange{Int, Int}}[]
+    for m in unique(vec(permutedims(m_coeff)))
+        mc_slice, ell_slice = _sphere_group_block(m_coeff, m, gs_coeff)
+        mg_slice, _ = _sphere_group_block(m_grid, m, gs_grid)
+        # Reverse ell_slice for folded modes so that ells are well-ordered
+        if first(ell_slice) == 1 && m != 0
+            ell_slice = last(ell_slice):-1:1
+        end
+        push!(maps, (m, mg_slice, mc_slice, ell_slice))
+    end
+    result = Tuple(maps)
+    b._cache[cache_key] = result
+    return result
+end
+
+# Groups of the local (azimuth, colatitude) elements of a sphere basis in a layout.
+function _local_sphere_groups(b::SphereBasis, layout, domain, scales, az)
+    elements = local_elements(layout, domain, scales; broadcast = true)
+    i = elements[az]
+    j = elements[az + 1]
+    groups = elements_to_groups(
+        b, layout.grid_space[az:(az + 1)],
+        [repeat(i, 1, length(j)), repeat(permutedims(j), length(i), 1)]
+    )
+    return groups[1], groups[2]
+end
+
+# Azimuth block (of `group_size` entries) holding group `m`, and the range of
+# colatitude positions of `m` within that block.
+function _sphere_group_block(m_arr, m, group_size)
+    blocks = [
+        start:min(start + group_size - 1, size(m_arr, 1))
+            for start in 1:group_size:size(m_arr, 1)
+            if any(==(m), view(m_arr, start:min(start + group_size - 1, size(m_arr, 1)), :))
+    ]
+    length(blocks) == 1 || error("SphereBasis m_maps: m = $m spans $(length(blocks)) local azimuth blocks")
+    block = only(blocks)
+    cols = findall(j -> any(==(m), view(m_arr, block, j)), axes(m_arr, 2))
+    return block, first(cols):last(cols)
 end
 
 """
@@ -5090,7 +5144,10 @@ end
 """
     ell_maps(b::SphereBasis, dist)
 
-Compute a tuple of (ell, m_slice, ell_slice) for all local ells in coeff space.
+Compute a tuple of `(ell, m_slice, ell_slice)` for all local ells in coeff
+space. `m_slice` and `ell_slice` are local ranges along the azimuth and
+colatitude axes, and data for each ell is sliced as `data[m_slice, ell_slice]`.
+An ell stored in several coefficient columns has one entry per column.
 """
 function ell_maps(b::SphereBasis, dist)
     cache_key = (:ell_maps, dist)
@@ -5098,76 +5155,17 @@ function ell_maps(b::SphereBasis, dist)
     if cached !== nothing
         return cached
     end
-    # Build ell_maps from the coeff-space layout.
-    # In coeff-coeff space, use elements_to_groups to find (m, ell) for each position,
-    # then group by ell to produce (ell, m_slice, ell_slice) entries.
-    cl = coeff_layout(dist)
+    az = first_axis(dist, b)
     domain = make_domain(dist, (b,))
-    azimuth_axis = first_axis(dist, b)          # 1-based axis for azimuth
-    colatitude_axis = first_axis(dist, b) + 1    # 1-based axis for colatitude
-
-    # Get local elements (0-based) in coeff space
-    le = local_elements(cl, domain, Tuple(b.dealias_tuple); broadcast = true)
-
-    # Build element index arrays for this basis's axes
-    fa = first_axis(dist, b)
-    la = last_axis(dist, b)
-    basis_le = [le[ax] for ax in fa:la]  # (azimuth_elements, colatitude_elements)
-
-    # Create meshgrid of 0-based element indices
-    n_az = length(basis_le[1])
-    n_co = length(basis_le[2])
-    i_grid = repeat(reshape(basis_le[1], n_az, 1), 1, n_co)
-    j_grid = repeat(reshape(basis_le[2], 1, n_co), n_az, 1)
-
-    # Convert to (m, ell) groups
-    gs = cl.grid_space[fa:la]
-    groups = elements_to_groups(b, gs, [i_grid, j_grid])
-    m_arr = groups[1]
-    ell_arr = groups[2]
-
-    # Build ell_maps: for each unique ell, collect the data indices
-    # m_ind and ell_ind are 1-based Julia indices into the local data array
-    result = Tuple{Int, Any, Any}[]
-    seen_ells = Dict{Int, Bool}()
-    for j in 1:n_co
-        for i in 1:n_az
-            ell_val = ell_arr[i, j]
-            m_val = m_arr[i, j]
-            if abs(m_val) > ell_val
-                continue  # invalid mode
-            end
-            if !haskey(seen_ells, ell_val)
-                seen_ells[ell_val] = true
-                # Find all positions with this ell
-                m_indices = Int[]
-                ell_indices = Int[]
-                for jj in 1:n_co
-                    for ii in 1:n_az
-                        if ell_arr[ii, jj] == ell_val && abs(m_arr[ii, jj]) <= ell_arr[ii, jj]
-                            push!(m_indices, ii)
-                            push!(ell_indices, jj)
-                        end
-                    end
-                end
-                # If all ell_indices are the same (single column), use scalar index
-                unique_ell_inds = unique(ell_indices)
-                if length(unique_ell_inds) == 1
-                    ell_ind = unique_ell_inds[1]
-                else
-                    ell_ind = ell_indices
-                end
-                # For m_indices, check if they form a contiguous range
-                unique_m_inds = sort(unique(m_indices))
-                if length(unique_m_inds) == 1
-                    m_ind = unique_m_inds[1]
-                elseif unique_m_inds == collect(unique_m_inds[1]:unique_m_inds[end])
-                    m_ind = unique_m_inds[1]:unique_m_inds[end]
-                else
-                    m_ind = unique_m_inds
-                end
-                push!(result, (ell_val, m_ind, ell_ind))
-            end
+    _, ell_arr = _local_sphere_groups(b, coeff_layout(dist), domain, domain_dealias(domain), az)
+    result = Tuple{Int, UnitRange{Int}, UnitRange{Int}}[]
+    for ell in unique(vec(permutedims(ell_arr))), j in axes(ell_arr, 2)
+        rows = findall(==(ell), view(ell_arr, :, j))
+        # One entry per contiguous run of rows
+        while !isempty(rows)
+            n = findfirst(k -> k == length(rows) || rows[k + 1] != rows[k] + 1, eachindex(rows))
+            push!(result, (ell, rows[1]:rows[n], j:j))
+            rows = rows[(n + 1):end]
         end
     end
     result_tuple = Tuple(result)
@@ -5379,20 +5377,14 @@ function ell_maps(b::AbstractRegularityBasis, dist)
     # For the S2 axes: in coeff space, groups[1]=0, groups[2]=ell value
     # So ell = basis_le_co (0-based element indices = ell values for colatitude axis)
 
-    result = Tuple{Int, Any, Any}[]
+    result = Tuple{Int, UnitRange{Int}, UnitRange{Int}}[]
     seen_ells = Dict{Int, Bool}()
     for j in 1:n_co
         ell_val = basis_le_co[j]  # 0-based colatitude element = ell value
         if !haskey(seen_ells, ell_val)
             seen_ells[ell_val] = true
             # m_ind covers all azimuth positions (they are all grouped to m=0)
-            if n_az == 1
-                m_ind = 1
-            else
-                m_ind = 1:n_az
-            end
-            ell_ind = j  # 1-based index into colatitude axis
-            push!(result, (ell_val, m_ind, ell_ind))
+            push!(result, (ell_val, 1:n_az, j:j))
         end
     end
     result_tuple = Tuple(result)
