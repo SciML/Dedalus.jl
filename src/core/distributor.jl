@@ -159,6 +159,10 @@ Construct an Alltoallv transpose planner.
 - `comm_sub` -- MPI sub-communicator for this transpose axis.
 """
 function AlltoallvTranspose(global_shape_in, dtype, axis::Integer, comm_sub)
+    return _alltoallv_transpose(global_shape_in, dtype, axis, comm_sub, (1, 1))
+end
+
+function _alltoallv_transpose(global_shape_in, dtype, axis, comm_sub, chunks)
     gs = Int32.(collect(global_shape_in))
     datasize = dtype == ComplexF64 ? 2 : 1
 
@@ -170,15 +174,15 @@ function AlltoallvTranspose(global_shape_in, dtype, axis::Integer, comm_sub)
     # Dimensions before the transpose axis, the two transpose axes, and after.
     # axis is 1-based: axes 1..axis-1 are "before", axis and axis+1 are transposed,
     # axis+2..end are "after".
-    N0 = axis > 1 ? prod(gs[1:(axis - 1)]) : 1
-    N1 = gs[axis]
-    N2 = gs[axis + 1]
-    N3_raw = axis + 2 <= length(gs) ? prod(gs[(axis + 2):end]) : 1
-    N3 = N3_raw * datasize
+    # Reinterpreted complex values occupy adjacent doubles on the first axis.
+    N0 = prod(gs[1:(axis - 1)]; init = 1) * datasize
+    N1 = cld(gs[axis], chunks[1]) * chunks[1]
+    N2 = cld(gs[axis + 1], chunks[2]) * chunks[2]
+    N3 = prod(gs[(axis + 2):end]; init = 1)
 
     # Block sizes (ceiling division)
-    B1 = cld(Int(N1), nprocs)
-    B2 = cld(Int(N2), nprocs)
+    B1 = cld(N1 ÷ chunks[1], nprocs) * chunks[1]
+    B2 = cld(N2 ÷ chunks[2], nprocs) * chunks[2]
 
     # Per-rank start/end/count arrays
     ranks = Int32.(collect(0:(nprocs - 1)))
@@ -348,18 +352,12 @@ end
 """
     _make_reduced_view(data, shape::Vector{Int32})
 
-Reshape `data` (treated as a flat Float64 buffer via `reinterpret`) into
-a 4D array view of the given shape. If `data` is a complex array, it is
-first reinterpreted as Float64 (doubling the last dimension).
+Reshape `data` into a 4D view of doubles. Complex data occupies twice as
+many entries on the first dimension.
 """
 function _make_reduced_view(data::AbstractArray, shape::Vector{Int32})
     s = Tuple(Int.(shape))
-    if eltype(data) <: Complex
-        flat = reinterpret(Float64, vec(data))
-    else
-        flat = reinterpret(Float64, vec(data))
-    end
-    return reshape(flat, s)
+    return reshape(reinterpret(Float64, vec(data)), s)
 end
 
 """
@@ -1414,16 +1412,15 @@ function local_chunks(
     end
 
     # Get chunks axis by axis
-    fb = full_bases(domain)
-    for ax in 1:length(fb)
-        basis = fb[ax]
+    constant = broadcast ? domain_constant(domain) : nothing
+    for ax in eachindex(chunk_nums)
         if layout.local_flags[ax]
             # All chunks for local dimensions (0-based chunk indices)
             push!(lc, collect(0:(chunk_nums[ax] - 1)))
         else
             # Block distribution
             m = layout.ext_mesh[ax]
-            if broadcast && basis === nothing
+            if broadcast && constant[ax]
                 coord = 0
             else
                 coord = ext_c[ax]
@@ -1518,10 +1515,24 @@ function valid_elements(
         basis_axes = fa:la
         # Get grid_space and elements for this basis's axes
         basis_gs = gs[basis_axes]
-        basis_elements = [elements[ax] for ax in basis_axes]
-        # Create meshgrid of basis elements
+        # Meshgrid of basis elements: one dense array per basis axis,
+        # each shaped by the basis axis lengths and varying along its axis
+        basis_lengths = [length(elements[ax]) for ax in basis_axes]
+        basis_elements = Any[]
+        for (j, ax) in enumerate(basis_axes)
+            shp = ones(Int, length(basis_axes))
+            shp[j] = basis_lengths[j]
+            reps = copy(basis_lengths)
+            reps[j] = 1
+            push!(basis_elements, repeat(reshape(elements[ax], shp...); outer = reps))
+        end
         basis_valid = valid_elements(basis, tensorsig, basis_gs, basis_elements)
-        valid .&= basis_valid
+        # Reshape to the full shape, with singletons on non-basis axes
+        full_shape = (
+            tensor_shape...,
+            ntuple(ax -> ax in basis_axes ? basis_lengths[ax - fa + 1] : 1, dim)...,
+        )
+        valid .&= reshape(basis_valid, full_shape)
     end
 
     layout._valid_elements_cache[cache_key] = valid
@@ -1609,6 +1620,7 @@ function local_group_arrays(
         layout::Layout, domain, scales;
         rank = nothing, broadcast::Bool = false
     )
+    scales = remedy_scales(layout.dist, scales)
     cache_key = (objectid(domain), Tuple(scales), rank, broadcast)
     cached = get(layout._local_group_arrays_cache, cache_key, nothing)
     if cached !== nothing
@@ -1691,6 +1703,7 @@ function local_groupsets(
         layout::Layout, group_coupling, domain, scales;
         rank = nothing, broadcast::Bool = false
     )
+    scales = remedy_scales(layout.dist, scales)
     cache_key = (Tuple(group_coupling), objectid(domain), Tuple(scales), rank, broadcast)
     cached = get(layout._local_groupsets_cache, cache_key, nothing)
     if cached !== nothing
@@ -1726,8 +1739,63 @@ function local_groupsets(
         end
     end
 
-    result = OrderedSet{Tuple}(groupset_list)
+    result = OrderedSet(groupset_list)
     layout._local_groupsets_cache[cache_key] = result
+    return result
+end
+
+"""
+    local_groupset_slices(layout::Layout, groupset, domain; scales=1)
+
+Slices of local data belonging to `groupset`, as a vector of per-axis
+index tuples (one tuple per contiguous block). Axes whose groupset entry
+is `nothing` (coupled axes) are sliced with `Colon()`.
+"""
+function local_groupset_slices(layout::Layout, groupset, domain; scales = 1)
+    scales = remedy_scales(layout.dist, scales)
+    cache_key = (groupset, objectid(domain), Tuple(scales))
+    cached = get(layout._local_groupset_slices_cache, cache_key, nothing)
+    if cached !== nothing
+        return cached
+    end
+    groups = local_group_arrays(layout, domain, scales)
+    dim = length(groups)
+    per_axis = Vector{Any}(undef, dim)
+    for d in 1:dim
+        g = groupset[d]
+        if g === nothing
+            per_axis[d] = Any[Colon()]
+            continue
+        end
+        gd = groups[d]
+        idxs = Int[]
+        for i in axes(gd, d)
+            if any(x -> x == g, selectdim(gd, d, i))
+                push!(idxs, i)
+            end
+        end
+        ranges = Any[]
+        if !isempty(idxs)
+            start = prev = idxs[1]
+            for i in idxs[2:end]
+                if i == prev + 1
+                    prev = i
+                else
+                    push!(ranges, start:prev)
+                    start = prev = i
+                end
+            end
+            push!(ranges, start:prev)
+        end
+        per_axis[d] = ranges
+    end
+    result = Any[]
+    if all(!isempty, per_axis)
+        for combo in Base.Iterators.product(per_axis...)
+            push!(result, Tuple(combo))
+        end
+    end
+    layout._local_groupset_slices_cache[cache_key] = result
     return result
 end
 
@@ -1905,8 +1973,9 @@ function increment_single(transform::DistTransform, field)
     preset_layout!(field, transform.layout1)
     gdata = field.data
 
-    # Transform non-constant bases with data
-    return if basis !== nothing && prod(size(cdata)) > 0
+    return if basis === nothing
+        copyto!(gdata, cdata)
+    elseif !isempty(cdata)
         backward_transform(basis, field, ax, cdata, gdata)
     end
 end
@@ -1927,8 +1996,9 @@ function decrement_single(transform::DistTransform, field)
     preset_layout!(field, transform.layout0)
     cdata = field.data
 
-    # Transform non-constant bases with data
-    return if basis !== nothing && prod(size(gdata)) > 0
+    return if basis === nothing
+        copyto!(cdata, gdata)
+    elseif !isempty(gdata)
         forward_transform(basis, field, ax, gdata, cdata)
     end
 end
@@ -2013,8 +2083,8 @@ end
 """
     _get_plan(transpose_obj::Transpose, ncomp, sub_shape, chunk_shape_val, dtype)
 
-Build or retrieve a cached transpose plan. Returns `nothing` if no
-communication is needed (serial mode or identity shapes).
+Build or retrieve a cached transpose plan. Returns `nothing` in serial
+mode or for a subgrid with no data on any rank.
 """
 function _get_plan(
         transpose_obj::Transpose, ncomp::Integer, sub_shape::Tuple,
@@ -2029,17 +2099,15 @@ function _get_plan(
     ax = transpose_obj.axis
     if prod(sub_shape) == 0
         plan = nothing  # no data
-    elseif sub_shape[ax] == chunk_shape_val[ax] && (ax + 1 <= length(sub_shape) ? sub_shape[ax + 1] == chunk_shape_val[ax + 1] : true)
-        plan = nothing  # no change needed
     elseif transpose_obj.comm_sub === nothing
         plan = nothing  # serial mode
     else
         # Build AlltoallvTranspose plan
         # Prepend ncomp to sub_shape (matching Python's (ncomp,) + sub_shape)
         full_sub_shape = (ncomp, sub_shape...)
-        full_chunk_shape = (ncomp, chunk_shape_val...)
+        chunks = (chunk_shape_val[ax], chunk_shape_val[ax + 1])
         # axis+1 because we prepended ncomp dimension
-        plan = AlltoallvTranspose(full_sub_shape, dtype, ax + 1, transpose_obj.comm_sub)
+        plan = _alltoallv_transpose(full_sub_shape, dtype, ax + 1, transpose_obj.comm_sub, chunks)
     end
 
     transpose_obj._plan_cache[cache_key] = plan
@@ -2052,7 +2120,7 @@ end
 Build a transpose plan for a single field.
 """
 function _single_plan(transpose_obj::Transpose, field)
-    ncomp = prod([get_dim(cs) for cs in field.tensorsig])
+    ncomp = prod([get_dim(cs) for cs in field.tensorsig]; init = 1)
     sub_shape_val = _sub_shape(transpose_obj, field.domain, field.scales)
     chunk_shape_val = Tuple(chunk_shape(field.domain, transpose_obj.layout0))
     return _get_plan(transpose_obj, ncomp, sub_shape_val, chunk_shape_val, field.dtype)
@@ -2080,7 +2148,7 @@ function _group_plans(transpose_obj::Transpose, fields)
     for ((sub_shape_val, chunk_shape_val), grp_fields) in field_groups
         ncomp = 0
         for f in grp_fields
-            ncomp += prod([get_dim(cs) for cs in f.tensorsig])
+            ncomp += prod([get_dim(cs) for cs in f.tensorsig]; init = 1)
         end
         plan = _get_plan(
             transpose_obj, ncomp, sub_shape_val, chunk_shape_val,

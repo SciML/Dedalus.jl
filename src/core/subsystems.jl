@@ -42,14 +42,14 @@ function build_subsystems(solver)
     for var in solver.problem.variables
         push!(
             all_local_groupsets,
-            local_groupsets(coeff_layout, matrix_coupling, var.domain; scales = 1)
+            local_groupsets(coeff_layout, matrix_coupling, var.domain, 1)
         )
     end
     # Collect groupsets for equations
     for eqn in solver.problem.equations
         push!(
             all_local_groupsets,
-            local_groupsets(coeff_layout, matrix_coupling, eqn["domain"]; scales = 1)
+            local_groupsets(coeff_layout, matrix_coupling, eqn["domain"], 1)
         )
     end
     # Combine and check that groupsets are nested
@@ -159,7 +159,7 @@ mutable struct Subsystem
     group::Tuple
     matrix_group::Tuple
     subproblem::Any  # set by Subproblem constructor
-    _cache::Dict{Symbol, Any}
+    _cache::Dict{Any, Any}
 end
 
 function Subsystem(solver, group)
@@ -172,13 +172,13 @@ function Subsystem(solver, group)
     matrix_group_arr = collect(Any, group)
     for i in eachindex(group_arr)
         if !matrix_dep[i] && group_arr[i] != 0
-            matrix_group_arr[i] = dist.default_nonconst_groups[i]
+            matrix_group_arr[i] = default_nonconst_groups(dist)[i]
         end
     end
     matrix_group = Tuple(matrix_group_arr)
     return Subsystem(
         solver, problem, dist, dtype, Tuple(group),
-        matrix_group, nothing, Dict{Symbol, Any}()
+        matrix_group, nothing, Dict{Any, Any}()
     )
 end
 
@@ -206,11 +206,10 @@ Return the coefficient shape for this subsystem within the given domain.
 """
 function coeff_shape(ss::Subsystem, domain)
     cs = coeff_slices(ss, domain)
-    dom_cs = domain.coeff_shape
+    dom_cs = coeff_shape(domain)
     shape = Int[]
     for (ax_slice, ax_size) in zip(cs, dom_cs)
-        indices = ax_slice
-        push!(shape, length(indices))
+        push!(shape, ax_slice isa Colon ? ax_size : length(ax_slice))
     end
     return Tuple(shape)
 end
@@ -641,8 +640,7 @@ function build_matrices!(sp::Subproblem, names)
         for (eqn, eqn_size, eqn_cond) in zip(eqns, eqn_sizes, eqn_conditions)
             if eqn_size > 0 && eqn_cond && get(eqn, name, 0) != 0
                 eqn_blocks = expression_matrices(
-                    eqn[name];
-                    subproblem = sp, vars = vars,
+                    eqn[name], sp, vars;
                     ncc_cutoff = solver.ncc_cutoff,
                     max_ncc_terms = solver.max_ncc_terms
                 )
@@ -686,7 +684,7 @@ function build_matrices!(sp::Subproblem, names)
     for var in vars
         push!(
             valid_var_vecs,
-            valid_modes(sp.subsystems[1], var, var.valid_modes)
+            valid_modes(sp.subsystems[1], var, valid_modes(var))
         )
     end
     # Invalidate equations that fail condition test
@@ -885,8 +883,8 @@ function right_permutation(sp, variables; tau_left::Bool = false, interleave_com
         end
         push!(L0, L1)
     end
-    # For variables, use domain.dim for dimension grouping
-    dims_list = [var.domain.dim for var in variables]
+    # For variables, use the domain dimension for grouping
+    dims_list = [get_dim(var.domain) for var in variables]
     return _build_permutation_with_dims(L0, dims_list, tau_left, interleave_components)
 end
 
@@ -900,7 +898,7 @@ function _build_permutation(L0, items, dim_accessor::Symbol, forward::Bool, inte
     dims_list = Int[]
     for item in items
         if item isa Dict
-            push!(dims_list, item["domain"].dim)
+            push!(dims_list, get_dim(item["domain"]))
         else
             push!(dims_list, getproperty(item, dim_accessor))
         end

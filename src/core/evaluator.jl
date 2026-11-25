@@ -315,9 +315,8 @@ function require_coeff_space(ev::Evaluator, fields)::Nothing
     isempty(layouts) && return
     # Decrement all fields down to coeff layout
     current_fields = Any[]
-    for index in sort(collect(keys(layouts)); rev = true)
-        index <= coeff_layout.index && continue
-        append!(current_fields, layouts[index])
+    for index in maximum(keys(layouts)):-1:(coeff_layout.index + 1)
+        haskey(layouts, index) && append!(current_fields, layouts[index])
         path = ev.dist.paths[index]  # path at index connects index-1 <-> index
         decrement(path, current_fields)
     end
@@ -346,9 +345,8 @@ function require_grid_space(ev::Evaluator, fields)
     isempty(layouts) && return
     # Increment all fields up to grid layout
     current_fields = Any[]
-    for index in sort(collect(keys(layouts)))
-        index >= grid_layout.index && continue
-        append!(current_fields, layouts[index])
+    for index in minimum(keys(layouts)):(grid_layout.index - 1)
+        haskey(layouts, index) && append!(current_fields, layouts[index])
         path = ev.dist.paths[index + 1]  # path at index+1 connects index <-> index+1
         increment(path, current_fields)
     end
@@ -773,16 +771,36 @@ end
 """
     _handler_sync(f::Function, comm)
 
-Execute f() with entry+exit barriers on a handler communicator.
-No-ops for SerialCommCart or serial mode.
+Execute f() between an entry barrier and an exit reduction on a handler
+communicator. If f() throws on any rank, every rank throws. No-ops for
+SerialCommCart or serial mode.
 """
 function _handler_sync(f::Function, comm)
     _handler_barrier(comm)
-    return try
+    result = try
         f()
-    finally
-        _handler_barrier(comm)
+    catch
+        _handler_any_failed(comm, true)
+        rethrow()
     end
+    _handler_any_failed(comm, false) &&
+        error("HDF5 file handler operation failed on another MPI rank")
+    return result
+end
+
+"""
+    _handler_any_failed(comm, failed::Bool) -> Bool
+
+Return whether `failed` is true on any rank of a handler communicator, so that
+an error on one rank reaches every rank instead of leaving the others blocked
+in a later collective.
+"""
+function _handler_any_failed(comm, failed::Bool)
+    if comm === nothing || comm isa SerialCommCart || !MPI_ENABLED[]
+        return failed
+    end
+    mpi = get_mpi()
+    return mpi.Allreduce(Int(failed), max, comm) > 0
 end
 
 # ============================================================================
@@ -1150,7 +1168,7 @@ function setup_file(h::H5FileHandlerBase, file)
         # Spatial scale metadata as attributes
         _rank = length(op.tensorsig)
         for axis in 1:h.dist.dim
-            basis = op.domain.full_bases[axis]
+            basis = full_bases(op.domain)[axis]
             if basis === nothing
                 attrs(dset)["scale_name_$(axis)"] = "constant"
             else
@@ -1679,7 +1697,7 @@ function _virtual_setup_joint_file(h::H5FileHandlerBase, file)
         attrs(dset)["scales"] = collect(Float64, scales)
         _rank = length(op.tensorsig)
         for axis in 1:h.dist.dim
-            basis = op.domain.full_bases[axis]
+            basis = full_bases(op.domain)[axis]
             if basis === nothing
                 attrs(dset)["scale_name_$(axis)"] = "constant"
             else
@@ -1699,11 +1717,9 @@ end
 """
     _virtual_create_task_dataset(h, file, task) -> HDF5.Dataset
 
-Create a virtual dataset that maps to per-process files.
-
-Note: HDF5.jl virtual dataset support varies. If VDS API is not available,
-falls back to a regular dataset with a warning (data must then be merged
-manually post-run).
+Create a virtual dataset that maps to per-process files. Without MPI, or if
+the loaded HDF5.jl lacks virtual dataset support, create a regular resizable
+dataset instead.
 """
 function _virtual_create_task_dataset(h::H5FileHandlerBase, file, task)
     g_shape = task["global_shape"]
@@ -1716,8 +1732,6 @@ function _virtual_create_task_dataset(h::H5FileHandlerBase, file, task)
     jl_dtype = task["dtype"]
     comm_sz = _handler_comm_size(h.comm)
 
-    # Try to create a virtual dataset linking per-process files.
-    # HDF5.jl virtual dataset support requires the low-level API.
     if _hdf5_has_vds_support() && comm_sz > 1
         dset = _create_vds_dataset(h, file, task, shape, maxshape, jl_dtype, comm_sz)
     else
@@ -1739,99 +1753,41 @@ end
 Check if HDF5.jl supports the Virtual Dataset (VDS) API.
 """
 function _hdf5_has_vds_support()
-    # Check for the necessary low-level API functions
-    return isdefined(HDF5, :VirtualLayout) ||
-        isdefined(HDF5.API, :h5p_set_virtual)
+    return isdefined(HDF5, :VirtualMapping)
 end
 
 """
     _create_vds_dataset(h, file, task, shape, maxshape, dtype, comm_sz)
 
-Create a virtual dataset using HDF5 low-level API that maps to per-process
-files. Each process file contains the local portion of the data.
+Create a virtual dataset that maps time slices and spatial blocks to
+per-process files.
 """
-function _create_vds_dataset(h::H5FileHandlerBase, file, task, shape, maxshape, dtype, comm_sz)
-    # Use the low-level HDF5 API for virtual dataset creation
+function _create_vds_dataset(h, file, task, shape, maxshape, dtype, comm_sz)
     dset_name = task["name"]
-    g_shape = task["global_shape"]
-
-    # Create the dataset creation property list
-    dcpl = HDF5.API.h5p_create(HDF5.API.H5P_DATASET_CREATE)
+    mappings = HDF5.VirtualMapping[]
+    # The time axis is mapped as an unlimited selection even when max_writes is
+    # finite: HDF5 rejects a limited selection longer than the dataset's current
+    # extent, and the process files bound the number of writes anyway.
+    time = HDF5.BlockRange(1; count = -1)
     try
-        # Set up virtual mappings for each nonempty process
         for rank in 0:(comm_sz - 1)
-            rank_global_shape, rank_local_start, rank_local_shape = get_data_distribution(h, task; rank = rank)
-            if prod(rank_local_shape) == 0
-                continue
-            end
+            _, start, local_size = get_data_distribution(h, task; rank)
+            prod(local_size) == 0 && continue
 
-            # Source file path (relative to base_path)
-            proc_filename = "$(h.name)_s$(h.set_num)_p$(rank).h5"
-            src_path = joinpath("$(h.name)_s$(h.set_num)", proc_filename)
-            src_dset_name = "tasks/$(dset_name)"
-
-            # Source shape = (unlimited, local_shape...)
-            src_shape = (1, rank_local_shape...)
-            src_maxshape = maxshape[1:1]
-            for ls in rank_local_shape
-                src_maxshape = (src_maxshape..., ls)
-            end
-
-            # Virtual (file) space: hyperslab in the joint dataset
-            # Offset: (0, local_start...), count: (UNLIMITED, local_shape...)
-            vspace = HDF5.API.h5s_create_simple(collect(Int, reverse(shape)), collect(Int, reverse(maxshape)))
-            file_start = (0, rank_local_start...)
-            file_count = (1, rank_local_shape...)
-            # HDF5 C API uses reversed dimensions (row-major <-> column-major)
-            HDF5.API.h5s_select_hyperslab(
-                vspace, HDF5.API.H5S_SELECT_SET,
-                collect(UInt64, reverse(file_start)),
-                C_NULL,
-                collect(UInt64, reverse(file_count)),
-                C_NULL
-            )
-
-            # Source space
-            src_space = HDF5.API.h5s_create_simple(collect(Int, reverse(src_shape)), collect(Int, reverse(src_maxshape)))
-            src_start = ntuple(_ -> UInt64(0), length(src_shape))
-            src_count = Tuple(UInt64(s) for s in src_shape)
-            HDF5.API.h5s_select_hyperslab(
-                src_space, HDF5.API.H5S_SELECT_SET,
-                collect(UInt64, reverse(src_start)),
-                C_NULL,
-                collect(UInt64, reverse(src_count)),
-                C_NULL
-            )
-
-            # Add virtual mapping
-            HDF5.API.h5p_set_virtual(dcpl, vspace, src_path, src_dset_name, src_space)
-
-            HDF5.API.h5s_close(vspace)
-            HDF5.API.h5s_close(src_space)
+            src_path = relpath(_virtual_current_process_file(h, rank), h.base_path)
+            vspace = HDF5.dataspace(shape; max_dims = (-1, maxshape[2:end]...))
+            src_space = HDF5.dataspace((1, local_size...); max_dims = (-1, local_size...))
+            push!(mappings, HDF5.VirtualMapping(vspace, src_path, "/tasks/$dset_name", src_space))
+            spatial = map((offset, n) -> (offset + 1):(offset + n), start, local_size)
+            HDF5.select_hyperslab!(vspace, (time, spatial...))
+            HDF5.select_hyperslab!(src_space, (time, map(Base.OneTo, local_size)...))
         end
-
-        # Create the virtual dataset
-        hdf5_dtype = HDF5.datatype(dtype)
-        total_space = HDF5.API.h5s_create_simple(collect(Int, reverse(shape)), collect(Int, reverse(maxshape)))
-        dset_id = HDF5.API.h5d_create(
-            file["tasks"], dset_name,
-            hdf5_dtype, total_space, HDF5.API.H5P_DEFAULT,
-            dcpl, HDF5.API.H5P_DEFAULT
-        )
-        HDF5.API.h5s_close(total_space)
-        return HDF5.Dataset(dset_id, file["tasks"])
-    catch e
-        # VDS creation failed; fall back to regular dataset
-        @warn "Virtual dataset creation failed: $e. Falling back to regular dataset."
-        g_shape = task["global_shape"]
-        chunk_dims = (1, g_shape...)
-        dset = create_dataset(
-            file["tasks"], task["name"], dtype,
-            (shape, maxshape); chunk = chunk_dims
-        )
-        return dset
+        return create_dataset(file["tasks"], dset_name, dtype, (shape, maxshape); virtual = mappings)
     finally
-        HDF5.API.h5p_close(dcpl)
+        for mapping in mappings
+            close(mapping.vspace)
+            close(mapping.srcspace)
+        end
     end
 end
 
@@ -2162,7 +2118,10 @@ end
 Get the coordinate name for a given basis and sub-axis index.
 """
 function get_coord_name(basis, subaxis)
-    cs = basis.coordsys
+    cs = basis_coordsys(basis)
+    if cs isa CoordinateOrAzimuthal
+        return string(cs.name)
+    end
     coords = get_coords(cs)
     if subaxis isa Integer && 1 <= subaxis <= length(coords)
         return string(coords[subaxis].name)
@@ -2210,6 +2169,9 @@ Alias for [`H5FileHandlerBase`](@ref), the default file-output handler.
 const FileHandler = H5FileHandlerBase
 
 export Evaluator,
+    add_file_handler,
+    add_task!,
+    evaluate_handlers,
     FileHandler,
     H5FileHandlerBase,
     H5GatherFileHandler,

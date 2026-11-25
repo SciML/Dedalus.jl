@@ -17,11 +17,10 @@ using JET: JET
                 ignore = (
                     # MPI is loaded lazily via Base.require(Main, :MPI) in init_mpi!
                     :require,
-                    # HDF5.API internals are required for parallel/virtual datasets
-                    :API, :Dataset, :H5P_DATASET_CREATE, :H5P_DEFAULT, :H5S_SELECT_SET,
-                    :h5d_create, :h5l_move, :h5p_close, :h5p_create, :h5p_set_virtual,
-                    :h5s_close, :h5s_create_simple, :h5s_select_hyperslab,
-                    :has_parallel, :set_extent_dims,
+                    # HDF5.jl documents these functions and types without declaring them public.
+                    :BlockRange, :VirtualMapping, :select_hyperslab!, :has_parallel, :set_extent_dims,
+                    # Dataset renaming calls the HDF5 C API.
+                    :API, :H5P_DEFAULT, :h5l_move,
                     # FFTW planner flags are not exported by FFTW.jl
                     :ESTIMATE, :EXHAUSTIVE, :MEASURE, :PATIENT,
                     # Banded LU factorisations have no public LAPACK spelling

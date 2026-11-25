@@ -1017,7 +1017,10 @@ function subspace_matrix(op::Convert, layout)
             return sparse(I, N, 1)
         end
     elseif input_basis !== nothing && output_basis !== nothing
-        if input_basis isa JacobiBasis && output_basis isa JacobiBasis
+        if input_basis === output_basis || input_basis == output_basis
+            N = basis_size(input_basis)
+            return sparse(I, N, N)
+        elseif input_basis isa JacobiBasis && output_basis isa JacobiBasis
             return convert_jacobi_matrix(input_basis, output_basis)
         else
             error("subspace_matrix(::Convert) not implemented for input_basis $(typeof(input_basis)) and output_basis $(typeof(output_basis))")

@@ -149,7 +149,7 @@ function _init_solver_base(
     end
     # Check that coupled dimensions are local
     cl = dist.coeff_layout
-    coupled_nonlocal = mc .& .~BitVector(cl.local)
+    coupled_nonlocal = mc .& .~BitVector(cl.local_flags)
     if any(coupled_nonlocal)
         nonlocal_axes = findall(coupled_nonlocal)
         throw(
@@ -738,7 +738,7 @@ function NonlinearBoundaryValueSolver(problem; kw...)
     perts = problem.perturbations
     # Copy valid modes from variables to perturbations
     for (pert, var) in zip(perts, get_variables(problem))
-        pert.valid_modes .= var.valid_modes
+        valid_modes(pert) .= valid_modes(var)
     end
     solver = NonlinearBoundaryValueSolver(sd, collect(Any, perts), 0, Any[])
     _finalize_solver_base!(sd, solver)

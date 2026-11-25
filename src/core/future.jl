@@ -335,6 +335,8 @@ function evaluate_future(f::AbstractFuture; id = nothing, force::Bool = true)::U
     return out
 end
 
+evaluate_future(field::AbstractCurrent; id = nothing, force::Bool = true) = field
+
 """
     get_out(f::AbstractFuture)
 
@@ -510,11 +512,9 @@ future_type(::FutureLockedField) = LockedField
 # ============================================================================
 
 """
-    evaluate
+    evaluate(operand; id=nothing, force=true)
 
-Alias for `evaluate_future` — provided for convenience so that call sites
-(tests, arithmetic helpers) can write `evaluate(expr)` instead of the
-longer `evaluate_future(expr)`.
+Evaluate a lazy operand to produce a field, or return a current field directly.
 """
 const evaluate = evaluate_future
 

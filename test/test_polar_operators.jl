@@ -55,7 +55,7 @@ using Dedalus
             f = Field(d, dtype = T)
             f["g"] = 1
             g = evaluate(Convert(f, b))
-            @test isapprox(f["g"], g["g"], atol = 1.0e-12)
+            @test all(isapprox.(g["g"], f["g"]; atol = 1.0e-12))
         catch e
             @test_broken false
         end

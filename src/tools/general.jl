@@ -213,7 +213,7 @@ end
 function oscillate(iterable; max_passes::Real = Inf)
     items = collect(iterable)
     n = length(items)
-    return Channel{eltype(items)}(; ctype = eltype(items), csize = 0) do ch
+    return Channel{eltype(items)}(0) do ch
         passes = 0
         while true
             # Forward pass
