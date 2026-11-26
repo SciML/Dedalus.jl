@@ -5276,8 +5276,8 @@ function operate(op::SphericalEllOperator, out)::Nothing
     for idx_in in CartesianIndices(size(R_in))
         regindex_in = Tuple(idx_in)
         for regindex_out_val in regindex_out(op, regindex_in)
-            @inbounds comp_in = operand.data[regindex_in...]
-            @inbounds comp_out = out.data[regindex_out_val...]
+            @inbounds comp_in = isempty(regindex_in) ? operand.data : operand.data[regindex_in...]
+            @inbounds comp_out = isempty(regindex_out_val) ? out.data : out.data[regindex_out_val...]
             for (ell, m_ind, ell_ind) in ell_maps(basis, op.dist)
                 allowed_in = regularity_allowed(radial_basis, ell, regindex_in)
                 allowed_out = regularity_allowed(radial_basis, ell, regindex_out_val)
@@ -6103,7 +6103,8 @@ function radial_matrix(op::SphericalEllProduct, regindex_in, regindex_out_val, e
     radial_basis = _spherical_ell_get_radial_basis(op)
     regtotal_val = regtotal(regindex_in)
     if regindex_in == regindex_out_val
-        result = op.ell_func(ell + regtotal_val) * operator_matrix(radial_basis, "Id", ell, regtotal_val)
+        n = n_size(radial_basis, ell)
+        result = op.ell_func(ell + regtotal_val) * spdiagm(0 => ones(Float64, n))
     else
         error("SphericalEllProduct: regindex_in must equal regindex_out_val")
     end

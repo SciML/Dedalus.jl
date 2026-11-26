@@ -63,18 +63,33 @@ using Dedalus
             f = Field(d, bases = (b,), dtype = T)
             g = Field(d, bases = (b,), dtype = T)
             preset_scales!(f, dealias)
+            preset_scales!(g, dealias)
             f["g"] = @. 3 * x^2 + 2 * y * z
             for (ell, m_ind, ell_ind) in ell_maps(b, d)
                 g["c"][m_ind, ell_ind, :] = (ell + 3) .* f["c"][m_ind, ell_ind, :]
             end
             func = ell -> ell + 3
             h = evaluate(SphericalEllProduct(f, c, func))
-            preset_scales!(g, dealias)
             @test isapprox(h["g"], g["g"], atol = 1.0e-12)
         catch e
             @test_broken false
             @warn "spherical_ell_product_scalar failed" exception = e
         end
+    end
+
+    @testset "scalar spherical ell product on coefficient data" begin
+        c, d, b, phi, theta, r, x, y, z = build_ball(8, 4, 10, 0, 1.5, Float64)
+        f = Field(d, bases = (b,), dtype = Float64)
+        expected = Field(d, bases = (b,), dtype = Float64)
+        preset_scales!(f, 1.5)
+        preset_scales!(expected, 1.5)
+        f["g"] = @. 3 * x^2 + 2 * y * z
+        for (ell, m_ind, ell_ind) in ell_maps(b, d)
+            expected["c"][m_ind, ell_ind, :] = (ell + 3) .* f["c"][m_ind, ell_ind, :]
+        end
+
+        h = evaluate(SphericalEllProduct(f, c, ell -> ell + 3))
+        @test isapprox(h["g"], expected["g"], atol = 1.0e-12)
     end
 
     # ========================================================================
