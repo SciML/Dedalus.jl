@@ -108,6 +108,14 @@ using Dedalus
 
         w = evaluate(SphericalEllProduct(u, c, ell -> ell + 3))
         @test isapprox(w.data, expected, atol = 1.0e-12)
+
+        fill!(u.data, 0)
+        u.data[:, 1, 3, 2] = [2, 3, 4]
+        # At m = 0 and ell = 2, the regularity shifts are (-1, 1, 0).
+        fill!(expected, 0)
+        expected[:, 1, 3, 2] = [8, 18, 20]
+        w = evaluate(SphericalEllProduct(u, c, ell -> ell + 3))
+        @test isapprox(w.data, expected, atol = 1.0e-12)
     end
 
     # ========================================================================
