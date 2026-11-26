@@ -1227,7 +1227,7 @@ function _forward_SWSH_matrices(t::SWSHColatitudeTransform)
         if haskey(m_matrices, m)
             continue
         end
-        if m > Lmax
+        if abs(m) > Lmax
             # Don't make matrices for m's that will be dropped after transform
             m_matrices[m] = nothing
         else
@@ -1271,7 +1271,7 @@ function _backward_SWSH_matrices(t::SWSHColatitudeTransform)
         if haskey(m_matrices, m)
             continue
         end
-        if m > Lmax
+        if abs(m) > Lmax
             m_matrices[m] = nothing
         else
             Y = sphere_harmonics(Lmax, m, t.s, cos_grid)  # shape (Lmax-Lmin+1, Ntheta)

@@ -5074,17 +5074,22 @@ function m_maps(b::SphereBasis, dist)
     grid_layout = colat_transform.layout1
     domain = make_domain(dist, (b,))
     scales = domain_dealias(domain)
-    m_coeff, _ = _local_sphere_groups(b, coeff_layout, domain, scales, az)
+    m_coeff, ell_coeff = _local_sphere_groups(b, coeff_layout, domain, scales, az)
+    # The packed coefficient layout also contains padding with invalid (m, ell) pairs.
+    valid = @. (abs(m_coeff) <= ell_coeff) & (ell_coeff <= b.Lmax)
+    m_coeff = ifelse.(valid, m_coeff, nothing)
     m_grid, _ = _local_sphere_groups(b, grid_layout, domain, scales, az)
     gs_coeff = group_shape(domain, coeff_layout)[az]
     gs_grid = group_shape(domain, grid_layout)[az]
     maps = Tuple{Int, UnitRange{Int}, UnitRange{Int}, OrdinalRange{Int, Int}}[]
     for m in unique(vec(permutedims(m_coeff)))
+        m === nothing && continue
         mc_slice, ell_slice = _sphere_group_block(m_coeff, m, gs_coeff)
         mg_slice, _ = _sphere_group_block(m_grid, m, gs_grid)
         # Reverse ell_slice for folded modes so that ells are well-ordered
-        if first(ell_slice) == 1 && m != 0
-            ell_slice = last(ell_slice):-1:1
+        row = first(mc_slice)
+        if ell_coeff[row, first(ell_slice)] > ell_coeff[row, last(ell_slice)]
+            ell_slice = reverse(ell_slice)
         end
         push!(maps, (m, mg_slice, mc_slice, ell_slice))
     end

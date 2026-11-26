@@ -6,8 +6,21 @@ Reference: dedalus/tests/test_sphere_calculus.py (Python sphere tests).
 
 using Test
 using Dedalus
+using LinearAlgebra: norm
 
 @testset "Sphere Calculus" begin
+
+    @testset "Colatitude mode bounds ($T)" for T in (ComplexF64, Float64)
+        c = S2Coordinates("phi", "theta")
+        d = Distributor(c, T)
+        b = SphereBasis(c, (12, 5), T)
+        _, theta = local_grids(d, b)
+        f = Field(d; bases = (b,))
+        grid = zeros(T, 12, 5) .+ (1 .+ cos.(theta))
+        f["g"] = grid
+        Dedalus.require_coeff_space!(f)
+        @test norm(f["g"] - grid) <= 1.0e-12
+    end
 
     Nphi_range = [32]
     Ntheta_range = [16]
