@@ -1,5 +1,6 @@
 using Test
 using Dedalus
+using LinearAlgebra: norm
 
 @testset "Package" begin
     @testset "Module loading" begin
@@ -112,4 +113,19 @@ end
     destination = ones(T, 12, 5)
     Dedalus.backward_reduced!(plan, reshape(coeffs, 1, size(coeffs)..., 1), reshape(destination, 1, 12, 5, 1))
     @test all(iszero, destination)
+end
+
+@testset "Ball radial transform supports integer selectors" begin
+    c = SphericalCoordinates("phi", "theta", "r")
+    d = Distributor(c, ComplexF64)
+    b = BallBasis(c, (1, 1, 4), ComplexF64)
+    maps = ell_maps(radial_basis(b), d)
+    @test maps == ((0, 1, 1),)
+    plan = BallRadialTransform((1, 1, 4), 4, 3, maps, (), 0, 0, 0.0)
+    samples = reshape(ComplexF64[1, 2, 3, 4], 1, 1, 4)
+    coeffs = similar(samples)
+    destination = similar(samples)
+    forward!(plan, samples, coeffs, 3)
+    backward!(plan, coeffs, destination, 3)
+    @test norm(destination - samples) <= 1.0e-12
 end
