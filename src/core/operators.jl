@@ -5276,8 +5276,16 @@ function operate(op::SphericalEllOperator, out)::Nothing
     for idx_in in CartesianIndices(size(R_in))
         regindex_in = Tuple(idx_in)
         for regindex_out_val in regindex_out(op, regindex_in)
-            @inbounds comp_in = isempty(regindex_in) ? operand.data : operand.data[regindex_in...]
-            @inbounds comp_out = isempty(regindex_out_val) ? out.data : out.data[regindex_out_val...]
+            @inbounds comp_in = isempty(regindex_in) ? operand.data : view(
+                    operand.data,
+                    regindex_in...,
+                    ntuple(_ -> Colon(), ndims(operand.data) - length(regindex_in))...
+                )
+            @inbounds comp_out = isempty(regindex_out_val) ? out.data : view(
+                    out.data,
+                    regindex_out_val...,
+                    ntuple(_ -> Colon(), ndims(out.data) - length(regindex_out_val))...
+                )
             for (ell, m_ind, ell_ind) in ell_maps(basis, op.dist)
                 allowed_in = regularity_allowed(radial_basis, ell, regindex_in)
                 allowed_out = regularity_allowed(radial_basis, ell, regindex_out_val)

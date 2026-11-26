@@ -92,6 +92,26 @@ using Dedalus
         @test isapprox(h["g"], expected["g"], atol = 1.0e-12)
     end
 
+    @testset "vector spherical ell product on coefficient data" begin
+        c, d, b, phi, theta, r, x, y, z = build_ball(8, 4, 10, 0, 1.0, Float64)
+        u = VectorField(d, c, bases = (b,), dtype = Float64)
+        Dedalus.preset_layout!(u, coeff_layout(d))
+        u.data .= 0
+        expected = zeros(size(u.data))
+        for (ell, m_ind, ell_ind) in ell_maps(b, d), comp in 1:3
+            regindex = (comp,)
+            if Dedalus.regularity_allowed(b.radial_basis, ell, regindex)
+                n_sl = Dedalus.n_slice(b.radial_basis, ell)
+                fill!(view(u.data, comp, m_ind, ell_ind, n_sl), 1)
+                factor = ell + Dedalus.regtotal(regindex) + 3
+                fill!(view(expected, comp, m_ind, ell_ind, n_sl), factor)
+            end
+        end
+
+        w = evaluate(SphericalEllProduct(u, c, ell -> ell + 3))
+        @test isapprox(w.data, expected, atol = 1.0e-12)
+    end
+
     # ========================================================================
     # 2. Spherical ell product vector
     # ========================================================================
