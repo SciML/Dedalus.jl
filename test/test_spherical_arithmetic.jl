@@ -6,7 +6,7 @@ Reference: dedalus/tests/test_spherical_arithmetic.py
 
 using Test
 using Dedalus
-using LinearAlgebra: norm
+using LinearAlgebra: I, norm, opnorm, svdvals
 
 @testset "Spherical Arithmetic" begin
 
@@ -212,16 +212,177 @@ using LinearAlgebra: norm
         end
     end
 
-    # Roundoff budget for the scalar rescaling fixture, based on the analytic
-    # input norm. Count a forward and inverse contraction per axis (eight real
-    # operations per complex Fourier term, two per real colatitude/radial term),
-    # plus 20 operations each for sampling the input and evaluating the reference.
-    # Use the resulting gamma factor as a budget for the complete transform,
-    # including errors in computed quadrature nodes and matrix entries.
-    function rescaling_budget((nphi, ntheta, nr), polynomial)
-        u = eps(Float64) / 2
-        ku = (2 * (8 * nphi + 2 * ntheta + 2 * nr) + 40) * u
+    @testset "Scalar arithmetic on the dealiased grid ($basis_fn)" for
+        basis_fn in (build_ball, build_shell),
+            Nphi in Nphi_range, Ntheta in Ntheta_range, Nr in Nr_range
+        _, d, b, _, _, _, _, _, _ = basis_fn(Nphi, Ntheta, Nr, 1.5, ComplexF64)
+        phi, theta, r = local_grids(d, b; scales = 1.5)
+        x, y, z = cartesian(SphericalCoordinates, phi, theta, r)
+        polynomial = @. x^3 + 2 * y^3 + 3 * z^3
+        f = Field(d, bases = (b,), dtype = ComplexF64)
+        preset_scales!(f, 1.5)
+        f["g"] = polynomial
+        doubled = 2 .* polynomial
+        squared = polynomial .^ 2
+        @test isapprox(evaluate(2 * f)["g"], doubled; atol = 1.0e-12, rtol = 0)
+        @test isapprox(evaluate(f * 2)["g"], doubled; atol = 1.0e-12, rtol = 0)
+        actual = evaluate(f * f)["g"]
+        @test isapprox(actual, squared; atol = 1.0e-12, rtol = 0)
+        if basis_fn === build_ball
+            perturbed = (1 + 1.0e-14) .* actual
+            @test !isapprox(perturbed, squared; atol = 1.0e-12, rtol = 0)
+        end
+    end
+
+    # Classical Jacobi polynomials and their L² normalization, evaluated at
+    # high precision on the physical grid. Using the physical nodes here
+    # includes discrepancies between those nodes and the transform's nodes.
+    function reference_jacobi(count, a, b, nodes)
+        gamma = Dedalus.SpecialFunctions.gamma
+        choose(x, k) = prod((big(x - j) / (j + 1) for j in 0:(k - 1)); init = one(BigFloat))
+        mass = big(2.0)^(a + b + 1)
+        normalization = [
+            sqrt(
+                mass * gamma(big(n + a + 1)) * gamma(big(n + b + 1)) /
+                    (
+                    factorial(big(n)) * (
+                        n == 0 ? gamma(big(a + b + 2)) :
+                            (2 * n + a + b + 1) * gamma(big(n + a + b + 1))
+                    )
+                )
+            )
+                for n in 0:(count - 1)
+        ]
+        return [
+            sum(
+                choose(n + a, k) * choose(n + b, n - k) *
+                    ((x - 1) / 2)^(n - k) * ((x + 1) / 2)^k
+                    for k in 0:n
+            ) / normalization[n + 1]
+                for n in 0:(count - 1), x in nodes
+        ]
+    end
+
+    # Each block maps disjoint lanes, so the largest block norm bounds the
+    # whole stage. Precompute the forward defect on an analytic synthesis
+    # matrix V and the inverse defect against V at the destination nodes.
+    # The forward input is in range(V), so it suffices to bound ||F*V-I||
+    # and multiply by an upper bound on the exact coefficient norm.
+    function propagate_stage(error, magnitude, blocks, forward)
+        gain = 0.0
+        ideal_gain = 0.0
+        defect = 0.0
+        for (matrix, reference) in blocks
+            n = size(matrix, 2)
+            u = eps(Float64) / 2
+            gamma = 8 * n * u / (1 - 8 * n * u)
+            arithmetic = gamma * opnorm(abs.(matrix))
+            gain = max(gain, opnorm(matrix) + arithmetic)
+            isnothing(reference) && continue
+            if forward
+                inverse_norm = inv(minimum(svdvals(Float64.(reference))))
+                ideal_gain = max(ideal_gain, inverse_norm)
+                residual = BigFloat.(matrix) * reference - I
+                defect = max(defect, (Float64(norm(residual)) + arithmetic * opnorm(Float64.(reference))) * inverse_norm)
+            else
+                ideal_gain = max(ideal_gain, opnorm(Float64.(reference)))
+                defect = max(defect, Float64(norm(BigFloat.(matrix) - reference)) + arithmetic)
+            end
+        end
+        return gain * error + defect * magnitude, ideal_gain * magnitude
+    end
+
+    function stagewise_rescaling_bound(b, d, input, reference_input)
+        phi, theta, r = map(g -> vec(BigFloat.(g)), local_grids(d, b; scales = 1))
+        phi_out, theta_out, r_out = map(g -> vec(BigFloat.(g)), local_grids(d, b; scales = 1.5))
+        sphere = b.sphere_basis
+        angular = Dedalus.transform_plan(sphere, d, length(theta), 0)
+        angular_out = Dedalus.transform_plan(sphere, d, length(theta_out), 0)
+        forward_angular = Dedalus._forward_SWSH_matrices(angular)
+        backward_angular = Dedalus._backward_SWSH_matrices(angular_out)
+
+        function angular_reference(m, theta)
+            order = abs(m)
+            nodes = cos.(theta)
+            values = reference_jacobi(b.Lmax + 1 - order, order, order, nodes)
+            return Matrix((values .* ((-1)^max(m, 0) .* sin.(theta) .^ order)')')
+        end
+        # The cubic has Fourier modes 0, ±1 and ±3 and degrees 1 and 3.
+        modes = (0, 1, -1, 3, -3)
+        angular_forward = [(matrix, m in modes ? angular_reference(m, theta) : nothing) for (m, matrix) in forward_angular]
+        angular_backward = [(matrix, m in modes ? angular_reference(m, theta_out) : nothing) for (m, matrix) in backward_angular]
+
+        radial = b.radial_basis
+        radial_blocks = if b isa BallBasis
+            function (r, forward)
+                plan = Dedalus.transform_plan(b, d, (1, 1, length(r)), CartesianIndex(), 3, 0, radial.k, radial.alpha)
+                matrices = forward ? Dedalus._forward_matrices(plan) : Dedalus._backward_matrices(plan)
+                q = r ./ big(radial.radius)
+                return map(collect(matrices)) do (ell, matrix)
+                    ell in (1, 3) || return (matrix, nothing)
+                    nodes = @. 2 * q^2 - 1
+                    envelope = @. big(2)^(big(5) / 4 + big(radial.alpha) / 2) * (sqrt(big(2)) * q)^ell
+                    values = reference_jacobi(radial.Nmax + 1 - ell ÷ 2, radial.alpha, ell + 1 // 2, nodes)
+                    return (matrix, Matrix((values .* envelope')'))
+                end
+            end
+        else
+            function (r, forward)
+                plan = Dedalus.transform_plan(radial, d, length(r), radial.k)
+                matrix = forward ? Dedalus.forward_matrix(plan) : Dedalus.backward_matrix(plan)
+                lo, hi = big.(radial.radii)
+                nodes = @. (2 * r - hi - lo) / (hi - lo)
+                reference = reference_jacobi(radial.Nmax + 1, radial.alpha..., nodes)
+                return [(matrix, Matrix(reference'))]
+            end
+        end
+
+        function fourier_stage(error, magnitude, nodes, forward)
+            n = length(nodes)
+            u = eps(Float64) / 2
+            # Bound twiddle and contraction roundoff by the dense DFT
+            # operation count, and separately bound the azimuth node error.
+            gamma = 8 * n * u / (1 - 8 * n * u)
+            displacement = maximum(abs(nodes[j] - 2 * big(pi) * (j - 1) / n) for j in 1:n)
+            gain = forward ? inv(sqrt(n)) : sqrt(n)
+            arithmetic = gain * sqrt(n) * gamma
+            node_error = gain * sqrt(length(modes)) * 3 * Float64(displacement)
+            return (gain + arithmetic) * error + (arithmetic + node_error) * magnitude, gain * magnitude
+        end
+
+        error = Float64(norm(Complex{BigFloat}.(input) - reference_input))
+        magnitude = Float64(norm(reference_input))
+        error, magnitude = fourier_stage(error, magnitude, phi, true)
+        error, magnitude = propagate_stage(error, magnitude, angular_forward, true)
+        error, magnitude = propagate_stage(error, magnitude, radial_blocks(r, true), true)
+        error, magnitude = propagate_stage(error, magnitude, radial_blocks(r_out, false), false)
+        error, magnitude = propagate_stage(error, magnitude, angular_backward, false)
+        error, _ = fourier_stage(error, magnitude, phi_out, false)
+        return error
+    end
+
+    function analytic_cubic(d, b, scale)
+        phi, theta, r = map(g -> BigFloat.(g), local_grids(d, b; scales = scale))
+        return @. r^3 * (sin(theta)^3 * (cos(phi)^3 + 2 * sin(phi)^3) + 3 * cos(theta)^3)
+    end
+
+    # Keep the previous acceptance envelope as a ceiling even when the
+    # stage-wise estimate is larger.
+    function prior_rescaling_limit((nphi, ntheta, nr), polynomial)
+        ku = (2 * (8 * nphi + 2 * ntheta + 2 * nr) + 40) * (eps(Float64) / 2)
         return ku / (1 - ku) * norm(polynomial)
+    end
+
+    function scalar_product_atol(bname, dealias, b, d, input, polynomial; square = false)
+        if dealias == 1 || (bname == "ball" && !square)
+            return 1.0e-12
+        end
+        E = stagewise_rescaling_bound(b, d, input, analytic_cubic(d, b, 1))
+        reference = analytic_cubic(d, b, dealias)
+        E += Float64(norm(reference - BigFloat.(polynomial)))
+        roundoff = 2 * eps(Float64) * norm(polynomial .^ 2)
+        product_bound(E) = square ? 2 * maximum(abs, polynomial) * E + E^2 + roundoff : 2 * E
+        return min(product_bound(E), product_bound(prior_rescaling_limit(b.shape, polynomial)), 2.1e-10)
     end
 
     @testset "Dealiased cubic rescaling $basis_fn" for
@@ -229,28 +390,16 @@ using LinearAlgebra: norm
             Nphi in Nphi_range, Ntheta in Ntheta_range, Nr in Nr_range
         _, d, b, _, _, _, x, y, z = basis_fn(Nphi, Ntheta, Nr, 1.5, ComplexF64)
         f = Field(d, bases = (b,), dtype = ComplexF64)
-        f["g"] = @. x^3 + 2 * y^3 + 3 * z^3
+        input = @. x^3 + 2 * y^3 + 3 * z^3
+        f["g"] = input
         Dedalus.require_coeff_space!(f)
         change_scales!(f, 1.5)
-        phi, theta, r = map(g -> BigFloat.(g), local_grids(d, b; scales = 1.5))
-        # Evaluate the cubic directly in spherical coordinates at higher precision.
-        polynomial = @. Float64(r^3 * (sin(theta)^3 * (cos(phi)^3 + 2 * sin(phi)^3) + 3 * cos(theta)^3))
-        error = norm(f["g"] - polynomial)
-        @test error <= rescaling_budget((Nphi, Ntheta, Nr), polynomial)
-    end
-
-    function scalar_product_atol(bname, dealias, shape, polynomial; square = false)
-        if dealias == 1 || (bname == "ball" && !square)
-            return 1.0e-12
-        end
-        # With rescaling error e and ||e||₂ ≤ E, doubling gives 2E exactly
-        # in binary arithmetic. Squaring gives 2pe + e², bounded in norm
-        # by 2||p||∞E + E². Allow for rounding the complex product and the
-        # real reference square, and retain Chris's approved absolute cap.
-        E = rescaling_budget(shape, polynomial)
-        roundoff = 2 * eps(Float64) * norm(polynomial .^ 2)
-        bound = square ? 2 * maximum(abs, polynomial) * E + E^2 + roundoff : 2 * E
-        return min(bound, 2.1e-10)
+        reference = analytic_cubic(d, b, 1.5)
+        bound = stagewise_rescaling_bound(b, d, input, analytic_cubic(d, b, 1))
+        # Preserve the existing rescaling test's acceptance limit alongside
+        # the more conservative stage-wise estimate.
+        prior_limit = prior_rescaling_limit(b.shape, Float64.(reference))
+        @test norm(Complex{BigFloat}.(f["g"]) - reference) <= min(bound, prior_limit)
     end
 
     # ========================================================================
@@ -265,13 +414,14 @@ using LinearAlgebra: norm
         try
             c, d, b, phi, theta, r, x, y, z = basis_fn(Nphi, Ntheta, Nr, dealias, ComplexF64)
             f = Field(d, bases = (b,), dtype = ComplexF64)
-            f["g"] = @. x^3 + 2 * y^3 + 3 * z^3
+            input = @. x^3 + 2 * y^3 + 3 * z^3
+            f["g"] = input
             h = evaluate(2 * f)
             phi2, theta2, r2 = local_grids(d, b, scales = dealias)
             x2, y2, z2 = cartesian(SphericalCoordinates, phi2, theta2, r2)
             polynomial = @. x2^3 + 2 * y2^3 + 3 * z2^3
             hg = 2 .* polynomial
-            atol = scalar_product_atol(bname, dealias, (Nphi, Ntheta, Nr), polynomial)
+            atol = scalar_product_atol(bname, dealias, b, d, input, polynomial)
             @test isapprox(h["g"], hg; atol, rtol = 0)
             if bname == "ball" && dealias == 1
                 perturbed = (1 + 1.0e-13) .* h["g"]
@@ -295,13 +445,14 @@ using LinearAlgebra: norm
         try
             c, d, b, phi, theta, r, x, y, z = basis_fn(Nphi, Ntheta, Nr, dealias, ComplexF64)
             f = Field(d, bases = (b,), dtype = ComplexF64)
-            f["g"] = @. x^3 + 2 * y^3 + 3 * z^3
+            input = @. x^3 + 2 * y^3 + 3 * z^3
+            f["g"] = input
             h = evaluate(f * 2)
             phi2, theta2, r2 = local_grids(d, b, scales = dealias)
             x2, y2, z2 = cartesian(SphericalCoordinates, phi2, theta2, r2)
             polynomial = @. x2^3 + 2 * y2^3 + 3 * z2^3
             hg = 2 .* polynomial
-            atol = scalar_product_atol(bname, dealias, (Nphi, Ntheta, Nr), polynomial)
+            atol = scalar_product_atol(bname, dealias, b, d, input, polynomial)
             @test isapprox(h["g"], hg; atol, rtol = 0)
         catch e
             @test_broken false
@@ -321,13 +472,14 @@ using LinearAlgebra: norm
         try
             c, d, b, phi, theta, r, x, y, z = basis_fn(Nphi, Ntheta, Nr, dealias, ComplexF64)
             f = Field(d, bases = (b,), dtype = ComplexF64)
-            f["g"] = @. x^3 + 2 * y^3 + 3 * z^3
+            input = @. x^3 + 2 * y^3 + 3 * z^3
+            f["g"] = input
             h = evaluate(f * f)
             phi2, theta2, r2 = local_grids(d, b, scales = dealias)
             x2, y2, z2 = cartesian(SphericalCoordinates, phi2, theta2, r2)
             polynomial = @. x2^3 + 2 * y2^3 + 3 * z2^3
             hg = polynomial .^ 2
-            atol = scalar_product_atol(bname, dealias, (Nphi, Ntheta, Nr), polynomial; square = true)
+            atol = scalar_product_atol(bname, dealias, b, d, input, polynomial; square = true)
             @test isapprox(h["g"], hg; atol, rtol = 0)
             if bname == "shell" && dealias != 1
                 perturbed = (1 + 1.0e-13) .* h["g"]
