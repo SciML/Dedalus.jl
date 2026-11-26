@@ -59,3 +59,57 @@ using Dedalus
         @test hasfield(SphericalCoordinates, :S2coordsys)
     end
 end
+
+struct CopyNonSeparableTransform <: Dedalus.NonSeparableTransform end
+
+function Dedalus.forward_reduced!(::CopyNonSeparableTransform, gdata, cdata)
+    @test size(gdata) == size(cdata) == (1, 2, 5, 1)
+    return copyto!(cdata, gdata)
+end
+
+function Dedalus.backward_reduced!(::CopyNonSeparableTransform, cdata, gdata)
+    @test size(cdata) == size(gdata) == (1, 2, 5, 1)
+    return copyto!(gdata, cdata)
+end
+
+@testset "Nonseparable transform coupled axes" begin
+    plan = CopyNonSeparableTransform()
+    input = reshape(collect(1:10), 2, 5)
+    coeffs = zeros(Int, 2, 5)
+    output = similar(coeffs)
+    @test Dedalus.forward!(plan, input, coeffs, 1) == input
+    @test Dedalus.backward!(plan, coeffs, output, 1) == input
+end
+
+@testset "Sphere degree maps" begin
+    c = S2Coordinates("phi", "theta")
+    d = Distributor(c, ComplexF64)
+    b = SphereBasis(c, (8, 10), ComplexF64)
+    maps = ell_maps(b, d)
+    @test sort([entry[1] for entry in maps]) == collect(0:9)
+    @test only(filter(entry -> entry[1] == 0, maps)) === (0, 1, 1)
+    _, rows, columns = only(filter(entry -> entry[1] == 9, maps))
+    domain = Dedalus.make_domain(d, (b,))
+    m, ell = Dedalus._local_sphere_groups(b, Dedalus.coeff_layout(d), domain, (1, 1), 1)
+    @test 9 in ell[rows, columns]
+
+    coverage = zeros(Int, size(ell))
+    for (degree, rows, columns) in Dedalus._ell_blocks(b, d)
+        @test all(==(degree), ell[rows, columns])
+        coverage[rows, columns] .+= 1
+    end
+    @test coverage == (@. abs(m) <= ell <= b.Lmax)
+end
+
+@testset "Colatitude inverse initializes omitted modes" for T in (Float64, ComplexF64)
+    c = S2Coordinates("phi", "theta")
+    d = Distributor(c, T)
+    b = SphereBasis(c, (12, 5), T)
+    plan = Dedalus.transform_plan(b, d, 5, 0)
+    f = Field(d; bases = (b,))
+    coeffs = f["c"]
+    fill!(coeffs, zero(T))
+    destination = ones(T, 12, 5)
+    Dedalus.backward_reduced!(plan, reshape(coeffs, 1, size(coeffs)..., 1), reshape(destination, 1, 12, 5, 1))
+    @test all(iszero, destination)
+end

@@ -30,7 +30,7 @@ using LinearAlgebra: norm
         b = BallBasis(c, (12, 4, 6), T; radius = 1)
         phi, theta, r = local_grids(d, b)
         f = Field(d; bases = (b,))
-        grid = @. T(1 + cos(theta) + 0 * phi + 0 * r)
+        grid = @. T(1 + r * (cos(theta) + cos(phi) * sin(theta)))
         f["g"] = grid
         Dedalus.require_coeff_space!(f)
         @test norm(f["g"] - grid) <= 1.0e-12

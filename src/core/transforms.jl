@@ -1122,17 +1122,16 @@ abstract type NonSeparableTransform <: Transform end
 """
     forward!(t::NonSeparableTransform, gdata, cdata, axis)
 
-Apply the forward (grid --> coefficient) non-separable transform along
-`axis`. Reduces the input to a 4D view `(pre, axis-1, axis, post)`, so that
-the mode axis preceding `axis` is the second dimension, then delegates to
-`forward_reduced!`.
+Apply the forward (grid --> coefficient) non-separable transform.
+Reduces the input to a 4D view centred on `axis` and `axis+1`, then
+delegates to `forward_reduced!`.
 """
 function forward!(
         t::NonSeparableTransform, gdata::AbstractArray,
         cdata::AbstractArray, axis::Int
     )
-    gdata4 = reduced_view_4(gdata, axis - 1)
-    cdata4 = reduced_view_4(cdata, axis - 1)
+    gdata4 = reduced_view_4(gdata, axis)
+    cdata4 = reduced_view_4(cdata, axis)
     forward_reduced!(t, gdata4, cdata4)
     return cdata
 end
@@ -1140,16 +1139,16 @@ end
 """
     backward!(t::NonSeparableTransform, cdata, gdata, axis)
 
-Apply the backward (coefficient --> grid) non-separable transform along
-`axis`, using the same 4D view as `forward!`, then delegates to
-`backward_reduced!`.
+Apply the backward (coefficient --> grid) non-separable transform.
+Reduces the input to a 4D view centred on `axis` and `axis+1`, then
+delegates to `backward_reduced!`.
 """
 function backward!(
         t::NonSeparableTransform, cdata::AbstractArray,
         gdata::AbstractArray, axis::Int
     )
-    cdata4 = reduced_view_4(cdata, axis - 1)
-    gdata4 = reduced_view_4(gdata, axis - 1)
+    cdata4 = reduced_view_4(cdata, axis)
+    gdata4 = reduced_view_4(gdata, axis)
     backward_reduced!(t, cdata4, gdata4)
     return gdata
 end
@@ -1326,13 +1325,11 @@ function backward_reduced!(
         t::SWSHColatitudeTransform,
         cdata::AbstractArray, gdata::AbstractArray
     )
+    fill!(gdata, zero(eltype(gdata)))
     m_matrices = _backward_SWSH_matrices(t)
     Lmax = t.Lmax
     for (m, mg_slice, mc_slice, ell_slice) in t.m_maps
-        if abs(m) > Lmax
-            # Write zeros because they'll be used by the inverse azimuthal transform
-            gdata[:, mg_slice, :, :] .= 0
-        else
+        if abs(m) <= Lmax
             grm = @view gdata[:, mg_slice, :, :]
             crm = @view cdata[:, mc_slice, ell_slice, :]
             apply_matrix(m_matrices[m], crm, 3; out = grm)
