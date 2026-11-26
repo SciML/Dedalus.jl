@@ -73,7 +73,7 @@ function split_call(call::AbstractString)
         if isempty(argstring)
             args = ()
         else
-            args = Tuple(String.(split(argstring, ",")))
+            args = Tuple(String.(Base.split(argstring, ",")))
         end
         return (head, args)
     else
