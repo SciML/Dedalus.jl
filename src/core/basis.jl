@@ -4842,7 +4842,7 @@ function forward_transform_colatitude(b::SphereBasis, field, axis, gdata, cdata)
         s = S[i]
         Ntheta = size(component_view(gdata, i), axis)
         plan = transform_plan(b, field.dist, Ntheta, s)
-        forward!(plan, component_view(temp, i), component_view(cdata, i), axis)
+        forward!(plan, component_view(temp, i), component_view(cdata, i), axis - 1)
     end
     return nothing
 end
@@ -4870,7 +4870,7 @@ function backward_transform_colatitude(b::SphereBasis, field, axis, cdata, gdata
         s = S[i]
         Ntheta = size(component_view(gdata, i), axis)
         plan = transform_plan(b, field.dist, Ntheta, s)
-        backward!(plan, component_view(cdata, i), component_view(temp, i), axis)
+        backward!(plan, component_view(cdata, i), component_view(temp, i), axis - 1)
     end
     # Apply backward spin recombination
     fill!(gdata, zero(eltype(gdata)))
@@ -5055,8 +5055,8 @@ end
 """
     m_maps(b::SphereBasis, dist)
 
-Compute a tuple of `(m, mg_slice, mc_slice, ell_slice)` for all local m values
-in the layouts on either side of the colatitude transform. `mg_slice` and
+Compute a tuple of `(m, mg_slice, mc_slice, ell_slice)` for retained local modes
+with valid coefficients on both sides of the colatitude transform. `mg_slice` and
 `mc_slice` index the local azimuth axis of the grid-side and coefficient-side
 data, and `ell_slice` indexes the local colatitude coefficients of `m` in
 increasing ell order. Modes folded into the start of a coefficient column hold
@@ -5074,17 +5074,22 @@ function m_maps(b::SphereBasis, dist)
     grid_layout = colat_transform.layout1
     domain = make_domain(dist, (b,))
     scales = domain_dealias(domain)
-    m_coeff, _ = _local_sphere_groups(b, coeff_layout, domain, scales, az)
+    m_coeff, ell_coeff = _local_sphere_groups(b, coeff_layout, domain, scales, az)
+    # The packed coefficient layout also contains padding with invalid (m, ell) pairs.
+    valid = @. (abs(m_coeff) <= ell_coeff) & (ell_coeff <= b.Lmax)
+    m_coeff = ifelse.(valid, m_coeff, nothing)
     m_grid, _ = _local_sphere_groups(b, grid_layout, domain, scales, az)
     gs_coeff = group_shape(domain, coeff_layout)[az]
     gs_grid = group_shape(domain, grid_layout)[az]
     maps = Tuple{Int, UnitRange{Int}, UnitRange{Int}, OrdinalRange{Int, Int}}[]
     for m in unique(vec(permutedims(m_coeff)))
+        m === nothing && continue
         mc_slice, ell_slice = _sphere_group_block(m_coeff, m, gs_coeff)
         mg_slice, _ = _sphere_group_block(m_grid, m, gs_grid)
         # Reverse ell_slice for folded modes so that ells are well-ordered
-        if first(ell_slice) == 1 && m != 0
-            ell_slice = last(ell_slice):-1:1
+        row = first(mc_slice)
+        if ell_coeff[row, first(ell_slice)] > ell_coeff[row, last(ell_slice)]
+            ell_slice = reverse(ell_slice)
         end
         push!(maps, (m, mg_slice, mc_slice, ell_slice))
     end
@@ -5144,33 +5149,62 @@ end
 """
     ell_maps(b::SphereBasis, dist)
 
-Compute a tuple of `(ell, m_slice, ell_slice)` for all local ells in coeff
-space. `m_slice` and `ell_slice` are local ranges along the azimuth and
-colatitude axes, and data for each ell is sliced as `data[m_slice, ell_slice]`.
-An ell stored in several coefficient columns has one entry per column.
+Return one `(ell, m_ind, ell_ind)` tuple per local degree in coefficient
+space. The indices are 1-based selectors for the azimuth and colatitude axes.
 """
 function ell_maps(b::SphereBasis, dist)
-    cache_key = (:ell_maps, dist)
-    cached = get(b._cache, cache_key, nothing)
-    if cached !== nothing
-        return cached
-    end
-    az = first_axis(dist, b)
-    domain = make_domain(dist, (b,))
-    _, ell_arr = _local_sphere_groups(b, coeff_layout(dist), domain, domain_dealias(domain), az)
-    result = Tuple{Int, UnitRange{Int}, UnitRange{Int}}[]
-    for ell in unique(vec(permutedims(ell_arr))), j in axes(ell_arr, 2)
-        rows = findall(==(ell), view(ell_arr, :, j))
-        # One entry per contiguous run of rows
-        while !isempty(rows)
-            n = findfirst(k -> k == length(rows) || rows[k + 1] != rows[k] + 1, eachindex(rows))
-            push!(result, (ell, rows[1]:rows[n], j:j))
-            rows = rows[(n + 1):end]
+    return get!(b._cache, (:ell_maps, dist)) do
+        degrees = Dict{Int, Tuple{Vector{Int}, Vector{Int}}}()
+        order = Int[]
+        for (ell, rows, columns) in _ell_blocks(b, dist)
+            if !haskey(degrees, ell)
+                push!(order, ell)
+                degrees[ell] = (Int[], Int[])
+            end
+            m_indices, ell_indices = degrees[ell]
+            append!(m_indices, rows)
+            append!(ell_indices, fill(only(columns), length(rows)))
         end
+        return Tuple(
+            map(order) do ell
+                m_indices, ell_indices = degrees[ell]
+                rows = sort!(unique(m_indices))
+                m_ind = if length(rows) == 1
+                    only(rows)
+                elseif rows == first(rows):last(rows)
+                    first(rows):last(rows)
+                else
+                    rows
+                end
+                ell_ind = all(==(first(ell_indices)), ell_indices) ? first(ell_indices) : ell_indices
+                (ell, m_ind, ell_ind)
+            end
+        )
     end
-    result_tuple = Tuple(result)
-    b._cache[cache_key] = result_tuple
-    return result_tuple
+end
+
+# Rectangular views of valid coefficient cells for per-degree transforms.
+function _ell_blocks(b::SphereBasis, dist)
+    return get!(b._cache, (:_ell_blocks, dist)) do
+        az = first_axis(dist, b)
+        domain = make_domain(dist, (b,))
+        m, ell = _local_sphere_groups(b, coeff_layout(dist), domain, domain_dealias(domain), az)
+        blocks = Tuple{Int, UnitRange{Int}, UnitRange{Int}}[]
+        for j in axes(ell, 2)
+            i = first(axes(ell, 1))
+            while i <= last(axes(ell, 1))
+                degree = ell[i, j]
+                start = i
+                i += 1
+                abs(m[start, j]) <= degree <= b.Lmax || continue
+                while i <= last(axes(ell, 1)) && ell[i, j] == degree && abs(m[i, j]) <= degree
+                    i += 1
+                end
+                push!(blocks, (degree, start:(i - 1), j:j))
+            end
+        end
+        Tuple(blocks)
+    end
 end
 
 function Base.show(io::IO, b::SphereBasis)
@@ -5331,65 +5365,28 @@ end
 """
     ell_maps(b::AbstractRegularityBasis, dist)
 
-Compute ell maps by delegating to the same logic as SphereBasis.ell_maps.
-In Python this calls SphereBasis.ell_maps(self, dist) as an unbound method.
+Return one local coefficient selector per degree for a radial-only basis.
 """
 function ell_maps(b::AbstractRegularityBasis, dist)
-    cache_key = (:ell_maps, dist)
-    cached = get(b._cache, cache_key, nothing)
-    if cached !== nothing
-        return cached
+    return get!(b._cache, (:ell_maps, dist)) do
+        Tuple(
+            (ell, length(rows) == 1 ? only(rows) : rows, only(columns))
+                for (ell, rows, columns) in _ell_blocks(b, dist)
+        )
     end
-    # Delegate to SphereBasis.ell_maps logic.
-    # In Python this calls SphereBasis.ell_maps(self, dist) as an unbound method.
-    # The RegularityBasis is 3D (azimuth, colatitude, radius). The ell_maps
-    # only depends on the S2 (azimuth, colatitude) axes, which have the same
-    # data layout. We reuse the SphereBasis ell_maps from the parent 3D basis.
-    #
-    # Find the SphereBasis that shares our coordinate system.
-    # We look it up from the coordsys cache since RegularityBasis doesn't store
-    # a direct reference to its SphereBasis.
-    cl = coeff_layout(dist)
-    domain = make_domain(dist, (b,))
-    azimuth_axis = first_axis(dist, b)
-    colatitude_axis = first_axis(dist, b) + 1
+end
 
-    # Get local elements (0-based) in coeff space
-    le = local_elements(cl, domain, Tuple(b.dealias); broadcast = true)
-
-    # Build element index arrays for the S2 axes
-    fa = first_axis(dist, b)
-    basis_le_az = le[fa]        # azimuth elements
-    basis_le_co = le[fa + 1]    # colatitude elements
-
-    n_az = length(basis_le_az)
-    n_co = length(basis_le_co)
-
-    # For RegularityBasis in coeff-coeff space, the first two axes map to (m, ell)
-    # via elements_to_groups. We need to extract the S2 part.
-    gs = cl.grid_space[fa:(fa + 1)]
-    i_grid = repeat(reshape(basis_le_az, n_az, 1), 1, n_co)
-    j_grid = repeat(reshape(basis_le_co, 1, n_co), n_az, 1)
-
-    # elements_to_groups for RegularityBasis maps (m, ell, n) -> groups
-    # but we only need the S2 part. The first axis in coeff space maps m -> 0
-    # (grouped), second axis gives ell directly.
-    # For the S2 axes: in coeff space, groups[1]=0, groups[2]=ell value
-    # So ell = basis_le_co (0-based element indices = ell values for colatitude axis)
-
-    result = Tuple{Int, UnitRange{Int}, UnitRange{Int}}[]
-    seen_ells = Dict{Int, Bool}()
-    for j in 1:n_co
-        ell_val = basis_le_co[j]  # 0-based colatitude element = ell value
-        if !haskey(seen_ells, ell_val)
-            seen_ells[ell_val] = true
-            # m_ind covers all azimuth positions (they are all grouped to m=0)
-            push!(result, (ell_val, 1:n_az, j:j))
-        end
+function _ell_blocks(b::AbstractRegularityBasis, dist)
+    return get!(b._cache, (:_ell_blocks, dist)) do
+        domain = make_domain(dist, (b,))
+        az = first_axis(dist, b)
+        elements = local_elements(coeff_layout(dist), domain, Tuple(b.dealias); broadcast = true)
+        rows = 1:length(elements[az])
+        Tuple(
+            (ell, rows, j:j) for (j, ell) in enumerate(elements[az + 1])
+                if !isempty(rows) && 0 <= ell < b.shape[2]
+        )
     end
-    result_tuple = Tuple(result)
-    b._cache[cache_key] = result_tuple
-    return result_tuple
 end
 
 """
@@ -6071,7 +6068,7 @@ function forward_transform_radius_shell(b::ShellRadialBasis, field, axis, gdata,
         gdata = gdata .* radial_transform_factor(b, field.scales[axis], data_axis, -b.k)
     end
     # Apply recombinations
-    forward_regularity_recombination(b, field.tensorsig, axis, gdata; ell_maps = ell_maps(b, field.dist))
+    forward_regularity_recombination(b, field.tensorsig, axis, gdata; ell_maps = _ell_blocks(b, field.dist))
     temp = copy(gdata)
     # Perform radial transforms component-by-component
     R = regularity_classes(b, field.tensorsig)
@@ -6099,7 +6096,7 @@ function backward_transform_radius_shell(b::ShellRadialBasis, field, axis, cdata
     end
     copyto!(gdata, temp)
     # Regularity recombination
-    backward_regularity_recombination(b, field.tensorsig, axis, gdata, ell_maps(b, field.dist))
+    backward_regularity_recombination(b, field.tensorsig, axis, gdata, _ell_blocks(b, field.dist))
     # Multiply by radial factor
     if b.k > 0
         gdata .*= radial_transform_factor(b, field.scales[axis], data_axis, b.k)
@@ -6549,7 +6546,7 @@ function transform_plan(b::BallRadialBasis, dist, grid_shape_val, regindex, axis
     if !haskey(_ball_radial_transforms, b.radius_library)
         error("BallRadialBasis transform library '$(b.radius_library)' not registered. Register it in _ball_radial_transforms.")
     end
-    plan = _ball_radial_transforms[b.radius_library](grid_shape_val, b.Nmax + 1, axis, ell_maps(b, dist), regindex, regtotal_val, k, alpha)
+    plan = _ball_radial_transforms[b.radius_library](grid_shape_val, b.Nmax + 1, axis, _ell_blocks(b, dist), regindex, regtotal_val, k, alpha)
     b._cache[cache_key] = plan
     return plan
 end
@@ -6563,7 +6560,7 @@ Forward radial transform for ball basis.
 """
 function forward_transform_radius_ball(b::BallRadialBasis, field, axis, gdata, cdata)
     # Apply recombination
-    forward_regularity_recombination(b, field.tensorsig, axis, gdata; ell_maps = ell_maps(b, field.dist))
+    forward_regularity_recombination(b, field.tensorsig, axis, gdata; ell_maps = _ell_blocks(b, field.dist))
     # Perform radial transforms component-by-component
     R = regularity_classes(b, field.tensorsig)
     temp = copy(gdata)
@@ -6591,7 +6588,7 @@ function backward_transform_radius_ball(b::BallRadialBasis, field, axis, cdata, 
     end
     copyto!(gdata, temp)
     # Apply recombinations
-    backward_regularity_recombination(b, field.tensorsig, axis, gdata, ell_maps(b, field.dist))
+    backward_regularity_recombination(b, field.tensorsig, axis, gdata, _ell_blocks(b, field.dist))
     return nothing
 end
 
@@ -6890,6 +6887,8 @@ Delegate ell_maps to the sphere_basis.
 function ell_maps(b::AbstractSpherical3DBasis, dist)
     return ell_maps(b.sphere_basis, dist)
 end
+
+_ell_blocks(b::AbstractSpherical3DBasis, dist) = _ell_blocks(b.sphere_basis, dist)
 
 """
     ell_reversed(b::AbstractSpherical3DBasis, dist)
@@ -7591,7 +7590,7 @@ function forward_transform_radius_shell_3d(b::ShellBasis, field, axis, gdata, cd
     # Apply regularity recombination using 3D ell maps
     forward_regularity_recombination(
         radial_basis, field.tensorsig, axis, gdata;
-        ell_maps = ell_maps(b, field.dist)
+        ell_maps = _ell_blocks(b, field.dist)
     )
     # Perform radial transforms component-by-component
     R = regularity_classes(radial_basis, field.tensorsig)
@@ -7624,7 +7623,7 @@ function backward_transform_radius_shell_3d(b::ShellBasis, field, axis, cdata, g
     # Apply regularity recombinations using 3D ell maps
     backward_regularity_recombination(
         radial_basis, field.tensorsig, axis, gdata,
-        ell_maps(b, field.dist)
+        _ell_blocks(b, field.dist)
     )
     # Multiply by radial factor
     if b.k > 0
@@ -7825,7 +7824,7 @@ function build_meridional_ncc_matrix(b::ShellBasis, product, subproblem, ncc_cut
     spin_coeffs = copy(coeffs)
     backward_regularity_recombination(
         b.radial_basis, product.ncc.tensorsig,
-        axis, spin_coeffs, ell_maps(ncc_basis, product.dist)
+        axis, spin_coeffs, _ell_blocks(ncc_basis, product.dist)
     )
     # Build deferred S2 NCC for each radial index
     s2b = S2_basis(b)
@@ -8201,7 +8200,7 @@ function transform_plan(b::BallBasis, dist, grid_shape_val, regindex, axis, regt
     if haskey(_ball_basis_transforms, radius_lib)
         plan = _ball_basis_transforms[radius_lib](
             grid_shape_val, Nmax + 1, axis,
-            ell_maps(b, dist), regindex,
+            _ell_blocks(b, dist), regindex,
             regtotal_val, k, alpha
         )
     else
@@ -8222,7 +8221,7 @@ function forward_transform_radius_ball_3d(b::BallBasis, field, axis, gdata, cdat
     # Apply regularity recombination
     forward_regularity_recombination(
         radial_basis, field.tensorsig, axis, gdata;
-        ell_maps = ell_maps(b, field.dist)
+        ell_maps = _ell_blocks(b, field.dist)
     )
     # Perform radial transforms component-by-component
     R = regularity_classes(radial_basis, field.tensorsig)
@@ -8261,7 +8260,7 @@ function backward_transform_radius_ball_3d(b::BallBasis, field, axis, cdata, gda
     # Apply regularity recombinations
     backward_regularity_recombination(
         radial_basis, field.tensorsig, axis, gdata,
-        ell_maps(b, field.dist)
+        _ell_blocks(b, field.dist)
     )
     return nothing
 end

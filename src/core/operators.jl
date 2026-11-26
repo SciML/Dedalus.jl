@@ -3596,7 +3596,7 @@ function operate(op::SphericalTransposeComponents, out)::Nothing
         if length(out.data) > 0
             out.data .= operand.data
             radial_basis = op.radial_basis
-            ell_maps_val = ell_maps(op.input_basis, op.dist)
+            ell_maps_val = _ell_blocks(op.input_basis, op.dist)
             backward_regularity_recombination!(radial_basis, operand.tensorsig, radius_axis, out.data; ell_maps = ell_maps_val)
             out.data .= permutedims(out.data, collect(op.new_axis_order))
             forward_regularity_recombination!(radial_basis, operand.tensorsig, radius_axis, out.data; ell_maps = ell_maps_val)
@@ -5286,7 +5286,7 @@ function operate(op::SphericalEllOperator, out)::Nothing
                     regindex_out_val...,
                     ntuple(_ -> Colon(), ndims(out.data) - length(regindex_out_val))...
                 )
-            for (ell, m_ind, ell_ind) in ell_maps(basis, op.dist)
+            for (ell, m_ind, ell_ind) in _ell_blocks(basis, op.dist)
                 allowed_in = regularity_allowed(radial_basis, ell, regindex_in)
                 allowed_out = regularity_allowed(radial_basis, ell, regindex_out_val)
                 if allowed_in && allowed_out
@@ -5902,7 +5902,7 @@ function operate(op::SphericalCurl, out)::Nothing
         for regindex_out_val in regindex_out(op, regindex_in)
             @inbounds comp_in = operand.data[regindex_in...]
             @inbounds comp_out = out.data[regindex_out_val...]
-            for (ell, m_ind, ell_ind) in ell_maps(input_basis, op.dist)
+            for (ell, m_ind, ell_ind) in _ell_blocks(input_basis, op.dist)
                 allowed_in = regularity_allowed(radial_basis, ell, regindex_in)
                 allowed_out = regularity_allowed(radial_basis, ell, regindex_out_val)
                 if allowed_in && allowed_out
@@ -6224,6 +6224,8 @@ function ell_reversed(basis, dist)
     end
     error("ell_reversed not implemented for basis type $(typeof(basis))")
 end
+
+_ell_blocks(basis, dist) = ell_maps(basis, dist)
 
 function ell_maps(basis, dist)
     if hasproperty(basis, :ell_maps)
