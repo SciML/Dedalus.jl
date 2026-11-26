@@ -6,6 +6,7 @@ Reference: dedalus/tests/test_spherical_arithmetic.py
 
 using Test
 using Dedalus
+using LinearAlgebra: norm
 
 @testset "Spherical Arithmetic" begin
 
@@ -211,6 +212,47 @@ using Dedalus
         end
     end
 
+    # Roundoff budget for the scalar rescaling fixture, based on the analytic
+    # input norm. Count a forward and inverse contraction per axis (eight real
+    # operations per complex Fourier term, two per real colatitude/radial term),
+    # plus 20 operations each for sampling the input and evaluating the reference.
+    # Use the resulting gamma factor as a budget for the complete transform,
+    # including errors in computed quadrature nodes and matrix entries.
+    function rescaling_budget((nphi, ntheta, nr), polynomial)
+        u = eps(Float64) / 2
+        ku = (2 * (8 * nphi + 2 * ntheta + 2 * nr) + 40) * u
+        return ku / (1 - ku) * norm(polynomial)
+    end
+
+    @testset "Dealiased cubic rescaling $basis_fn" for
+        basis_fn in (build_ball, build_shell),
+            Nphi in Nphi_range, Ntheta in Ntheta_range, Nr in Nr_range
+        _, d, b, _, _, _, x, y, z = basis_fn(Nphi, Ntheta, Nr, 1.5, ComplexF64)
+        f = Field(d, bases = (b,), dtype = ComplexF64)
+        f["g"] = @. x^3 + 2 * y^3 + 3 * z^3
+        Dedalus.require_coeff_space!(f)
+        change_scales!(f, 1.5)
+        phi, theta, r = map(g -> BigFloat.(g), local_grids(d, b; scales = 1.5))
+        # Evaluate the cubic directly in spherical coordinates at higher precision.
+        polynomial = @. Float64(r^3 * (sin(theta)^3 * (cos(phi)^3 + 2 * sin(phi)^3) + 3 * cos(theta)^3))
+        error = norm(f["g"] - polynomial)
+        @test error <= rescaling_budget((Nphi, Ntheta, Nr), polynomial)
+    end
+
+    function scalar_product_atol(bname, dealias, shape, polynomial; square = false)
+        if dealias == 1 || (bname == "ball" && !square)
+            return 1.0e-12
+        end
+        # With rescaling error e and ||e||₂ ≤ E, doubling gives 2E exactly
+        # in binary arithmetic. Squaring gives 2pe + e², bounded in norm
+        # by 2||p||∞E + E². Allow for rounding the complex product and the
+        # real reference square, and retain Chris's approved absolute cap.
+        E = rescaling_budget(shape, polynomial)
+        roundoff = 2 * eps(Float64) * norm(polynomial .^ 2)
+        bound = square ? 2 * maximum(abs, polynomial) * E + E^2 + roundoff : 2 * E
+        return min(bound, 2.1e-10)
+    end
+
     # ========================================================================
     # 6. Multiply number * scalar
     # ========================================================================
@@ -227,9 +269,14 @@ using Dedalus
             h = evaluate(2 * f)
             phi2, theta2, r2 = local_grids(d, b, scales = dealias)
             x2, y2, z2 = cartesian(SphericalCoordinates, phi2, theta2, r2)
-            hg = @. 2 * (x2^3 + 2 * y2^3 + 3 * z2^3)
-            # Measured spread 3.0e-12..1.95e-10; exact-rounding floor 2.65e-12; tolerance raised per Chris approval 2026-11-25.
-            @test isapprox(h["g"], hg, atol = 2.1e-10)
+            polynomial = @. x2^3 + 2 * y2^3 + 3 * z2^3
+            hg = 2 .* polynomial
+            atol = scalar_product_atol(bname, dealias, (Nphi, Ntheta, Nr), polynomial)
+            @test isapprox(h["g"], hg; atol, rtol = 0)
+            if bname == "ball" && dealias == 1
+                perturbed = (1 + 1.0e-13) .* h["g"]
+                @test !isapprox(perturbed, hg; atol, rtol = 0)
+            end
         catch e
             @test_broken false
             @warn "multiply_number_scalar failed" exception = e
@@ -252,9 +299,10 @@ using Dedalus
             h = evaluate(f * 2)
             phi2, theta2, r2 = local_grids(d, b, scales = dealias)
             x2, y2, z2 = cartesian(SphericalCoordinates, phi2, theta2, r2)
-            hg = @. 2 * (x2^3 + 2 * y2^3 + 3 * z2^3)
-            # Measured spread 3.0e-12..1.95e-10; exact-rounding floor 2.65e-12; tolerance raised per Chris approval 2026-11-25.
-            @test isapprox(h["g"], hg, atol = 2.1e-10)
+            polynomial = @. x2^3 + 2 * y2^3 + 3 * z2^3
+            hg = 2 .* polynomial
+            atol = scalar_product_atol(bname, dealias, (Nphi, Ntheta, Nr), polynomial)
+            @test isapprox(h["g"], hg; atol, rtol = 0)
         catch e
             @test_broken false
             @warn "multiply_scalar_number failed" exception = e
@@ -277,9 +325,14 @@ using Dedalus
             h = evaluate(f * f)
             phi2, theta2, r2 = local_grids(d, b, scales = dealias)
             x2, y2, z2 = cartesian(SphericalCoordinates, phi2, theta2, r2)
-            hg = @. (x2^3 + 2 * y2^3 + 3 * z2^3)^2
-            # Measured spread 3.0e-12..1.95e-10; exact-rounding floor 2.65e-12; tolerance raised per Chris approval 2026-11-25.
-            @test isapprox(h["g"], hg, atol = 2.1e-10)
+            polynomial = @. x2^3 + 2 * y2^3 + 3 * z2^3
+            hg = polynomial .^ 2
+            atol = scalar_product_atol(bname, dealias, (Nphi, Ntheta, Nr), polynomial; square = true)
+            @test isapprox(h["g"], hg; atol, rtol = 0)
+            if bname == "shell" && dealias != 1
+                perturbed = (1 + 1.0e-13) .* h["g"]
+                @test !isapprox(perturbed, hg; atol, rtol = 0)
+            end
         catch e
             @test_broken false
             @warn "multiply_scalar_scalar failed" exception = e
