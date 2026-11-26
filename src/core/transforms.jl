@@ -1226,7 +1226,7 @@ function _forward_SWSH_matrices(t::SWSHColatitudeTransform)
         if haskey(m_matrices, m)
             continue
         end
-        if m > Lmax
+        if abs(m) > Lmax
             # Don't make matrices for m's that will be dropped after transform
             m_matrices[m] = nothing
         else
@@ -1270,7 +1270,7 @@ function _backward_SWSH_matrices(t::SWSHColatitudeTransform)
         if haskey(m_matrices, m)
             continue
         end
-        if m > Lmax
+        if abs(m) > Lmax
             m_matrices[m] = nothing
         else
             Y = sphere_harmonics(Lmax, m, t.s, cos_grid)  # shape (Lmax-Lmin+1, Ntheta)
@@ -1310,10 +1310,38 @@ function forward_reduced!(
         if abs(m) <= Lmax
             grm = @view gdata[:, mg_slice, :, :]
             crm = @view cdata[:, mc_slice, ell_slice, :]
-            apply_matrix(m_matrices[m], grm, 2; out = crm)
+            apply_matrix(m_matrices[m], grm, 3; out = crm)
         end
     end
     return nothing
+end
+
+# A reshaped or non-strided view can use its parent's span as a conservative bound.
+function _colatitude_storage_span(data::AbstractArray)
+    storage = parent(data)
+    return storage === data ? nothing : _colatitude_storage_span(storage)
+end
+
+function _colatitude_storage_span(data::StridedArray)
+    low, high = 0, 0
+    for (n, stride) in zip(size(data), strides(data))
+        offset = (n - 1) * stride
+        low += min(0, offset)
+        high += max(0, offset)
+    end
+    bytes = Base.elsize(data)
+    GC.@preserve data begin
+        start = pointer(data)
+        return (UInt(start + low * bytes), UInt(start + (high + 1) * bytes))
+    end
+end
+
+function _colatitude_buffers_overlap(cdata, gdata)
+    (isempty(cdata) || isempty(gdata)) && return false
+    cspan = _colatitude_storage_span(cdata)
+    gspan = _colatitude_storage_span(gdata)
+    (isnothing(cspan) || isnothing(gspan)) && return true
+    return max(cspan[1], gspan[1]) < min(cspan[2], gspan[2])
 end
 
 """
@@ -1325,16 +1353,16 @@ function backward_reduced!(
         t::SWSHColatitudeTransform,
         cdata::AbstractArray, gdata::AbstractArray
     )
+    # Option A: snapshot only when byte spans overlap or storage is unknown.
+    coeffs = _colatitude_buffers_overlap(cdata, gdata) ? copy(cdata) : cdata
+    fill!(gdata, zero(eltype(gdata)))
     m_matrices = _backward_SWSH_matrices(t)
     Lmax = t.Lmax
     for (m, mg_slice, mc_slice, ell_slice) in t.m_maps
-        if abs(m) > Lmax
-            # Write zeros because they'll be used by the inverse azimuthal transform
-            gdata[:, mg_slice, :, :] .= 0
-        else
+        if abs(m) <= Lmax
             grm = @view gdata[:, mg_slice, :, :]
-            crm = @view cdata[:, mc_slice, ell_slice, :]
-            apply_matrix(m_matrices[m], crm, 2; out = grm)
+            crm = @view coeffs[:, mc_slice, ell_slice, :]
+            apply_matrix(m_matrices[m], crm, 3; out = grm)
         end
     end
     return nothing
@@ -1625,7 +1653,9 @@ instead of 2).
 
 Unlike `DiskRadialTransform`, the ball transform iterates over `ell_maps`
 (ell, m_ind, ell_ind) triples and uses `reduced_view_5` to expose the
-(azimuthal, colatitude, radial) axes simultaneously.
+(azimuthal, colatitude, radial) axes simultaneously. Both angular selectors
+support integer indices and ranges. The radial axis remains the penultimate
+dimension of the selected view.
 
 Regularity enforcement: when `regindex` is non-empty, the `Intertwiner`
 spin-operator algebra is used to detect forbidden regularity components
@@ -1884,11 +1914,10 @@ function forward_reduced!(
         # In the 5D reduced view: (pre, azimuth, colatitude, radial, post)
         # m_ind indexes the azimuth axis (dim 2)
         # ell_ind indexes the colatitude axis (dim 3)
-        # radial is dim 4
         grm = @view gdata[:, m_ind, ell_ind, :, :]
         # Nmin+1 for 1-based indexing (Python Nmin: maps to Julia Nmin+1)
         crm = @view cdata[:, m_ind, ell_ind, (Nmin + 1):end, :]
-        apply_matrix(ell_matrices[ell], grm, 2; out = crm)
+        apply_matrix(ell_matrices[ell], grm, ndims(grm) - 1; out = crm)
     end
     return nothing
 end
@@ -1907,7 +1936,7 @@ function backward_reduced!(
         Nmin = zernike_min_degree(ell)
         grm = @view gdata[:, m_ind, ell_ind, :, :]
         crm = @view cdata[:, m_ind, ell_ind, (Nmin + 1):end, :]
-        apply_matrix(ell_matrices[ell], crm, 2; out = grm)
+        apply_matrix(ell_matrices[ell], crm, ndims(crm) - 1; out = grm)
     end
     return nothing
 end

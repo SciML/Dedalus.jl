@@ -63,18 +63,59 @@ using Dedalus
             f = Field(d, bases = (b,), dtype = T)
             g = Field(d, bases = (b,), dtype = T)
             preset_scales!(f, dealias)
+            preset_scales!(g, dealias)
             f["g"] = @. 3 * x^2 + 2 * y * z
-            for (ell, m_ind, ell_ind) in ell_maps(b, d)
+            for (ell, m_ind, ell_ind) in Dedalus._ell_blocks(b, d)
                 g["c"][m_ind, ell_ind, :] = (ell + 3) .* f["c"][m_ind, ell_ind, :]
             end
             func = ell -> ell + 3
             h = evaluate(SphericalEllProduct(f, c, func))
-            preset_scales!(g, dealias)
             @test isapprox(h["g"], g["g"], atol = 1.0e-12)
         catch e
             @test_broken false
             @warn "spherical_ell_product_scalar failed" exception = e
         end
+    end
+
+    @testset "scalar spherical ell product on coefficient data" begin
+        c, d, b, phi, theta, r, x, y, z = build_ball(8, 4, 10, 0, 1.5, Float64)
+        f = Field(d, bases = (b,), dtype = Float64)
+        preset_scales!(f, 1.5)
+        f["g"] = @. 3 * x^2 + 2 * y * z
+        Dedalus.require_coeff_space!(f)
+
+        h = evaluate(SphericalEllProduct(f, c, ell -> ell + 3))
+        # The degree-zero part is r² and the remainder is degree two.
+        expected = @. 5 * (3 * x^2 + 2 * y * z) - 2 * r^2
+        @test isapprox(h["g"], expected; atol = 1.0e-12, rtol = 0)
+    end
+
+    @testset "vector spherical ell product on coefficient data" begin
+        c, d, b, phi, theta, r, x, y, z = build_ball(8, 4, 10, 0, 1.0, Float64)
+        u = VectorField(d, c, bases = (b,), dtype = Float64)
+        Dedalus.preset_layout!(u, coeff_layout(d))
+        u.data .= 0
+        expected = zeros(size(u.data))
+        for (ell, m_ind, ell_ind) in Dedalus._ell_blocks(b, d), comp in 1:3
+            regindex = (comp,)
+            if Dedalus.regularity_allowed(b.radial_basis, ell, regindex)
+                n_sl = Dedalus.n_slice(b.radial_basis, ell)
+                fill!(view(u.data, comp, m_ind, ell_ind, n_sl), 1)
+                factor = ell + Dedalus.regtotal(regindex) + 3
+                fill!(view(expected, comp, m_ind, ell_ind, n_sl), factor)
+            end
+        end
+
+        w = evaluate(SphericalEllProduct(u, c, ell -> ell + 3))
+        @test isapprox(w.data, expected, atol = 1.0e-12)
+
+        fill!(u.data, 0)
+        u.data[:, 1, 3, 2] = [2, 3, 4]
+        # At m = 0 and ell = 2, the regularity shifts are (-1, 1, 0).
+        fill!(expected, 0)
+        expected[:, 1, 3, 2] = [8, 18, 20]
+        w = evaluate(SphericalEllProduct(u, c, ell -> ell + 3))
+        @test isapprox(w.data, expected, atol = 1.0e-12)
     end
 
     # ========================================================================
@@ -99,7 +140,7 @@ using Dedalus
             uk0["g"] = u["g"]
             v = VectorField(d, c, bases = (b,), dtype = T)
             preset_scales!(v, dealias)
-            for (ell, m_ind, ell_ind) in ell_maps(b, d)
+            for (ell, m_ind, ell_ind) in Dedalus._ell_blocks(b, d)
                 # Python 0-based indexing [0], [1], [2] -> Julia 1-based [1], [2], [3]
                 v["c"][1, m_ind, ell_ind, :] = (ell + 2) .* uk0["c"][1, m_ind, ell_ind, :]
                 v["c"][2, m_ind, ell_ind, :] = (ell + 4) .* uk0["c"][2, m_ind, ell_ind, :]

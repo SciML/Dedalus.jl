@@ -9,6 +9,7 @@ Requires MPI with at least 4 processes.
 using Test
 using MPI
 using Dedalus
+using LinearAlgebra: norm
 
 @testset "Spherical 3D Arithmetic Parallel" begin
 
@@ -21,6 +22,18 @@ using Dedalus
         @warn "test_spherical3d_arithmetic_parallel requires at least 4 MPI processes; skipping."
         @test_broken false
         return
+    end
+
+    @testset "Ball colatitude mode bounds ($T)" for T in (ComplexF64, Float64)
+        c = SphericalCoordinates("phi", "theta", "r")
+        d = Distributor(c, T; mesh = (2, 2))
+        b = BallBasis(c, (12, 4, 6), T; radius = 1)
+        phi, theta, r = local_grids(d, b)
+        f = Field(d; bases = (b,))
+        grid = @. T(1 + r * (cos(theta) + cos(phi) * sin(theta)))
+        f["g"] = grid
+        Dedalus.require_coeff_space!(f)
+        @test norm(f["g"] - grid) <= 1.0e-12
     end
 
     Nphi_range = [8]

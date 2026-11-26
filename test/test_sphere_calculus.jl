@@ -6,8 +6,21 @@ Reference: dedalus/tests/test_sphere_calculus.py (Python sphere tests).
 
 using Test
 using Dedalus
+using LinearAlgebra: norm
 
 @testset "Sphere Calculus" begin
+
+    @testset "Colatitude mode bounds ($T)" for T in (ComplexF64, Float64)
+        c = S2Coordinates("phi", "theta")
+        d = Distributor(c, T)
+        b = SphereBasis(c, (12, 5), T)
+        phi, theta = local_grids(d, b)
+        f = Field(d; bases = (b,))
+        grid = @. T(1 + cos(theta) + cos(phi) * sin(theta))
+        f["g"] = grid
+        Dedalus.require_coeff_space!(f)
+        @test norm(f["g"] - grid) <= 1.0e-12
+    end
 
     Nphi_range = [32]
     Ntheta_range = [16]
@@ -495,8 +508,8 @@ using Dedalus
             fill_random!(f, layout = "g")
             func = (ell, r) -> ell + 3
             # Manually build expected result in coefficient space
-            for (ell, m_ind, ell_ind) in ell_maps(b, d)
-                g["c"][m_ind, ell_ind] = func(ell, radius) * f["c"][m_ind, ell_ind]
+            for (ell, m_ind, ell_ind) in Dedalus._ell_blocks(b, d)
+                g["c"][m_ind, ell_ind] = func(ell, radius) .* f["c"][m_ind, ell_ind]
             end
             h = evaluate(SphereEllProduct(f, c, func))
             @test isapprox(g["c"], h["c"], atol = 1.0e-12)
@@ -523,9 +536,9 @@ using Dedalus
             func = (ell, r) -> ell + 3
             # Manually build expected result in coefficient space
             dim = 2  # S2 has 2 components
-            for (ell, m_ind, ell_ind) in ell_maps(b, d)
+            for (ell, m_ind, ell_ind) in Dedalus._ell_blocks(b, d)
                 for i in 1:dim
-                    g["c"][i, m_ind, ell_ind] = func(ell, radius) * f["c"][i, m_ind, ell_ind]
+                    g["c"][i, m_ind, ell_ind] = func(ell, radius) .* f["c"][i, m_ind, ell_ind]
                 end
             end
             h = evaluate(SphereEllProduct(f, c, func))
