@@ -1325,13 +1325,15 @@ function backward_reduced!(
         t::SWSHColatitudeTransform,
         cdata::AbstractArray, gdata::AbstractArray
     )
+    # Snapshot the coefficients so clearing omitted lanes is safe for any overlapping buffers.
+    coeffs = copy(cdata)
     fill!(gdata, zero(eltype(gdata)))
     m_matrices = _backward_SWSH_matrices(t)
     Lmax = t.Lmax
     for (m, mg_slice, mc_slice, ell_slice) in t.m_maps
         if abs(m) <= Lmax
             grm = @view gdata[:, mg_slice, :, :]
-            crm = @view cdata[:, mc_slice, ell_slice, :]
+            crm = @view coeffs[:, mc_slice, ell_slice, :]
             apply_matrix(m_matrices[m], crm, 3; out = grm)
         end
     end

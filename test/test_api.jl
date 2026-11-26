@@ -115,6 +115,16 @@ end
     @test all(iszero, destination)
 end
 
+@testset "Colatitude inverse supports shared buffers" begin
+    plan = SWSHColatitudeTransform(1, 0, ((0, 1:1, 1:1, 1:1),), 0)
+    coeffs = fill(2.0, 1, 1)
+    destination = similar(coeffs)
+    backward!(plan, coeffs, destination, 1)
+    @test destination[1] ≈ sqrt(2.0)
+    backward!(plan, coeffs, coeffs, 1)
+    @test coeffs[1] ≈ sqrt(2.0)
+end
+
 @testset "Ball radial transform supports integer selectors" begin
     c = SphericalCoordinates("phi", "theta", "r")
     d = Distributor(c, ComplexF64)
