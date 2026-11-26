@@ -1316,6 +1316,34 @@ function forward_reduced!(
     return nothing
 end
 
+# A reshaped or non-strided view can use its parent's span as a conservative bound.
+function _colatitude_storage_span(data::AbstractArray)
+    storage = parent(data)
+    return storage === data ? nothing : _colatitude_storage_span(storage)
+end
+
+function _colatitude_storage_span(data::StridedArray)
+    low, high = 0, 0
+    for (n, stride) in zip(size(data), strides(data))
+        offset = (n - 1) * stride
+        low += min(0, offset)
+        high += max(0, offset)
+    end
+    bytes = Base.elsize(data)
+    GC.@preserve data begin
+        start = pointer(data)
+        return (UInt(start + low * bytes), UInt(start + (high + 1) * bytes))
+    end
+end
+
+function _colatitude_buffers_overlap(cdata, gdata)
+    (isempty(cdata) || isempty(gdata)) && return false
+    cspan = _colatitude_storage_span(cdata)
+    gspan = _colatitude_storage_span(gdata)
+    (isnothing(cspan) || isnothing(gspan)) && return true
+    return max(cspan[1], gspan[1]) < min(cspan[2], gspan[2])
+end
+
 """
     backward_reduced!(t::SWSHColatitudeTransform, cdata, gdata)
 
@@ -1325,8 +1353,8 @@ function backward_reduced!(
         t::SWSHColatitudeTransform,
         cdata::AbstractArray, gdata::AbstractArray
     )
-    # Snapshot the coefficients so clearing omitted lanes is safe for any overlapping buffers.
-    coeffs = copy(cdata)
+    # Option A: snapshot only when byte spans overlap or storage is unknown.
+    coeffs = _colatitude_buffers_overlap(cdata, gdata) ? copy(cdata) : cdata
     fill!(gdata, zero(eltype(gdata)))
     m_matrices = _backward_SWSH_matrices(t)
     Lmax = t.Lmax

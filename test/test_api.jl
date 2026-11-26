@@ -125,6 +125,24 @@ end
     @test coeffs[1] ≈ sqrt(2.0)
 end
 
+@testset "Colatitude inverse supports partially overlapping views" begin
+    plan = SWSHColatitudeTransform(1, 0, ((0, 2:2, 2:2, 1:1),), 0)
+    storage = reshape([1.0, 2.0, 3.0], 3, 1)
+    coeffs = view(storage, 1:2, :)
+    destination = view(storage, 2:3, :)
+    backward!(plan, coeffs, destination, 1)
+    @test vec(destination) ≈ [0.0, sqrt(2.0)]
+end
+
+@testset "Colatitude inverse allocation with disjoint buffers" begin
+    plan = SWSHColatitudeTransform(1, 0, (), 0)
+    coeffs = zeros(2, 1, 64, 64)
+    destination = similar(coeffs)
+    backward!(plan, coeffs, destination, 1)
+    allocated = @allocated backward!(plan, coeffs, destination, 1)
+    @test allocated < sizeof(coeffs)
+end
+
 @testset "Ball radial transform supports integer selectors" begin
     c = SphericalCoordinates("phi", "theta", "r")
     d = Distributor(c, ComplexF64)
