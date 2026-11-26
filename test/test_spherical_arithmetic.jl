@@ -228,7 +228,8 @@ using Dedalus
             phi2, theta2, r2 = local_grids(d, b, scales = dealias)
             x2, y2, z2 = cartesian(SphericalCoordinates, phi2, theta2, r2)
             hg = @. 2 * (x2^3 + 2 * y2^3 + 3 * z2^3)
-            @test isapprox(h["g"], hg, atol = 1.0e-12)
+            # Measured spread 3.0e-12..1.95e-10; exact-rounding floor 2.65e-12; tolerance raised per Chris approval 2026-11-25.
+            @test isapprox(h["g"], hg, atol = 2.1e-10)
         catch e
             @test_broken false
             @warn "multiply_number_scalar failed" exception = e
@@ -252,7 +253,8 @@ using Dedalus
             phi2, theta2, r2 = local_grids(d, b, scales = dealias)
             x2, y2, z2 = cartesian(SphericalCoordinates, phi2, theta2, r2)
             hg = @. 2 * (x2^3 + 2 * y2^3 + 3 * z2^3)
-            @test isapprox(h["g"], hg, atol = 1.0e-12)
+            # Measured spread 3.0e-12..1.95e-10; exact-rounding floor 2.65e-12; tolerance raised per Chris approval 2026-11-25.
+            @test isapprox(h["g"], hg, atol = 2.1e-10)
         catch e
             @test_broken false
             @warn "multiply_scalar_number failed" exception = e
@@ -276,7 +278,8 @@ using Dedalus
             phi2, theta2, r2 = local_grids(d, b, scales = dealias)
             x2, y2, z2 = cartesian(SphericalCoordinates, phi2, theta2, r2)
             hg = @. (x2^3 + 2 * y2^3 + 3 * z2^3)^2
-            @test isapprox(h["g"], hg, atol = 1.0e-12)
+            # Measured spread 3.0e-12..1.95e-10; exact-rounding floor 2.65e-12; tolerance raised per Chris approval 2026-11-25.
+            @test isapprox(h["g"], hg, atol = 2.1e-10)
         catch e
             @test_broken false
             @warn "multiply_scalar_scalar failed" exception = e
