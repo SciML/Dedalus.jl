@@ -1122,16 +1122,17 @@ abstract type NonSeparableTransform <: Transform end
 """
     forward!(t::NonSeparableTransform, gdata, cdata, axis)
 
-Apply the forward (grid --> coefficient) non-separable transform.
-Reduces the input to a 4D view centred on `axis` and `axis+1`, then
-delegates to `forward_reduced!`.
+Apply the forward (grid --> coefficient) non-separable transform along
+`axis`. Reduces the input to a 4D view `(pre, axis-1, axis, post)`, so that
+the mode axis preceding `axis` is the second dimension, then delegates to
+`forward_reduced!`.
 """
 function forward!(
         t::NonSeparableTransform, gdata::AbstractArray,
         cdata::AbstractArray, axis::Int
     )
-    gdata4 = reduced_view_4(gdata, axis)
-    cdata4 = reduced_view_4(cdata, axis)
+    gdata4 = reduced_view_4(gdata, axis - 1)
+    cdata4 = reduced_view_4(cdata, axis - 1)
     forward_reduced!(t, gdata4, cdata4)
     return cdata
 end
@@ -1139,16 +1140,16 @@ end
 """
     backward!(t::NonSeparableTransform, cdata, gdata, axis)
 
-Apply the backward (coefficient --> grid) non-separable transform.
-Reduces the input to a 4D view centred on `axis` and `axis+1`, then
-delegates to `backward_reduced!`.
+Apply the backward (coefficient --> grid) non-separable transform along
+`axis`, using the same 4D view as `forward!`, then delegates to
+`backward_reduced!`.
 """
 function backward!(
         t::NonSeparableTransform, cdata::AbstractArray,
         gdata::AbstractArray, axis::Int
     )
-    cdata4 = reduced_view_4(cdata, axis)
-    gdata4 = reduced_view_4(gdata, axis)
+    cdata4 = reduced_view_4(cdata, axis - 1)
+    gdata4 = reduced_view_4(gdata, axis - 1)
     backward_reduced!(t, cdata4, gdata4)
     return gdata
 end
@@ -1310,7 +1311,7 @@ function forward_reduced!(
         if abs(m) <= Lmax
             grm = @view gdata[:, mg_slice, :, :]
             crm = @view cdata[:, mc_slice, ell_slice, :]
-            apply_matrix(m_matrices[m], grm, 2; out = crm)
+            apply_matrix(m_matrices[m], grm, 3; out = crm)
         end
     end
     return nothing
@@ -1334,7 +1335,7 @@ function backward_reduced!(
         else
             grm = @view gdata[:, mg_slice, :, :]
             crm = @view cdata[:, mc_slice, ell_slice, :]
-            apply_matrix(m_matrices[m], crm, 2; out = grm)
+            apply_matrix(m_matrices[m], crm, 3; out = grm)
         end
     end
     return nothing
@@ -1888,7 +1889,7 @@ function forward_reduced!(
         grm = @view gdata[:, m_ind, ell_ind, :, :]
         # Nmin+1 for 1-based indexing (Python Nmin: maps to Julia Nmin+1)
         crm = @view cdata[:, m_ind, ell_ind, (Nmin + 1):end, :]
-        apply_matrix(ell_matrices[ell], grm, 2; out = crm)
+        apply_matrix(ell_matrices[ell], grm, 4; out = crm)
     end
     return nothing
 end
@@ -1907,7 +1908,7 @@ function backward_reduced!(
         Nmin = zernike_min_degree(ell)
         grm = @view gdata[:, m_ind, ell_ind, :, :]
         crm = @view cdata[:, m_ind, ell_ind, (Nmin + 1):end, :]
-        apply_matrix(ell_matrices[ell], crm, 2; out = grm)
+        apply_matrix(ell_matrices[ell], crm, 4; out = grm)
     end
     return nothing
 end
