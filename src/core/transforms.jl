@@ -1623,7 +1623,9 @@ instead of 2).
 
 Unlike `DiskRadialTransform`, the ball transform iterates over `ell_maps`
 (ell, m_ind, ell_ind) triples and uses `reduced_view_5` to expose the
-(azimuthal, colatitude, radial) axes simultaneously.
+(azimuthal, colatitude, radial) axes simultaneously. Both angular selectors
+support integer indices and ranges. The radial axis remains the penultimate
+dimension of the selected view.
 
 Regularity enforcement: when `regindex` is non-empty, the `Intertwiner`
 spin-operator algebra is used to detect forbidden regularity components
@@ -1882,11 +1884,10 @@ function forward_reduced!(
         # In the 5D reduced view: (pre, azimuth, colatitude, radial, post)
         # m_ind indexes the azimuth axis (dim 2)
         # ell_ind indexes the colatitude axis (dim 3)
-        # radial is dim 4
         grm = @view gdata[:, m_ind, ell_ind, :, :]
         # Nmin+1 for 1-based indexing (Python Nmin: maps to Julia Nmin+1)
         crm = @view cdata[:, m_ind, ell_ind, (Nmin + 1):end, :]
-        apply_matrix(ell_matrices[ell], grm, 4; out = crm)
+        apply_matrix(ell_matrices[ell], grm, ndims(grm) - 1; out = crm)
     end
     return nothing
 end
@@ -1905,7 +1906,7 @@ function backward_reduced!(
         Nmin = zernike_min_degree(ell)
         grm = @view gdata[:, m_ind, ell_ind, :, :]
         crm = @view cdata[:, m_ind, ell_ind, (Nmin + 1):end, :]
-        apply_matrix(ell_matrices[ell], crm, 4; out = grm)
+        apply_matrix(ell_matrices[ell], crm, ndims(crm) - 1; out = grm)
     end
     return nothing
 end
